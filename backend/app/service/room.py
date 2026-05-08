@@ -1,22 +1,21 @@
 from __future__ import annotations
 
+from sqlmodel import Session, select
+
 from app.model import AgentLevel, Room, RoomParticipant, RoomStatus, SubscriptionTier
 from app.service.base import BaseService
 
 
 class RoomService(BaseService[Room]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, Room)
+
     def list_active_rooms(self) -> list[Room]:
-        return [room for room in self.list_all() if room.status == RoomStatus.ACTIVE]
+        statement = select(Room).where(Room.status == RoomStatus.ACTIVE)
+        return list(self.session.exec(statement))
 
     def create_matching_room(self, room: Room) -> Room:
         room.status = RoomStatus.MATCHING
-        return self.save(room)
-
-    def activate_room(self, room_id: str) -> Room | None:
-        room = self.get_by_id(room_id)
-        if room is None:
-            return None
-        room.status = RoomStatus.ACTIVE
         return self.save(room)
 
     def resolve_agent_level(self, participant_tiers: list[SubscriptionTier]) -> AgentLevel:
@@ -28,8 +27,12 @@ class RoomService(BaseService[Room]):
 
 
 class RoomParticipantService(BaseService[RoomParticipant]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, RoomParticipant)
+
     def list_room_participants(self, room_id: str) -> list[RoomParticipant]:
-        return [participant for participant in self.list_all() if participant.room_id == room_id]
+        statement = select(RoomParticipant).where(RoomParticipant.room_id == room_id)
+        return list(self.session.exec(statement))
 
     def add_participant(self, participant: RoomParticipant) -> RoomParticipant:
         return self.save(participant)

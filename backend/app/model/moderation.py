@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from uuid import UUID
 
-from app.model.common import BaseEntity
+from sqlmodel import Field, SQLModel
+
+from app.model.common import TimestampedModel
 
 
 class ModerationEventType(StrEnum):
@@ -20,9 +23,9 @@ class ModerationAction(StrEnum):
     BAN_PERMANENT = "ban_permanent"
 
 
-class ModerationEvent(BaseEntity):
-    user_id: str
-    room_id: str | None = None
+class ModerationEventBase(SQLModel):
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    room_id: UUID | None = Field(default=None, foreign_key="rooms.id")
     event_type: ModerationEventType
     evidence_url: str | None = None
     confidence: float | None = None
@@ -30,9 +33,17 @@ class ModerationEvent(BaseEntity):
     moderator_notes: str | None = None
 
 
-class AgentMisuseLog(BaseEntity):
-    user_id: str
-    room_id: str
+class ModerationEvent(TimestampedModel, ModerationEventBase, table=True):
+    __tablename__ = "moderation_events"
+
+
+class AgentMisuseLogBase(SQLModel):
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    room_id: UUID = Field(foreign_key="rooms.id", index=True)
     query: str
     intent: str
     action: str
+
+
+class AgentMisuseLog(TimestampedModel, AgentMisuseLogBase, table=True):
+    __tablename__ = "agent_misuse_logs"

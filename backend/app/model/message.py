@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from pydantic import Field
+from uuid import UUID
 
-from app.model.common import BaseEntity, MessageType
+from sqlmodel import JSON, Column, Field, SQLModel
+
+from app.model.common import MessageType, TimestampedModel
 
 
-class Message(BaseEntity):
-    room_id: str
-    user_id: str | None = None
+class MessageBase(SQLModel):
+    room_id: UUID = Field(foreign_key="rooms.id", index=True)
+    user_id: UUID | None = Field(default=None, foreign_key="users.id")
     content: str
     message_type: MessageType = MessageType.TEXT
-    metadata: dict[str, str | int | float | bool | list[str] | None] = Field(default_factory=dict)
+    payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class Message(TimestampedModel, MessageBase, table=True):
+    __tablename__ = "messages"

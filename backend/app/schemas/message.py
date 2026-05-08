@@ -22,4 +22,4 @@ class MessageResponse(BaseModel):
     user_id: str | None = None
     content: str
     message_type: MessageType
-    metadata: dict[str, str | int | float | bool | list[str] | None] = Field(default_factory=dict)
+    payload: dict = Field(default_factory=dict)

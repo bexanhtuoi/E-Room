@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from uuid import UUID
 
-from app.model.common import BaseEntity
+from sqlmodel import Field, SQLModel
+
+from app.model.common import TimestampedModel
 
 
 class NotificationType(StrEnum):
@@ -16,10 +19,14 @@ class NotificationType(StrEnum):
     SYSTEM = "system"
 
 
-class Notification(BaseEntity):
-    user_id: str
+class NotificationBase(SQLModel):
+    user_id: UUID = Field(foreign_key="users.id", index=True)
     title: str
     body: str | None = None
     notification_type: NotificationType = NotificationType.SYSTEM
     action_url: str | None = None
     is_read: bool = False
+
+
+class Notification(TimestampedModel, NotificationBase, table=True):
+    __tablename__ = "notifications"

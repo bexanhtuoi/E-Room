@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
 
-from app.api.dependencies import get_pagination_params
+from app.api.dependencies import get_db_session, get_pagination_params
 from app.model import Room, RoomStatus
 from app.schemas import RoomCreateRequest, RoomMatchRequest, RoomResponse
 from app.service.room import RoomService
 
 router = APIRouter()
-room_service = RoomService()
 
 
 @router.get("/", response_model=list[RoomResponse])
-async def list_rooms(pagination: tuple[int, int] = Depends(get_pagination_params)) -> list[RoomResponse]:
+async def list_rooms(pagination: tuple[int, int] = Depends(get_pagination_params), session: Session = Depends(get_db_session)) -> list[RoomResponse]:
+    room_service = RoomService(session)
     skip, limit = pagination
     rooms = room_service.list_all()[skip : skip + limit]
     return [
@@ -33,7 +34,8 @@ async def list_rooms(pagination: tuple[int, int] = Depends(get_pagination_params
 
 
 @router.post("/", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
-async def create_room(payload: RoomCreateRequest) -> RoomResponse:
+async def create_room(payload: RoomCreateRequest, session: Session = Depends(get_db_session)) -> RoomResponse:
+    room_service = RoomService(session)
     room = Room(livekit_room_name=payload.topic.lower().replace(" ", "-"), topic=payload.topic, tags=payload.tag_ids, max_participants=payload.max_participants, is_public=payload.is_public)
     room.status = RoomStatus.MATCHING
     saved_room = room_service.save(room)

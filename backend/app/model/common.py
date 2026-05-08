@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from sqlmodel import Field, SQLModel
 
 
 class EnglishLevel(StrEnum):
@@ -49,7 +49,7 @@ class MessageType(StrEnum):
     TTS_AUDIO = "tts_audio"
 
 
-class BaseEntity(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+class TimestampedModel(SQLModel):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)

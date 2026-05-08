@@ -1,25 +1,31 @@
 from __future__ import annotations
 
 from typing import Generic, TypeVar
+from uuid import UUID
 
-from pydantic import BaseModel
+from sqlmodel import Session, SQLModel, select
 
-EntityT = TypeVar("EntityT", bound=BaseModel)
+EntityT = TypeVar("EntityT", bound=SQLModel)
 
 
 class BaseService(Generic[EntityT]):
-    def __init__(self) -> None:
-        self._items: dict[str, EntityT] = {}
+    def __init__(self, session: Session, model_type: type[EntityT]) -> None:
+        self.session = session
+        self.model_type = model_type
 
-    def get_by_id(self, entity_id: str) -> EntityT | None:
-        return self._items.get(entity_id)
+    def get_by_id(self, entity_id: UUID) -> EntityT | None:
+        return self.session.get(self.model_type, entity_id)
 
     def list_all(self) -> list[EntityT]:
-        return list(self._items.values())
+        statement = select(self.model_type)
+        return list(self.session.exec(statement))
 
     def save(self, entity: EntityT) -> EntityT:
-        self._items[str(entity.id)] = entity
+        self.session.add(entity)
+        self.session.commit()
+        self.session.refresh(entity)
         return entity
 
-    def delete(self, entity_id: str) -> None:
-        self._items.pop(entity_id, None)
+    def delete(self, entity: EntityT) -> None:
+        self.session.delete(entity)
+        self.session.commit()

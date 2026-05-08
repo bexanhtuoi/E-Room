@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
+from uuid import UUID
 
-from pydantic import Field
+from sqlmodel import Field, SQLModel
 
-from app.model.common import BaseEntity
+from app.model.common import TimestampedModel
 
 
 class SeriesStatus(StrEnum):
@@ -21,38 +22,52 @@ class TopicRoomStatus(StrEnum):
     CANCELED = "canceled"
 
 
-class RoomSeries(BaseEntity):
+class RoomSeriesBase(SQLModel):
     title: str
     description: str | None = None
-    creator_id: str
-    tag_id: str
+    creator_id: UUID = Field(foreign_key="users.id", index=True)
+    tag_id: UUID = Field(foreign_key="tags.id", index=True)
     total_sessions: int = Field(default=2, ge=2, le=20)
     schedule_cron: str
     status: SeriesStatus = SeriesStatus.ACTIVE
 
 
-class TopicRoom(BaseEntity):
+class RoomSeries(TimestampedModel, RoomSeriesBase, table=True):
+    __tablename__ = "room_series"
+
+
+class TopicRoomBase(SQLModel):
     title: str
     description: str | None = None
-    tag_id: str
-    series_id: str | None = None
-    host_user_id: str
+    tag_id: UUID = Field(foreign_key="tags.id", index=True)
+    series_id: UUID | None = Field(default=None, foreign_key="room_series.id")
+    host_user_id: UUID = Field(foreign_key="users.id", index=True)
     is_ai_hosted: bool = False
     max_participants: int = Field(default=5, ge=1)
-    registered_count: int = Field(default=0, ge=0)
+    registered_count: int = 0
     status: TopicRoomStatus = TopicRoomStatus.UPCOMING
 
 
-class TopicRoomRegistration(BaseEntity):
-    topic_room_id: str
-    user_id: str
+class TopicRoom(TimestampedModel, TopicRoomBase, table=True):
+    __tablename__ = "topic_rooms"
 
 
-class LeaderboardEntry(BaseEntity):
-    user_id: str
-    tag_id: str
+class TopicRoomRegistration(TimestampedModel, table=True):
+    __tablename__ = "topic_room_registrations"
+
+    topic_room_id: UUID = Field(foreign_key="topic_rooms.id", index=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+
+
+class LeaderboardEntryBase(SQLModel):
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    tag_id: UUID = Field(foreign_key="tags.id", index=True)
     week_start: date
-    speaking_time_seconds: int = Field(default=0, ge=0)
+    speaking_time_seconds: int = 0
     avg_score: float = Field(default=0, ge=0, le=10)
-    sessions_count: int = Field(default=0, ge=0)
-    rank: int = Field(default=0, ge=0)
+    sessions_count: int = 0
+    rank: int = 0
+
+
+class LeaderboardEntry(TimestampedModel, LeaderboardEntryBase, table=True):
+    __tablename__ = "leaderboard"

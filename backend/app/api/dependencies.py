@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Query, status
 from jwt import InvalidTokenError
+from sqlmodel import Session
 
 from app.database import get_session
 from app.security import decode_token
@@ -45,5 +47,5 @@ def get_current_user(token_subject: Annotated[str, Depends(get_token)]) -> dict[
     return {"id": token_subject, "name": "Authenticated User"}
 
 
-def get_db_session() -> None:
+def get_db_session() -> Generator[Session, None, None]:
     yield from get_session()

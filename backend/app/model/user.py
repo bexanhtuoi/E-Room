@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from pydantic import EmailStr
+from sqlmodel import Field, SQLModel
 
-from app.model.common import BaseEntity, EnglishLevel
+from app.model.common import EnglishLevel, TimestampedModel
 
 
-class User(BaseEntity):
-    email: EmailStr
+class UserBase(SQLModel):
+    email: EmailStr = Field(index=True, unique=True)
     password_hash: str | None = None
-    display_name: str
+    display_name: str = Field(index=True)
     avatar_url: str | None = None
     english_level: EnglishLevel | None = None
     career_field: str | None = None
@@ -21,3 +22,7 @@ class User(BaseEntity):
     is_banned: bool = False
     ban_reason: str | None = None
     strikes: int = 0
+
+
+class User(TimestampedModel, UserBase, table=True):
+    __tablename__ = "users"
