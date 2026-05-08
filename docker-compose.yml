@@ -12,17 +12,6 @@ services:
       minio:
         condition: service_started
 
-  admin:
-    build: ./backend
-    command: uv run python -m admin.server
-    ports:
-      - "9002:9000"
-    restart: unless-stopped
-    env_file: ./backend/.env.docker
-    depends_on:
-      redis:
-        condition: service_healthy
-
   celery_worker:
     build: ./backend
     command: uv run celery -A app.infrastructure.celery_app.celery_app worker --loglevel=info
@@ -92,7 +81,7 @@ services:
         condition: service_started
     entrypoint: ["/bin/sh", "/config/init-buckets.sh"]
     volumes:
-      - ./minio/init-buckets.sh:/config/init-buckets.sh:ro
+      - ./init-buckets.sh:/config/init-buckets.sh:ro
 
   livekit:
     image: livekit/livekit-server:latest
@@ -103,7 +92,7 @@ services:
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
     volumes:
-      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+      - ./livekit.yaml:/etc/livekit.yaml:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -115,7 +104,7 @@ services:
       - "3478:3478"
       - "3478:3478/udp"
     volumes:
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
     command: ["-c", "/etc/coturn/turnserver.conf"]
 
   frontend:
@@ -136,7 +125,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api
       - frontend
