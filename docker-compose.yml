@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./backend
+    command: uv run python -m app.server
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    env_file: ./backend/.env
+
+  admin:
+    build: ./backend
+    command: uv run python -m admin.server
+    ports:
+      - "9000:9000"
+    restart: unless-stopped
+    env_file: ./backend/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: e_room_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    container_name: e_room_frontend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  redis_data:
