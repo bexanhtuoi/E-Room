@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from app.infrastructure.redis_client import get_redis_client
+from app.infrastructure.redis import get_redis_client
 from app.model.common import AgentLevel, RoomStatus
 
 

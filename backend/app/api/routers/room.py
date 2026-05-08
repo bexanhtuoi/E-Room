@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.dependencies import get_current_user, get_db_session, get_pagination_params
-from app.infrastructure.livekit_service import LiveKitService
+from app.infrastructure.livekit import LiveKitService
 from app.model import Room, RoomParticipant, RoomStatus, Session as RoomSession
 from app.schemas import (
     RoomCreateRequest,

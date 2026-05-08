@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.config import settings
-from app.infrastructure.redis_client import get_redis_client
+from app.infrastructure.redis import get_redis_client
 from app.infrastructure.video import VideoRoomService
-from app.infrastructure.livekit_service import LiveKitService
+from app.infrastructure.livekit import LiveKitService
 
 router = APIRouter()
 

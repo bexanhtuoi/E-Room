@@ -9,12 +9,14 @@ from app.config import settings
 
 
 class LiveKitService:
-    """Generate LiveKit access tokens for room participants."""
-
     def __init__(self) -> None:
         self.api_key = settings.livekit_api_key
         self.api_secret = settings.livekit_api_secret
         self.server_url = settings.livekit_url
+
+    @property
+    def base_url(self) -> str:
+        return self.server_url
 
     def build_room_token(
         self,

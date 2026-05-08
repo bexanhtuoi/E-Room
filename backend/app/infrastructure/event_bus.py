@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.infrastructure.redis_client import get_redis_client
+from app.infrastructure.redis import get_redis_client
 
 
 class RoomEventBus:

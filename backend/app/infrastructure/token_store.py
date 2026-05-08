@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.infrastructure.redis_client import get_redis_client
+from app.infrastructure.redis import get_redis_client
 
 
 class TokenStore:
