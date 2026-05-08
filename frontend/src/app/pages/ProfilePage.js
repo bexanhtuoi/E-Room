@@ -9,7 +9,7 @@ import Form from 'react-bootstrap/Form';
 import Alert from 'react-bootstrap/Alert';
 import Spinner from 'react-bootstrap/Spinner';
 import Badge from 'react-bootstrap/Badge';
-import { HiUserCircle, HiCog6Tooth, HiShieldCheck, HiBookOpen, HiCreditCard, HiLogout, HiPencil, HiCheckCircle } from 'react-icons/hi2';
+import { HiUserCircle, HiCog6Tooth, HiShieldCheck, HiBookOpen, HiCreditCard, HiArrowRightOnRectangle, HiPencil, HiCheckCircle } from 'react-icons/hi2';
 import { useAuth } from '../AuthContext';
 
 export function ProfilePage() {
@@ -53,7 +53,7 @@ export function ProfilePage() {
             <small className="text-muted">Member since 2026</small>
           </div>
           <Button variant="outline-danger" size="sm" className="rounded-pill d-flex align-items-center gap-1" onClick={handleLogout}>
-            <HiLogout size={14} /> Sign Out
+            <HiArrowRightOnRectangle size={14} /> Sign Out
           </Button>
         </div>
 

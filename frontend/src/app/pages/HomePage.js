@@ -7,7 +7,7 @@ import Card from 'react-bootstrap/Card';
 import Button from 'react-bootstrap/Button';
 import Badge from 'react-bootstrap/Badge';
 import Spinner from 'react-bootstrap/Spinner';
-import { HiHome, HiAcademicCap, HiUserGroup, HiLightBulb, HiShieldCheck, HiTrophy, HiGlobeAlt, HiSparkles, HiArrowRight, HiPlayCircle } from 'react-icons/hi2';
+import { HiHome, HiAcademicCap, HiUserGroup, HiLightBulb, HiShieldCheck, HiTrophy, HiGlobeAlt, HiSparkles, HiArrowRight, HiPlayCircle, HiClock } from 'react-icons/hi2';
 import { FiCheck } from 'react-icons/fi';
 import { useAuth } from '../AuthContext';
 

@@ -5,7 +5,7 @@ import Nav from 'react-bootstrap/Nav';
 import Container from 'react-bootstrap/Container';
 import Button from 'react-bootstrap/Button';
 import Badge from 'react-bootstrap/Badge';
-import { HiHome, HiAcademicCap, HiUserCircle, HiCreditCard, HiLogout, HiSun, HiMoon } from 'react-icons/hi2';
+import { HiHome, HiAcademicCap, HiUserCircle, HiCreditCard, HiArrowRightOnRectangle, HiSun, HiMoon } from 'react-icons/hi2';
 import { useAuth } from './AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -120,7 +120,7 @@ export function AppShell({ children }) {
                     style={{ color: 'var(--color-text-muted)', fontSize: '1rem' }}
                     onClick={handleLogout} title="Sign out"
                   >
-                    <HiLogout size={18} />
+                    <HiArrowRightOnRectangle size={18} />
                   </Button>
 
                   <Button variant="outline-danger" size="sm" className="rounded-pill d-lg-none w-100 mt-2"
