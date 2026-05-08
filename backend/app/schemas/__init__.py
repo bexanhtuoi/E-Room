@@ -1,5 +1,5 @@
 from app.schemas.agent import AgentSelection, AgentStatusResponse
-from app.schemas.auth import AuthTokenResponse, AuthUserPayload, LoginRequest, RegisterRequest
+from app.schemas.auth import AuthTokenResponse, AuthUserPayload, LoginRequest, RefreshTokenRequest, RegisterRequest
 from app.schemas.common import ApiMessage, PaginationMeta
 from app.schemas.conversation import SessionNoteResponse, SessionResponse
 from app.schemas.message import MessageCreateRequest, MessageResponse, TranscriptCreateRequest
@@ -18,6 +18,7 @@ __all__ = [
     "MessageCreateRequest",
     "MessageResponse",
     "PaginationMeta",
+    "RefreshTokenRequest",
     "RegisterRequest",
     "RoomCreateRequest",
     "RoomMatchRequest",

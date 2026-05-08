@@ -5,6 +5,8 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from app.infrastructure.event_bus import event_bus
+
 
 class WebSocketManager:
     def __init__(self) -> None:
@@ -21,6 +23,7 @@ class WebSocketManager:
             self._rooms.pop(room_id, None)
 
     async def broadcast(self, room_id: str, payload: dict[str, Any]) -> None:
+        event_bus.publish(room_id, payload)
         for connection in list(self._rooms.get(room_id, [])):
             await connection.send_json(payload)
 

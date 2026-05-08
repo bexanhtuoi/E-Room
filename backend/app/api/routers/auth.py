@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlmodel import Session
 
 from app.api.dependencies import get_db_session
-from app.schemas import AuthTokenResponse, LoginRequest, RegisterRequest, UserResponse
+from app.infrastructure.token_store import TokenStore
+from app.schemas import AuthTokenResponse, LoginRequest, RefreshTokenRequest, RegisterRequest, UserResponse
+from app.security import hash_token
 from app.service.auth import AuthService
 from app.service.user import UserService
 
@@ -38,7 +40,24 @@ async def login(payload: LoginRequest, session: Session = Depends(get_db_session
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     issued_tokens = auth_service.issue_tokens(user)
-    return AuthTokenResponse(
-        access_token=issued_tokens["access_token"],
-        refresh_token=issued_tokens["refresh_token"],
-    )
+    return AuthTokenResponse(access_token=issued_tokens["access_token"], refresh_token=issued_tokens["refresh_token"])
+
+
+@router.post("/refresh", response_model=AuthTokenResponse)
+async def refresh_token(payload: RefreshTokenRequest, session: Session = Depends(get_db_session)) -> AuthTokenResponse:
+    auth_service = AuthService(session)
+    refreshed = auth_service.refresh_tokens(payload.refresh_token)
+    if refreshed is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    return AuthTokenResponse(access_token=refreshed["access_token"], refresh_token=refreshed["refresh_token"])
+
+
+@router.post("/logout", response_model=dict[str, str])
+async def logout(payload: RefreshTokenRequest, response: Response, session: Session = Depends(get_db_session), access_token: str | None = Cookie(default=None)) -> dict[str, str]:
+    auth_service = AuthService(session)
+    token_store = TokenStore()
+    auth_service.revoke_refresh_token(payload.refresh_token)
+    if access_token:
+        token_store.blacklist_access_token(hash_token(access_token), 60 * 60)
+    response.delete_cookie("access_token")
+    return {"status": "logged_out"}

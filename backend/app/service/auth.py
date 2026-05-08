@@ -2,15 +2,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from jwt import InvalidTokenError
 from sqlmodel import Session, select
 
+from app.infrastructure.token_store import TokenStore
 from app.model import RefreshToken, User
-from app.security import create_access_token, create_refresh_token, hash_password, hash_token, verify_password
+from app.security import create_access_token, create_refresh_token, decode_token, hash_password, hash_token, verify_password
 
 
 class AuthService:
     def __init__(self, session: Session) -> None:
         self.session = session
+        self.token_store = TokenStore()
 
     def register_user(self, email: str, password: str, display_name: str) -> User:
         user = User(email=email, password_hash=hash_password(password), display_name=display_name)
@@ -42,3 +45,38 @@ class AuthService:
             "access_token": access_token,
             "refresh_token": refresh_token,
         }
+
+    def refresh_tokens(self, refresh_token: str) -> dict[str, str] | None:
+        try:
+            payload = decode_token(refresh_token)
+        except InvalidTokenError:
+            return None
+
+        if payload.get("type") != "refresh":
+            return None
+
+        token_hash = hash_token(refresh_token)
+        statement = select(RefreshToken).where(RefreshToken.token_hash == token_hash, RefreshToken.revoked == False)
+        refresh_record = self.session.exec(statement).first()
+        if refresh_record is None:
+            return None
+
+        user = self.session.get(User, refresh_record.user_id)
+        if user is None:
+            return None
+
+        refresh_record.revoked = True
+        self.session.add(refresh_record)
+        self.session.commit()
+        return self.issue_tokens(user)
+
+    def revoke_refresh_token(self, refresh_token: str) -> bool:
+        token_hash = hash_token(refresh_token)
+        statement = select(RefreshToken).where(RefreshToken.token_hash == token_hash, RefreshToken.revoked == False)
+        refresh_record = self.session.exec(statement).first()
+        if refresh_record is None:
+            return False
+        refresh_record.revoked = True
+        self.session.add(refresh_record)
+        self.session.commit()
+        return True
