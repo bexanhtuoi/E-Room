@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.136.1",
     "pydantic-settings>=2.14.0",
     "pyjwt>=2.12.1",
+    "sqlmodel>=0.0.38",
     "uvicorn>=0.46.0",
 ]
 
