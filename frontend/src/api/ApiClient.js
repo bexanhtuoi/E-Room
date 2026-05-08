@@ -1,56 +1,75 @@
-from __future__ import annotations
+const BASE_URL = '/api/v1';
 
-import json
-from typing import Any, Optional
+function getToken() {
+  try {
+    const stored = localStorage.getItem('auth');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.token || parsed.access_token || null;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
+async function request(method, path, body = null) {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
 
-class ApiClient:
-    def __init__(self, base_url: str = "/api/v1") -> None:
-        self._base_url = base_url
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
-    def _auth_headers(self) -> dict[str, str]:
-        token = None
-        try:
-            raw = __import__("json").loads(
-                __import__("pathlib").Path("./auth.json").read_text()
-            )
-        except Exception:
-            raw = {}
-        stored = raw or {}
-        # also check localStorage via injected value
-        return {"Authorization": f"Bearer {stored.get('token', '')}", "Content-Type": "application/json"}
+  const config = { method, headers };
+  if (body) {
+    config.body = JSON.stringify(body);
+  }
 
-    async def get(self, path: str) -> Any:
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self._base_url}{path}", headers=self._auth_headers()) as resp:
-                if resp.status >= 400:
-                    raise Exception(f"API {resp.status}: {await resp.text()}")
-                return await resp.json()
+  const url = `${BASE_URL}${path}`;
+  const response = await fetch(url, config);
 
-    async def post(self, path: str, data: dict) -> Any:
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self._base_url}{path}", json=data, headers=self._auth_headers()
-            ) as resp:
-                if resp.status >= 400:
-                    raise Exception(f"API {resp.status}: {await resp.text()}")
-                return await resp.json()
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const errBody = await response.json();
+      detail = errBody.detail || errBody.message || '';
+    } catch {
+      // ignore parse errors
+    }
+    const error = new Error(detail || `API ${response.status}: ${response.statusText}`);
+    error.status = response.status;
+    throw error;
+  }
 
-    def get_sync(self, path: str) -> Any:
-        import urllib.request
-        req = urllib.request.Request(f"{self._base_url}{path}", headers=self._auth_headers())
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+  // 204 No Content
+  if (response.status === 204) return null;
 
-    def post_sync(self, path: str, data: dict) -> Any:
-        import urllib.request
-        req = urllib.request.Request(
-            f"{self._base_url}{path}",
-            data=json.dumps(data).encode(),
-            headers=self._auth_headers(),
-            method="POST",
-        )
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+  return response.json();
+}
+
+const ApiClient = {
+  get(path) {
+    return request('GET', path);
+  },
+
+  post(path, body) {
+    return request('POST', path, body);
+  },
+
+  put(path, body) {
+    return request('PUT', path, body);
+  },
+
+  patch(path, body) {
+    return request('PATCH', path, body);
+  },
+
+  delete(path) {
+    return request('DELETE', path);
+  },
+};
+
+export default ApiClient;
