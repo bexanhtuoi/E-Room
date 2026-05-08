@@ -121,3 +121,35 @@ STATUS_MAP = {
     "IDLE": "IDLE",
     "END": "END",
 }
+
+
+def seed_rooms(session) -> int:
+    from uuid import uuid4
+
+    from sqlmodel import select
+
+    from app.model import Room
+
+    inserted = 0
+    for room_data in SEED_ROOMS:
+        existing = session.exec(
+            select(Room).where(Room.livekit_room_name == room_data["livekit_room_name"])
+        ).first()
+        if existing is None:
+            room = Room(
+                id=uuid4(),
+                livekit_room_name=room_data["livekit_room_name"],
+                topic=room_data["topic"],
+                description=room_data["description"],
+                tags=room_data["tags"],
+                agent_level=room_data["agent_level"],
+                english_level=room_data["english_level"],
+                max_participants=room_data["max_participants"],
+                is_public=room_data["is_public"],
+                status=room_data["status"],
+            )
+            session.add(room)
+            inserted += 1
+    if inserted > 0:
+        session.commit()
+    return inserted

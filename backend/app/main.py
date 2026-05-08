@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import create_db_and_tables
 from app.log import get_logger
 from app.infrastructure.tag_seed import seed_default_tags
+from app.infrastructure.seed_data import seed_rooms
 from app.database import engine
 from sqlmodel import Session
 
