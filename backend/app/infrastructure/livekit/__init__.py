@@ -9,47 +9,67 @@ from app.config import settings
 
 
 class LiveKitService:
+    _ALGORITHM = "HS256"
+    _TOKEN_TTL_SECONDS = 3600
+
     def __init__(self) -> None:
-        self.api_key = settings.livekit_api_key
-        self.api_secret = settings.livekit_api_secret
-        self.server_url = settings.livekit_url
+        self._api_key = settings.livekit_api_key
+        self._api_secret = settings.livekit_api_secret
+        self._server_url = settings.livekit_url
 
     @property
-    def base_url(self) -> str:
-        return self.server_url
+    def server_url(self) -> str:
+        return self._server_url
 
-    def build_room_token(
+    def generate_token(
         self,
         room_name: str,
         participant_identity: str,
         participant_name: str = "",
         can_publish: bool = True,
         can_subscribe: bool = True,
-        ttl_seconds: int = 3600,
+        metadata: dict | None = None,
     ) -> str:
         now = int(time.time())
-        payload = {
-            "iss": self.api_key,
+        claims = {
+            "exp": now + self._TOKEN_TTL_SECONDS,
+            "iat": now,
+            "iss": self._api_key,
             "sub": participant_identity,
             "nbf": now,
-            "exp": now + ttl_seconds,
-            "room": room_name,
-            "roomJoin": True,
-            "canPublish": can_publish,
-            "canSubscribe": can_subscribe,
-            "name": participant_name,
+            "video": {
+                "room": room_name,
+                "roomJoin": True,
+                "canPublish": can_publish,
+                "canSubscribe": can_subscribe,
+                "canPublishData": True,
+            },
         }
-        return jwt.encode(payload, self.api_secret, algorithm="HS256")
+        if participant_name:
+            claims["name"] = participant_name
+        if metadata:
+            claims["metadata"] = json.dumps(metadata)
 
-    def build_room_token_for_user(
-        self,
-        room_name: str,
-        user_id: UUID,
-        display_name: str = "",
-    ) -> str:
-        identity = str(user_id)
-        return self.build_room_token(
-            room_name=room_name,
-            participant_identity=identity,
-            participant_name=display_name or identity,
-        )
+        return jwt.encode(claims, self._api_secret, algorithm=self._ALGORITHM)
+
+    def generate_admin_token(self, room_name: str) -> str:
+        now = int(time.time())
+        claims = {
+            "exp": now + self._TOKEN_TTL_SECONDS,
+            "iat": now,
+            "iss": self._api_key,
+            "sub": f"admin_{room_name}",
+            "nbf": now,
+            "video": {
+                "room": room_name,
+                "roomJoin": True,
+                "roomAdmin": True,
+                "canPublish": True,
+                "canSubscribe": True,
+                "canPublishData": True,
+            },
+        }
+        return jwt.encode(claims, self._api_secret, algorithm=self._ALGORITHM)
+
+    def verify_webhook_token(self, token: str) -> dict:
+        return jwt.decode(token, self._api_secret, algorithms=[self._ALGORITHM])
