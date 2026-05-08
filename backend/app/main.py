@@ -12,6 +12,9 @@ from app.config import settings
 from app.database import create_db_and_tables
 from app.log import get_logger
 from app.presentation import presentation_router
+from app.infrastructure.tag_seed import seed_default_tags
+from app.database import engine
+from sqlmodel import Session
 
 os.makedirs(settings.avatar_dir, exist_ok=True)
 os.makedirs(settings.upload_dir, exist_ok=True)
@@ -22,6 +25,9 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    with Session(engine) as session:
+        inserted = seed_default_tags(session)
+        log.info("Seeded %s default tags", inserted)
     log.info("%s started", settings.app_name)
     yield
     log.info("%s shutdown", settings.app_name)

@@ -30,6 +30,10 @@ export function InfrastructurePanel() {
             <span>{data.video.videoServer}</span>
           </li>
           <li>
+            <strong>LiveKit</strong>
+            <span>{data.livekit.server}</span>
+          </li>
+          <li>
             <strong>WebSocket</strong>
             <span>{data.websocket.path}</span>
           </li>

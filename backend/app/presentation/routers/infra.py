@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.config import settings
 from app.infrastructure.redis_client import get_redis_client
 from app.infrastructure.video import VideoRoomService
+from app.infrastructure.livekit_service import LiveKitService
 
 router = APIRouter()
 
@@ -13,6 +14,7 @@ router = APIRouter()
 async def get_infra_status() -> dict[str, object]:
     redis_client = get_redis_client()
     video_service = VideoRoomService()
+    livekit_service = LiveKitService()
 
     redis_ok = False
     try:
@@ -30,6 +32,10 @@ async def get_infra_status() -> dict[str, object]:
             "broker": settings.redis_url,
         },
         "video": video_service.create_room_payload("demo-room", 5),
+        "livekit": {
+            "server": livekit_service.base_url,
+            "apiKey": livekit_service.api_key,
+        },
         "websocket": {
             "path": "/ws/rooms/{room_id}",
         },

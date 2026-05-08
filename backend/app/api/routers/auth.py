@@ -4,9 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.dependencies import get_db_session
-from app.model import User
 from app.schemas import AuthTokenResponse, LoginRequest, RegisterRequest, UserResponse
-from app.security import create_access_token
+from app.service.auth import AuthService
 from app.service.user import UserService
 
 router = APIRouter()
@@ -19,8 +18,8 @@ async def register(payload: RegisterRequest, session: Session = Depends(get_db_s
     if existing_user is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
 
-    user = User(email=payload.email, password_hash=payload.password, display_name=payload.display_name)
-    saved_user = user_service.create_user(user)
+    auth_service = AuthService(session)
+    saved_user = auth_service.register_user(str(payload.email), payload.password, payload.display_name)
     return UserResponse(
         id=str(saved_user.id),
         email=saved_user.email,
@@ -33,10 +32,13 @@ async def register(payload: RegisterRequest, session: Session = Depends(get_db_s
 
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest, session: Session = Depends(get_db_session)) -> AuthTokenResponse:
-    user_service = UserService(session)
-    user = user_service.get_by_email(str(payload.email))
+    auth_service = AuthService(session)
+    user = auth_service.authenticate_user(str(payload.email), payload.password)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    token = create_access_token(str(user.id))
-    return AuthTokenResponse(access_token=token)
+    issued_tokens = auth_service.issue_tokens(user)
+    return AuthTokenResponse(
+        access_token=issued_tokens["access_token"],
+        refresh_token=issued_tokens["refresh_token"],
+    )
