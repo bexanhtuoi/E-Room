@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlmodel import Session, select
 
 from app.model import AgentLevel, Room, RoomParticipant, RoomStatus, SubscriptionTier
@@ -30,7 +32,7 @@ class RoomParticipantService(BaseService[RoomParticipant]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, RoomParticipant)
 
-    def list_room_participants(self, room_id: str) -> list[RoomParticipant]:
+    def list_room_participants(self, room_id: UUID) -> list[RoomParticipant]:
         statement = select(RoomParticipant).where(RoomParticipant.room_id == room_id)
         return list(self.session.exec(statement))
 

@@ -8,14 +8,14 @@ export function InfrastructurePanel() {
   const { data, isLoading, error } = useAsyncResource(loader, null);
 
   return (
-    <Card title="Infrastructure services" subtitle="Redis, Celery, MinIO, video, websocket scaffolds">
-      {isLoading ? <p>Checking infrastructure...</p> : null}
-      {error ? <p className="error-text">{error}</p> : null}
+    <Card title="Infrastructure" subtitle="Redis, Celery, MinIO, LiveKit, WebSocket">
+      {isLoading ? <p className="empty-state">Checking infrastructure...</p> : null}
+      {error ? <p className="empty-state" style={{ color: '#f87171' }}>{error}</p> : null}
       {data ? (
-        <ul className="simple-list">
+        <ul className="list-simple">
           <li>
             <strong>Redis</strong>
-            <span>{data.redis ? 'reachable' : 'unreachable'}</span>
+            <span className={data.redis ? 'pill pill-active' : 'pill pill-end'}>{data.redis ? 'reachable' : 'unreachable'}</span>
           </li>
           <li>
             <strong>MinIO</strong>
@@ -23,11 +23,7 @@ export function InfrastructurePanel() {
           </li>
           <li>
             <strong>Celery</strong>
-            <span>broker configured</span>
-          </li>
-          <li>
-            <strong>Video server</strong>
-            <span>{data.video.videoServer}</span>
+            <span>configured</span>
           </li>
           <li>
             <strong>LiveKit</strong>

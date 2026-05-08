@@ -16,6 +16,10 @@ class RoomMatchRequest(BaseModel):
     auto_join: bool = True
 
 
+class RoomJoinRequest(BaseModel):
+    user_id: str
+
+
 class RoomResponse(BaseModel):
     id: str
     livekit_room_name: str
@@ -27,3 +31,8 @@ class RoomResponse(BaseModel):
     max_participants: int
     current_participants: int
     is_public: bool
+
+
+class RoomDetailResponse(RoomResponse):
+    participants: list[str] = Field(default_factory=list)
+    messages: list[dict[str, str]] = Field(default_factory=list)

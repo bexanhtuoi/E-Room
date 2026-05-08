@@ -15,15 +15,16 @@ export function RealtimeRoomPanel() {
       socket.send(JSON.stringify({ type: 'heartbeat_probe', roomId }));
     });
 
-    return () => {
-      socket.close();
-    };
+    return () => { socket.close(); };
   }, [roomId]);
 
   return (
-    <Card title="Realtime room" subtitle="WebSocket room contract and event feed">
-      <input value={roomId} onChange={(event) => setRoomId(event.target.value)} placeholder="Room id" />
-      <ul className="simple-list">
+    <Card title="Realtime events" subtitle="Room WebSocket event feed">
+      <div className="form-row" style={{ marginBottom: 12 }}>
+        <input value={roomId} onChange={(event) => setRoomId(event.target.value)} placeholder="Room id" />
+      </div>
+      {events.length === 0 ? <p className="empty-state">Waiting for room events...</p> : null}
+      <ul className="list-simple">
         {events.map((event, index) => (
           <li key={`${event.type}-${index}`}>
             <strong>{event.type}</strong>

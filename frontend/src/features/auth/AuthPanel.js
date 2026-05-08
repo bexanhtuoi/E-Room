@@ -37,17 +37,17 @@ export function AuthPanel() {
   }
 
   return (
-    <Card title="Auth flow" subtitle="Register and login against the current backend contract">
-      <div className="form-grid">
+    <Card title="Auth" subtitle="Register or login to get tokens">
+      <div className="form-stack">
         <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Display name" />
         <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
         <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" />
       </div>
-      <div className="button-row">
-        <button onClick={register} type="button">Register</button>
-        <button onClick={login} type="button">Login</button>
+      <div className="form-row" style={{ marginTop: 12 }}>
+        <button onClick={register}>Register</button>
+        <button onClick={login}>Login</button>
       </div>
-      <p>{status}</p>
+      <p style={{ marginTop: 10, fontSize: 13, color: '#94a3b8' }}>{status}</p>
     </Card>
   );
 }

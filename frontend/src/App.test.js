@@ -3,5 +3,5 @@ import { App } from './app/App';
 
 test('renders e-room shell title', () => {
   render(<App />);
-  expect(screen.getByText(/Realtime English rooms with clean infrastructure first/i)).toBeInTheDocument();
+  expect(screen.getByText(/Realtime English speaking rooms/i)).toBeInTheDocument();
 });

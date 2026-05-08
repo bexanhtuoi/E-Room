@@ -15,22 +15,26 @@ export function DashboardOverview() {
   const { data, isLoading, error } = useAsyncResource(loader, { status: 'unknown' });
 
   return (
-    <Card title="Infrastructure status" subtitle="Backend first, AI later">
-      <div className="stats-row">
-        <div className="stat-box">
-          <span>Status</span>
+    <Card title="System" subtitle="Backend first, AI follows">
+      <div className="stat-row">
+        <div className="stat">
+          <span>API status</span>
           <strong>{isLoading ? 'Checking' : data.status}</strong>
         </div>
-        <div className="stat-box">
+        <div className="stat">
           <span>Persistence</span>
           <strong>SQLModel</strong>
         </div>
-        <div className="stat-box">
-          <span>Frontend mode</span>
+        <div className="stat">
+          <span>Mode</span>
           <strong>Clean scaffold</strong>
         </div>
+        <div className="stat">
+          <span>WebSocket</span>
+          <strong>Ready</strong>
+        </div>
       </div>
-      {error ? <p className="error-text">{error}</p> : null}
+      {error ? <p style={{ marginTop: 12, color: '#f87171', fontSize: 13 }}>{error}</p> : null}
     </Card>
   );
 }

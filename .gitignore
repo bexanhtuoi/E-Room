@@ -9,6 +9,7 @@ backend/.pytest_cache/
 backend/.mypy_cache/
 backend/log/*.log
 backend/.env
+backend/*.db
 
 # frontend
 frontend/node_modules/
