@@ -34,6 +34,15 @@ class SessionService:
         self.session.refresh(session)
         return session
 
+    def save(self, obj):
+        self.session.add(obj)
+        self.session.commit()
+        self.session.refresh(obj)
+        return obj
+
+    def list_all(self):
+        return self.repo.get_many(self.session)
+
 
 class SessionNoteService:
     def __init__(self, session: DBSession) -> None:

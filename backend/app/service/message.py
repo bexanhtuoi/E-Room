@@ -29,3 +29,12 @@ class MessageService:
         self.session.commit()
         self.session.refresh(message)
         return message
+
+    def save(self, obj):
+        self.session.add(obj)
+        self.session.commit()
+        self.session.refresh(obj)
+        return obj
+
+    def list_all(self):
+        return self.repo.get_many(self.session)

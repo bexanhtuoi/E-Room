@@ -37,6 +37,12 @@ class RoomService:
             return AgentLevel.ADVANCED
         return AgentLevel.BASIC
 
+    def save(self, obj):
+        self.session.add(obj)
+        self.session.commit()
+        self.session.refresh(obj)
+        return obj
+
 
 class RoomParticipantService:
     def __init__(self, session: Session) -> None:

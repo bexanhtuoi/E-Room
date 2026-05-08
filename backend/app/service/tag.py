@@ -22,6 +22,12 @@ class TagService:
         statement = select(Tag).order_by(Tag.usage_count.desc()).limit(limit)
         return list(self.session.exec(statement))
 
+    def save(self, obj):
+        self.session.add(obj)
+        self.session.commit()
+        self.session.refresh(obj)
+        return obj
+
 
 class UserTagService:
     def __init__(self, session: Session) -> None:
