@@ -3,24 +3,35 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from app.model import Subscription, SubscriptionTier, User
-from app.service.base import BaseService
+from app.service.base import CRUDRepository
 
 
-class UserService(BaseService[User]):
+class UserService:
     def __init__(self, session: Session) -> None:
-        super().__init__(session, User)
+        self.session = session
+        self.repo = CRUDRepository(User)
 
-    def create_user(self, user: User) -> User:
-        return self.save(user)
+    def get_by_id(self, id):
+        return self.session.get(self.repo._model, id)
 
     def get_by_email(self, email: str) -> User | None:
         statement = select(User).where(User.email == email)
         return self.session.exec(statement).first()
 
+    def create_user(self, user: User) -> User:
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
 
-class SubscriptionService(BaseService[Subscription]):
+
+class SubscriptionService:
     def __init__(self, session: Session) -> None:
-        super().__init__(session, Subscription)
+        self.session = session
+        self.repo = CRUDRepository(Subscription)
+
+    def get_by_id(self, id):
+        return self.session.get(self.repo._model, id)
 
     def get_user_tier(self, user_id: str) -> SubscriptionTier:
         statement = select(Subscription).where(Subscription.user_id == user_id)
@@ -30,4 +41,7 @@ class SubscriptionService(BaseService[Subscription]):
         return subscription.tier
 
     def set_subscription(self, subscription: Subscription) -> Subscription:
-        return self.save(subscription)
+        self.session.add(subscription)
+        self.session.commit()
+        self.session.refresh(subscription)
+        return subscription

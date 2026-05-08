@@ -3,12 +3,16 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from app.model import Tag, UserTag
-from app.service.base import BaseService
+from app.service.base import CRUDRepository
 
 
-class TagService(BaseService[Tag]):
+class TagService:
     def __init__(self, session: Session) -> None:
-        super().__init__(session, Tag)
+        self.session = session
+        self.repo = CRUDRepository(Tag)
+
+    def get_by_id(self, id):
+        return self.session.get(self.repo._model, id)
 
     def search_tags(self, query: str, limit: int = 10) -> list[Tag]:
         statement = select(Tag).where(Tag.name.contains(query)).limit(limit)
@@ -19,13 +23,20 @@ class TagService(BaseService[Tag]):
         return list(self.session.exec(statement))
 
 
-class UserTagService(BaseService[UserTag]):
+class UserTagService:
     def __init__(self, session: Session) -> None:
-        super().__init__(session, UserTag)
+        self.session = session
+        self.repo = CRUDRepository(UserTag)
+
+    def get_by_id(self, id):
+        return self.session.get(self.repo._model, id)
 
     def list_user_tags(self, user_id: str) -> list[UserTag]:
         statement = select(UserTag).where(UserTag.user_id == user_id)
         return list(self.session.exec(statement))
 
     def attach_tag(self, user_tag: UserTag) -> UserTag:
-        return self.save(user_tag)
+        self.session.add(user_tag)
+        self.session.commit()
+        self.session.refresh(user_tag)
+        return user_tag

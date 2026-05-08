@@ -5,12 +5,16 @@ from uuid import UUID
 from sqlmodel import Session as DBSession, select
 
 from app.model import Session, SessionNote
-from app.service.base import BaseService
+from app.service.base import CRUDRepository
 
 
-class SessionService(BaseService[Session]):
+class SessionService:
     def __init__(self, session: DBSession) -> None:
-        super().__init__(session, Session)
+        self.session = session
+        self.repo = CRUDRepository(Session)
+
+    def get_by_id(self, id: UUID):
+        return self.session.get(self.repo._model, id)
 
     def list_sessions_for_user(self, user_id: UUID) -> list[Session]:
         statement = select(Session).where(Session.user_id == user_id)
@@ -25,12 +29,19 @@ class SessionService(BaseService[Session]):
         if session is None:
             return None
         session.ai_review = review_payload
-        return self.save(session)
+        self.session.add(session)
+        self.session.commit()
+        self.session.refresh(session)
+        return session
 
 
-class SessionNoteService(BaseService[SessionNote]):
+class SessionNoteService:
     def __init__(self, session: DBSession) -> None:
-        super().__init__(session, SessionNote)
+        self.session = session
+        self.repo = CRUDRepository(SessionNote)
+
+    def get_by_id(self, id: UUID):
+        return self.session.get(self.repo._model, id)
 
     def list_notes_for_user(self, user_id: UUID) -> list[SessionNote]:
         statement = select(SessionNote).where(SessionNote.user_id == user_id)
@@ -38,4 +49,7 @@ class SessionNoteService(BaseService[SessionNote]):
 
     def create_note(self, note: SessionNote) -> SessionNote:
         note.word_count = len(note.content.split())
-        return self.save(note)
+        self.session.add(note)
+        self.session.commit()
+        self.session.refresh(note)
+        return note

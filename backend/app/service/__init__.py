@@ -1,5 +1,5 @@
 from app.service.agent import AgentPolicyService
-from app.service.base import BaseService
+from app.service.base import CRUDRepository
 from app.service.conversation import SessionNoteService, SessionService
 from app.service.document import DocumentService, KnowledgeChunkService
 from app.service.message import MessageService
@@ -12,7 +12,7 @@ from app.service.user import SubscriptionService, UserService
 __all__ = [
     "AgentMisuseService",
     "AgentPolicyService",
-    "BaseService",
+    "CRUDRepository",
     "DocumentService",
     "KnowledgeChunkService",
     "LeaderboardService",

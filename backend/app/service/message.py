@@ -5,15 +5,19 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from app.model import Message, MessageType
-from app.service.base import BaseService
+from app.service.base import CRUDRepository
 
 
-class MessageService(BaseService[Message]):
+class MessageService:
     def __init__(self, session: Session) -> None:
-        super().__init__(session, Message)
+        self.session = session
+        self.repo = CRUDRepository(Message)
+
+    def get_many(self):
+        return self.repo.get_many(self.session)
 
     def list_messages(self) -> list[dict]:
-        return [message.model_dump(mode="json") for message in self.list_all()]
+        return [message.model_dump(mode="json") for message in self.repo.get_many(self.session)]
 
     def list_room_messages(self, room_id: UUID) -> list[Message]:
         statement = select(Message).where(Message.room_id == room_id)
@@ -21,4 +25,7 @@ class MessageService(BaseService[Message]):
 
     def create_transcript_message(self, room_id: UUID, user_id: UUID | None, content: str) -> Message:
         message = Message(room_id=room_id, user_id=user_id, content=content, message_type=MessageType.TRANSCRIPT)
-        return self.save(message)
+        self.session.add(message)
+        self.session.commit()
+        self.session.refresh(message)
+        return message
