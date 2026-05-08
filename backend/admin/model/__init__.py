@@ -1,1 +1,0 @@
-"""Admin models package."""

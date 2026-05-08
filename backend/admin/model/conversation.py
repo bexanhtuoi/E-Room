@@ -1,2 +1,0 @@
-class Conversation:
-    pass

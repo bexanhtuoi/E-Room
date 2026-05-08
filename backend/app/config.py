@@ -15,8 +15,8 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
-    database_url: str = "sqlite:///./e_room.db"
-    database_url_sync: str = "sqlite:///./e_room.db"
+    database_url: str = "sqlite:///../e_room.db"
+    database_url_sync: str = "sqlite:///../e_room.db"
     redis_url: str = "redis://localhost:6379/0"
 
     secret_key: str = "change-me"

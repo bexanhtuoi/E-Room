@@ -32,7 +32,10 @@ export function AuthProvider({ children }) {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || 'Login failed');
+      const detail = Array.isArray(body.detail)
+        ? body.detail.map((e) => e.msg).join('; ')
+        : body.detail;
+      throw new Error(detail || 'Login failed');
     }
     const data = await response.json();
     setTokens(data.access_token, data.refresh_token);
@@ -53,7 +56,10 @@ export function AuthProvider({ children }) {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || 'Registration failed');
+      const detail = Array.isArray(body.detail)
+        ? body.detail.map((e) => e.msg).join('; ')
+        : body.detail;
+      throw new Error(detail || 'Registration failed');
     }
     return response.json();
   }, []);

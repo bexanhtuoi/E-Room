@@ -11,7 +11,6 @@ from app.api import api_router
 from app.config import settings
 from app.database import create_db_and_tables
 from app.log import get_logger
-from app.presentation import presentation_router
 from app.infrastructure.tag_seed import seed_default_tags
 from app.database import engine
 from sqlmodel import Session
@@ -42,15 +41,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 app.include_router(api_router, prefix="/api/v1")
-app.include_router(presentation_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["root"])

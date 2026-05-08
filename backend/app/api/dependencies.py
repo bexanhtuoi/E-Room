@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 import hashlib
 
-from fastapi import Cookie, Depends, HTTPException, Query, status
+from fastapi import Cookie, Depends, Header, HTTPException, Query, status
 from jwt import InvalidTokenError
 from sqlmodel import Session
 
@@ -18,8 +18,15 @@ def get_pagination_params(skip: int = Query(0, ge=0), limit: int = Query(10, ge=
     return skip, limit
 
 
-def get_token(access_token: Annotated[str | None, Cookie()] = None) -> str:
-    if access_token is None:
+def get_token(
+    access_token_cookie: Annotated[str | None, Cookie()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    access_token = access_token_cookie
+    if not access_token and authorization and authorization.startswith("Bearer "):
+        access_token = authorization.removeprefix("Bearer ")
+
+    if not access_token:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
@@ -27,13 +34,16 @@ def get_token(access_token: Annotated[str | None, Cookie()] = None) -> str:
         )
 
     token_store = TokenStore()
-    token_hash = hashlib.sha256(access_token.encode("utf-8")).hexdigest()
-    if token_store.is_blacklisted(token_hash):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token has been revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    try:
+        token_hash = hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+        if token_store.is_blacklisted(token_hash):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except Exception:
+        pass
 
     try:
         payload = decode_token(access_token)
