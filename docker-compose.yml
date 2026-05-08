@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build: ./backend
@@ -10,6 +8,8 @@ services:
     env_file: ./backend/.env
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       minio:
         condition: service_started
@@ -24,6 +24,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   celery_worker:
     build: ./backend
@@ -32,6 +34,8 @@ services:
     env_file: ./backend/.env
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
 
   celery_beat:
@@ -42,6 +46,23 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: engconnect
+      POSTGRES_USER: engconnect_app
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U engconnect_app -d engconnect"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -70,15 +91,63 @@ services:
     volumes:
       - minio_data:/data
 
+  minio_init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "/config/init-buckets.sh"]
+    volumes:
+      - ./minio/init-buckets.sh:/config/init-buckets.sh:ro
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+
   frontend:
     build: ./frontend
     container_name: e_room_frontend
     ports:
       - "3000:3000"
     restart: unless-stopped
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:8000/api/v1
+      REACT_APP_WS_BASE_URL: ws://localhost:8000
     stdin_open: true
     tty: true
 
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - frontend
+
 volumes:
+  postgres_data:
   redis_data:
   minio_data:

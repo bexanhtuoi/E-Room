@@ -9,7 +9,7 @@ from app.config import settings
 from app.log import get_logger
 
 log = get_logger(__name__)
-engine = create_engine(settings.database_url, echo=False)
+engine = create_engine(settings.database_url_sync or settings.database_url, echo=False)
 
 
 def create_db_and_tables() -> None:
