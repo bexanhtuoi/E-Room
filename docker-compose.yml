@@ -14,7 +14,7 @@ services:
 
   celery_worker:
     build: ./backend
-    command: uv run celery -A app.infrastructure.celery_app.celery_app worker --loglevel=info
+    command: uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info
     restart: unless-stopped
     env_file: ./backend/.env.docker
     depends_on:
@@ -23,7 +23,7 @@ services:
 
   celery_beat:
     build: ./backend
-    command: uv run celery -A app.infrastructure.celery_app.celery_app beat --loglevel=info
+    command: uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info
     restart: unless-stopped
     env_file: ./backend/.env.docker
     depends_on:
