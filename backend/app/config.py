@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     avatar_dir: str = "static/avatars"
     upload_dir: str = "static/uploads"
 
+    livekit_url: str = "ws://localhost:7880"
+    livekit_api_key: str = "devkey"
+    livekit_api_secret: str = "secret"
+    turn_server_url: str = "turn:localhost:3478"
+
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "e-room-rag-docs"
+    minio_secure: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

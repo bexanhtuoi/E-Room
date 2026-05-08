@@ -11,6 +11,7 @@ from app.api import api_router
 from app.config import settings
 from app.database import create_db_and_tables
 from app.log import get_logger
+from app.presentation import presentation_router
 
 os.makedirs(settings.avatar_dir, exist_ok=True)
 os.makedirs(settings.upload_dir, exist_ok=True)
@@ -43,6 +44,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(presentation_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["root"])
