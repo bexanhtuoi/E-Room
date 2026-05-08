@@ -180,10 +180,10 @@ async def get_room_token(
     if room is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
 
-    token = livekit.build_room_token_for_user(
+    token = livekit.generate_token(
         room_name=room.livekit_room_name,
-        user_id=UUID(current_user["id"]),
-        display_name=current_user.get("name", ""),
+        participant_identity=str(current_user["id"]),
+        participant_name=current_user.get("display_name", current_user.get("email", "")),
     )
 
     return RoomTokenResponse(

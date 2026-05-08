@@ -5,8 +5,9 @@ import Nav from 'react-bootstrap/Nav';
 import Container from 'react-bootstrap/Container';
 import Button from 'react-bootstrap/Button';
 import Badge from 'react-bootstrap/Badge';
+import { HiHome, HiAcademicCap, HiUserCircle, HiCreditCard, HiLogout, HiSun, HiMoon } from 'react-icons/hi2';
 import { useAuth } from './AuthContext';
-import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { useTheme } from '../context/ThemeContext';
 import { Avatar } from '../components/ui/Avatar';
 
 export function AppShell({ children }) {
@@ -14,20 +15,21 @@ export function AppShell({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   function handleLogout() {
     logout();
     navigate('/login');
   }
 
-  const isActive = (path) => {
+  const isActive = path => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
 
   const navItems = [
-    { path: '/', label: 'Home', icon: '🏠' },
-    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { path: '/', label: 'Home', icon: HiHome },
+    { path: '/learning', label: 'Learning', icon: HiAcademicCap },
   ];
 
   return (
@@ -47,32 +49,24 @@ export function AppShell({ children }) {
         }}
       >
         <Container>
-          <Navbar.Brand
-            as={Link}
-            to="/"
+          <Navbar.Brand as={Link} to="/" onClick={() => setExpanded(false)}
             className="fw-extrabold d-flex align-items-center gap-2"
             style={{ color: 'var(--color-text-primary)', fontSize: '1.1rem' }}
-            onClick={() => setExpanded(false)}
           >
-            <span
-              className="d-flex align-items-center justify-content-center rounded-3"
-              style={{
-                width: 32, height: 32,
-                background: 'var(--color-accent)', color: '#fff',
-                fontSize: '0.95rem', fontWeight: 800,
-              }}
-            >E</span>
+            <span className="d-flex align-items-center justify-content-center rounded-3"
+              style={{ width: 32, height: 32, background: 'var(--color-accent)', color: '#fff', fontSize: '0.95rem', fontWeight: 800 }}>
+              E
+            </span>
             E-Room
           </Navbar.Brand>
-          <Navbar.Toggle aria-controls="main-navbar" className="border-0" style={{ color: 'var(--color-text-secondary)' }} />
+
+          <Navbar.Toggle aria-controls="main-navbar" className="border-0" />
+
           <Navbar.Collapse id="main-navbar">
             <Nav className="me-auto gap-1">
               {navItems.map(item => (
-                <Nav.Link
-                  key={item.path}
-                  as={Link}
-                  to={item.path}
-                  className={`rounded-pill px-3 ${isActive(item.path) ? 'active' : ''}`}
+                <Nav.Link key={item.path} as={Link} to={item.path}
+                  className={`rounded-pill px-3 d-flex align-items-center gap-1 ${isActive(item.path) ? 'active' : ''}`}
                   style={{
                     color: isActive(item.path) ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     fontWeight: isActive(item.path) ? 600 : 500,
@@ -81,72 +75,61 @@ export function AppShell({ children }) {
                   }}
                   onClick={() => setExpanded(false)}
                 >
-                  <span className="me-1">{item.icon}</span>
+                  <item.icon size={16} />
                   {item.label}
                 </Nav.Link>
               ))}
             </Nav>
+
             <Nav className="align-items-lg-center gap-1">
-              <ThemeToggle />
+              <Button variant="link" size="sm" className="text-decoration-none rounded-pill px-2 d-flex align-items-center"
+                style={{ color: 'var(--color-text-secondary)', fontSize: '1.1rem' }}
+                onClick={toggleTheme} title="Toggle theme"
+              >
+                {theme === 'dark' ? <HiSun size={18} /> : <HiMoon size={18} />}
+              </Button>
+
               {user ? (
                 <>
-                  <Nav.Link
-                    as={Link}
-                    to="/profile"
+                  <Nav.Link as={Link} to="/profile"
                     className="rounded-pill px-3 d-flex align-items-center gap-2"
                     style={{
                       color: isActive('/profile') ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                      fontWeight: isActive('/profile') ? 600 : 500,
-                      fontSize: '0.875rem',
+                      fontWeight: isActive('/profile') ? 600 : 500, fontSize: '0.875rem',
                     }}
                     onClick={() => setExpanded(false)}
                   >
-                    <Avatar name={user.display_name || user.email} size={24} />
+                    <HiUserCircle size={18} />
                     <span className="d-none d-md-inline">{user.display_name || 'Profile'}</span>
                   </Nav.Link>
-                  <Nav.Link
-                    as={Link}
-                    to="/payment"
-                    className={`rounded-pill px-3 ${isActive('/payment') ? 'active' : ''}`}
+
+                  <Nav.Link as={Link} to="/payment"
+                    className={`rounded-pill px-3 d-flex align-items-center gap-1 ${isActive('/payment') ? 'active' : ''}`}
                     style={{
                       color: isActive('/payment') ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
+                      fontWeight: 500, fontSize: '0.875rem',
                     }}
                     onClick={() => setExpanded(false)}
                   >
-                    <Badge bg="warning" text="dark" className="rounded-pill fw-semibold" style={{ fontSize: '0.65rem' }}>
-                      PRO
-                    </Badge>
+                    <HiCreditCard size={16} />
+                    <Badge bg="warning" text="dark" className="rounded-pill fw-semibold" style={{ fontSize: '0.6rem' }}>PRO</Badge>
                   </Nav.Link>
-                  <Button
-                    variant="link"
-                    size="sm"
+
+                  <Button variant="link" size="sm"
                     className="text-decoration-none rounded-pill px-2 d-none d-lg-flex align-items-center"
-                    style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}
-                    onClick={handleLogout}
-                    title="Sign out"
+                    style={{ color: 'var(--color-text-muted)', fontSize: '1rem' }}
+                    onClick={handleLogout} title="Sign out"
                   >
-                    🚪
+                    <HiLogout size={18} />
                   </Button>
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    className="rounded-pill d-lg-none w-100 mt-2"
+
+                  <Button variant="outline-danger" size="sm" className="rounded-pill d-lg-none w-100 mt-2"
                     onClick={() => { handleLogout(); setExpanded(false); }}
-                  >
-                    Sign Out
-                  </Button>
+                  >Sign Out</Button>
                 </>
               ) : (
-                <Button
-                  as={Link}
-                  to="/login"
-                  variant="primary"
-                  size="sm"
-                  className="rounded-pill px-4 fw-semibold"
-                  onClick={() => setExpanded(false)}
-                >
+                <Button as={Link} to="/login" variant="primary" size="sm"
+                  className="rounded-pill px-4 fw-semibold" onClick={() => setExpanded(false)}>
                   Sign In
                 </Button>
               )}
@@ -155,12 +138,8 @@ export function AppShell({ children }) {
         </Container>
       </Navbar>
 
-      {/* Main Content */}
-      <main style={{ paddingTop: '72px', flex: 1 }}>
-        {children}
-      </main>
+      <main style={{ paddingTop: '72px', flex: 1 }}>{children}</main>
 
-      {/* Footer */}
       <footer className="py-3 border-top" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}>
         <Container>
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
@@ -170,7 +149,7 @@ export function AppShell({ children }) {
             </small>
             <div className="d-flex gap-3">
               <Link to="/" className="text-muted small text-decoration-none">Home</Link>
-              <Link to="/dashboard" className="text-muted small text-decoration-none">Rooms</Link>
+              <Link to="/learning" className="text-muted small text-decoration-none">Learning</Link>
               <Link to="/profile" className="text-muted small text-decoration-none">Profile</Link>
               <Link to="/payment" className="text-muted small text-decoration-none">Pricing</Link>
             </div>

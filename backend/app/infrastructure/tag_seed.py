@@ -71,3 +71,24 @@ def get_default_tags_by_category() -> dict[str, list[TagSeed]]:
 
 def get_tag_count() -> int:
     return len(DEFAULT_TAGS)
+
+
+def seed_default_tags(session) -> int:
+    from app.model import Tag, TagCategory
+    inserted = 0
+    for tag_data in DEFAULT_TAGS:
+        existing = session.exec(
+            __import__("sqlmodel").select(Tag).where(Tag.slug == tag_data["slug"])
+        ).first()
+        if existing is None:
+            tag = Tag(
+                name=tag_data["name"],
+                slug=tag_data["slug"],
+                category=TagCategory(tag_data["category"]),
+                icon=tag_data["icon"],
+            )
+            session.add(tag)
+            inserted += 1
+    if inserted > 0:
+        session.commit()
+    return inserted

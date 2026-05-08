@@ -2,9 +2,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './AuthContext';
 import { ProtectedRoute } from './ProtectedRoute';
 import { HomePage } from './pages/HomePage';
+import { LearningPage } from './pages/LearningPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { PaymentPage } from './pages/PaymentPage';
-import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { RoomPage } from '../features/rooms/RoomPage';
 import { AppShell } from './AppShell';
@@ -19,8 +19,8 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
 
           {/* Protected */}
-          <Route path="/dashboard" element={
-            <ProtectedRoute><AppShell><DashboardPage /></AppShell></ProtectedRoute>
+          <Route path="/learning" element={
+            <ProtectedRoute><AppShell><LearningPage /></AppShell></ProtectedRoute>
           } />
           <Route path="/profile" element={
             <ProtectedRoute><AppShell><ProfilePage /></AppShell></ProtectedRoute>
