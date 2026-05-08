@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.infrastructure.celery_app import celery_app
+from app.infrastructure.celery import celery_app
 
 
 @celery_app.task(name="app.tasks.tts.generate_tts_audio")

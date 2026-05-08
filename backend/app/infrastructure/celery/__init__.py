@@ -28,17 +28,17 @@ celery_app.conf.update(
     },
 )
 
-from app.infrastructure.celery.ai import run_ai_pipeline
+from app.infrastructure.celery.ai import generate_ai_correction
 from app.infrastructure.celery.matching import run_matchmaking_tick
 from app.infrastructure.celery.moderation import scan_active_rooms
-from app.infrastructure.celery.rag import ingest_document
-from app.infrastructure.celery.tts import synthesize_speech
+from app.infrastructure.celery.rag import load_room_knowledge
+from app.infrastructure.celery.tts import generate_tts_audio
 
 __all__ = [
     "celery_app",
-    "ingest_document",
-    "run_ai_pipeline",
+    "generate_ai_correction",
+    "generate_tts_audio",
+    "load_room_knowledge",
     "run_matchmaking_tick",
     "scan_active_rooms",
-    "synthesize_speech",
 ]
