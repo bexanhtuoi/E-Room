@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CreateRoomModal } from '../../features/rooms/CreateRoomModal';
 
-export function AppShell({ children, onRoomCreated }) {
+export function AppShell({ children, onRoomCreated, user, onLogout }) {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
 
   return (
@@ -18,7 +18,15 @@ export function AppShell({ children, onRoomCreated }) {
             <p>Clean infrastructure first. AI features scaffolded until the backend is stable.</p>
           </div>
           <div className="hero-actions">
+            {user && (
+              <span style={{ color: '#94a3b8', fontSize: 13, marginRight: 8 }}>
+                {user.display_name || user.email}
+              </span>
+            )}
             <button onClick={() => setShowCreateRoom(true)}>New Room</button>
+            {onLogout && (
+              <button className="outline" onClick={onLogout}>Logout</button>
+            )}
           </div>
         </div>
       </section>

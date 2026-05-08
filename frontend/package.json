@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@livekit/components-react": "^2.9.21",
+    "@livekit/components-styles": "^1.2.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
+    "livekit-client": "^2.18.9",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-router-dom": "^7.15.0",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
@@ -22,6 +26,17 @@
     "extends": [
       "react-app",
       "react-app/jest"
+    ]
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^react-router-dom$": "<rootDir>/src/__mocks__/react-router-dom.js",
+      "^@livekit/components-react$": "<rootDir>/src/__mocks__/@livekit/components-react.js",
+      "^livekit-client$": "<rootDir>/src/__mocks__/livekit-client.js",
+      "^@livekit/components-styles$": "<rootDir>/src/__mocks__/@livekit/components-styles.js"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(react-router-dom|@remix-run|react-router|@livekit|livekit-client)/)"
     ]
   },
   "browserslist": {

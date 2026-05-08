@@ -1,7 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import { App } from './app/App';
+import { AuthProvider } from './app/AuthContext';
+import { LoginPage } from './features/auth/LoginPage';
 
-test('renders e-room shell title', () => {
-  render(<App />);
-  expect(screen.getByText(/Realtime English speaking rooms/i)).toBeInTheDocument();
+test('renders login page', () => {
+  render(
+    <AuthProvider>
+      <LoginPage />
+    </AuthProvider>
+  );
+  expect(screen.getByText(/Welcome back/i)).toBeInTheDocument();
 });
