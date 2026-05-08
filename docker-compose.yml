@@ -5,11 +5,9 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: ./backend/.env.docker
     depends_on:
       redis:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
       minio:
         condition: service_started
@@ -18,31 +16,27 @@ services:
     build: ./backend
     command: uv run python -m admin.server
     ports:
-      - "9000:9000"
+      - "9002:9000"
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: ./backend/.env.docker
     depends_on:
       redis:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
 
   celery_worker:
     build: ./backend
     command: uv run celery -A app.infrastructure.celery_app.celery_app worker --loglevel=info
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: ./backend/.env.docker
     depends_on:
       redis:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
 
   celery_beat:
     build: ./backend
     command: uv run celery -A app.infrastructure.celery_app.celery_app beat --loglevel=info
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: ./backend/.env.docker
     depends_on:
       redis:
         condition: service_healthy
