@@ -28,6 +28,8 @@ async def lifespan(app: FastAPI):
     with Session(engine) as session:
         inserted = seed_default_tags(session)
         log.info("Seeded %s default tags", inserted)
+        inserted_rooms = seed_rooms(session)
+        log.info("Seeded %s sample rooms", inserted_rooms)
     log.info("%s started", settings.app_name)
     yield
     log.info("%s shutdown", settings.app_name)
