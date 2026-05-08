@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import Navbar from 'react-bootstrap/Navbar';
+import Nav from 'react-bootstrap/Nav';
+import Container from 'react-bootstrap/Container';
+import Button from 'react-bootstrap/Button';
+import Badge from 'react-bootstrap/Badge';
 import { useAuth } from './AuthContext';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { Avatar } from '../components/ui/Avatar';
@@ -8,143 +13,170 @@ export function AppShell({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   function handleLogout() {
     logout();
     navigate('/login');
   }
 
-  const isActive = (path) => location.pathname.startsWith(path);
+  const isActive = (path) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
+
+  const navItems = [
+    { path: '/', label: 'Home', icon: '🏠' },
+    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
+  ];
 
   return (
-    <div className="app-shell">
-      <nav className="navbar">
-        <div className="navbar-inner">
-          <div className="navbar-left">
-            <Link to="/dashboard" className="navbar-brand">
-              <span className="navbar-logo">E</span>
-              <span className="navbar-name">E-Room</span>
-            </Link>
-            <div className="navbar-links">
-              <Link
-                to="/dashboard"
-                className={`navbar-link ${isActive('/dashboard') ? 'active' : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                Dashboard
-              </Link>
-              <Link
-                to="/dashboard"
-                className={`navbar-link ${isActive('/rooms') ? 'active' : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><rect x="1" y="9" width="22" height="14" rx="2" ry="2" /></svg>
-                Rooms
-              </Link>
-            </div>
-          </div>
+    <div className="app-shell d-flex flex-column min-vh-100" style={{ background: 'var(--color-bg)' }}>
+      <Navbar
+        expand="lg"
+        fixed="top"
+        expanded={expanded}
+        onToggle={setExpanded}
+        className="glass-panel"
+        style={{
+          background: 'var(--color-bg-glass)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--color-border)',
+          fontFamily: 'Nunito, sans-serif',
+        }}
+      >
+        <Container>
+          <Navbar.Brand
+            as={Link}
+            to="/"
+            className="fw-extrabold d-flex align-items-center gap-2"
+            style={{ color: 'var(--color-text-primary)', fontSize: '1.1rem' }}
+            onClick={() => setExpanded(false)}
+          >
+            <span
+              className="d-flex align-items-center justify-content-center rounded-3"
+              style={{
+                width: 32, height: 32,
+                background: 'var(--color-accent)', color: '#fff',
+                fontSize: '0.95rem', fontWeight: 800,
+              }}
+            >E</span>
+            E-Room
+          </Navbar.Brand>
+          <Navbar.Toggle aria-controls="main-navbar" className="border-0" style={{ color: 'var(--color-text-secondary)' }} />
+          <Navbar.Collapse id="main-navbar">
+            <Nav className="me-auto gap-1">
+              {navItems.map(item => (
+                <Nav.Link
+                  key={item.path}
+                  as={Link}
+                  to={item.path}
+                  className={`rounded-pill px-3 ${isActive(item.path) ? 'active' : ''}`}
+                  style={{
+                    color: isActive(item.path) ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    fontWeight: isActive(item.path) ? 600 : 500,
+                    fontSize: '0.875rem',
+                    background: isActive(item.path) ? 'var(--color-accent-muted)' : 'transparent',
+                  }}
+                  onClick={() => setExpanded(false)}
+                >
+                  <span className="me-1">{item.icon}</span>
+                  {item.label}
+                </Nav.Link>
+              ))}
+            </Nav>
+            <Nav className="align-items-lg-center gap-1">
+              <ThemeToggle />
+              {user ? (
+                <>
+                  <Nav.Link
+                    as={Link}
+                    to="/profile"
+                    className="rounded-pill px-3 d-flex align-items-center gap-2"
+                    style={{
+                      color: isActive('/profile') ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                      fontWeight: isActive('/profile') ? 600 : 500,
+                      fontSize: '0.875rem',
+                    }}
+                    onClick={() => setExpanded(false)}
+                  >
+                    <Avatar name={user.display_name || user.email} size={24} />
+                    <span className="d-none d-md-inline">{user.display_name || 'Profile'}</span>
+                  </Nav.Link>
+                  <Nav.Link
+                    as={Link}
+                    to="/payment"
+                    className={`rounded-pill px-3 ${isActive('/payment') ? 'active' : ''}`}
+                    style={{
+                      color: isActive('/payment') ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                    }}
+                    onClick={() => setExpanded(false)}
+                  >
+                    <Badge bg="warning" text="dark" className="rounded-pill fw-semibold" style={{ fontSize: '0.65rem' }}>
+                      PRO
+                    </Badge>
+                  </Nav.Link>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-decoration-none rounded-pill px-2 d-none d-lg-flex align-items-center"
+                    style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}
+                    onClick={handleLogout}
+                    title="Sign out"
+                  >
+                    🚪
+                  </Button>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    className="rounded-pill d-lg-none w-100 mt-2"
+                    onClick={() => { handleLogout(); setExpanded(false); }}
+                  >
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  as={Link}
+                  to="/login"
+                  variant="primary"
+                  size="sm"
+                  className="rounded-pill px-4 fw-semibold"
+                  onClick={() => setExpanded(false)}
+                >
+                  Sign In
+                </Button>
+              )}
+            </Nav>
+          </Navbar.Collapse>
+        </Container>
+      </Navbar>
 
-          <div className="navbar-right">
-            <ThemeToggle />
-            {user && (
-              <>
-                <span className="navbar-user-name">{user.display_name}</span>
-                <Avatar name={user.display_name || user.email} size={32} />
-                <button className="navbar-logout" onClick={handleLogout} title="Logout">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                </button>
-              </>
-            )}
-
-            <button
-              className="navbar-hamburger"
-              onClick={() => setMenuOpen(!menuOpen)}
-              aria-label="Toggle menu"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                {menuOpen ? (
-                  <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>
-                ) : (
-                  <><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></>
-                )}
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {menuOpen && (
-          <div className="navbar-mobile-menu">
-            <Link to="/dashboard" className="navbar-link active" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-            <Link to="/dashboard" className="navbar-link" onClick={() => setMenuOpen(false)}>Rooms</Link>
-            {user && (
-              <button className="navbar-logout mobile" onClick={() => { handleLogout(); setMenuOpen(false); }}>Logout</button>
-            )}
-          </div>
-        )}
-      </nav>
-
-      <main className="main-content">
+      {/* Main Content */}
+      <main style={{ paddingTop: '72px', flex: 1 }}>
         {children}
       </main>
 
-      <style>{`
-        .app-shell { min-height: 100vh; background: var(--color-bg); }
-        .navbar {
-          position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-          height: var(--navbar-height);
-          background: var(--color-bg-glass);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border-bottom: 1px solid var(--color-border);
-        }
-        .navbar-inner {
-          display: flex; align-items: center; justify-content: space-between;
-          height: 100%; padding: 0 20px; max-width: 1280px; margin: 0 auto;
-        }
-        .navbar-left { display: flex; align-items: center; gap: 32px; }
-        .navbar-brand {
-          display: flex; align-items: center; gap: 8px;
-          color: var(--color-text-primary); font-weight: 700; font-size: 17px;
-          font-family: var(--font-display); text-decoration: none;
-        }
-        .navbar-logo {
-          display: flex; align-items: center; justify-content: center;
-          width: 30px; height: 30px; border-radius: var(--radius-sm);
-          background: var(--color-accent); color: #fff;
-          font-size: 15px; font-weight: 700;
-        }
-        .navbar-links { display: flex; gap: 4px; }
-        .navbar-link {
-          display: flex; align-items: center; gap: 6px;
-          padding: 6px 12px; border-radius: var(--radius-md);
-          color: var(--color-text-secondary); font-size: 13px; font-weight: 500;
-          text-decoration: none; transition: all var(--transition-fast);
-        }
-        .navbar-link:hover { color: var(--color-text-primary); background: var(--color-bg-hover); }
-        .navbar-link.active { color: var(--color-accent); background: var(--color-accent-muted); }
-
-        .navbar-right { display: flex; align-items: center; gap: 10px; }
-        .navbar-user-name { font-size: 13px; color: var(--color-text-secondary); font-weight: 500; }
-        .navbar-logout {
-          display: flex; align-items: center; justify-content: center;
-          width: 32px; height: 32px; border-radius: var(--radius-md);
-          color: var(--color-text-muted); transition: all var(--transition-fast);
-        }
-        .navbar-logout:hover { color: var(--color-danger); background: var(--color-danger-muted); }
-        .navbar-logout.mobile { width: 100%; justify-content: flex-start; padding: 10px 16px; }
-
-        .navbar-hamburger { display: none; align-items: center; justify-content: center; color: var(--color-text-secondary); }
-        .navbar-mobile-menu { display: none; flex-direction: column; padding: 8px 16px 16px; background: var(--color-bg-elevated); border-bottom: 1px solid var(--color-border); }
-
-        @media (max-width: 768px) {
-          .navbar-links { display: none; }
-          .navbar-user-name { display: none; }
-          .navbar-hamburger { display: flex; }
-          .navbar-mobile-menu { display: flex; }
-        }
-
-        .main-content { padding-top: var(--navbar-height); min-height: calc(100vh - var(--navbar-height)); }
-      `}</style>
+      {/* Footer */}
+      <footer className="py-3 border-top" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-elevated)' }}>
+        <Container>
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+            <small className="text-muted">
+              <span className="fw-bold" style={{ fontFamily: 'Nunito, sans-serif', color: 'var(--color-text-primary)' }}>E-Room</span>
+              {' '}— Speak English, Connect Globally
+            </small>
+            <div className="d-flex gap-3">
+              <Link to="/" className="text-muted small text-decoration-none">Home</Link>
+              <Link to="/dashboard" className="text-muted small text-decoration-none">Rooms</Link>
+              <Link to="/profile" className="text-muted small text-decoration-none">Profile</Link>
+              <Link to="/payment" className="text-muted small text-decoration-none">Pricing</Link>
+            </div>
+          </div>
+        </Container>
+      </footer>
     </div>
   );
 }

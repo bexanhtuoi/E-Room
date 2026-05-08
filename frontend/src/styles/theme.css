@@ -1,61 +1,10 @@
 /* ===================================================================
    E-Room Design System — Theme Variables
+   Font: Nunito | Light theme default | Bootstrap 5 compatible
    =================================================================== */
 
-/* ---- Dark Theme (default) ---- */
+/* ---- Light Theme (default) ---- */
 :root,
-[data-theme="dark"] {
-  --color-bg: #080c17;
-  --color-bg-elevated: #0f1629;
-  --color-bg-surface: #141c30;
-  --color-bg-hover: #1a2340;
-  --color-bg-glass: rgba(8, 12, 23, 0.85);
-
-  --color-text-primary: #e8edf5;
-  --color-text-secondary: #8894b0;
-  --color-text-muted: #556080;
-
-  --color-border: rgba(136, 148, 176, 0.12);
-  --color-border-strong: rgba(136, 148, 176, 0.22);
-
-  --color-accent: #38bdf8;
-  --color-accent-hover: #7dd3fc;
-  --color-accent-muted: rgba(56, 189, 248, 0.12);
-  --color-accent-text: #0284c7;
-
-  --color-success: #34d399;
-  --color-success-muted: rgba(52, 211, 153, 0.12);
-  --color-danger: #f87171;
-  --color-danger-hover: #fca5a5;
-  --color-danger-muted: rgba(248, 113, 113, 0.12);
-  --color-warning: #fbbf24;
-
-  --color-live: #34d399;
-  --color-matching: #fbbf24;
-  --color-ended: #64748b;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(56, 189, 248, 0.15);
-
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-full: 9999px;
-
-  --font-display: 'Playfair Display', 'Georgia', serif;
-  --font-body: 'DM Sans', 'Inter', -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-  --navbar-height: 56px;
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 350ms ease;
-}
-
-/* ---- Light Theme ---- */
 [data-theme="light"] {
   --color-bg: #f8fafc;
   --color-bg-elevated: #ffffff;
@@ -90,6 +39,73 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
   --shadow-glow: 0 0 20px rgba(2, 132, 199, 0.1);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  --font-display: 'Nunito', sans-serif;
+  --font-body: 'Nunito', sans-serif;
+
+  --navbar-height: 56px;
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 350ms ease;
+}
+
+/* ---- Dark Theme ---- */
+[data-theme="dark"] {
+  --color-bg: #0f172a;
+  --color-bg-elevated: #1e293b;
+  --color-bg-surface: #334155;
+  --color-bg-hover: #475569;
+  --color-bg-glass: rgba(15, 23, 42, 0.88);
+
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+
+  --color-border: rgba(148, 163, 184, 0.12);
+  --color-border-strong: rgba(148, 163, 184, 0.22);
+
+  --color-accent: #38bdf8;
+  --color-accent-hover: #7dd3fc;
+  --color-accent-muted: rgba(56, 189, 248, 0.12);
+  --color-accent-text: #38bdf8;
+
+  --color-success: #34d399;
+  --color-success-muted: rgba(52, 211, 153, 0.12);
+  --color-danger: #f87171;
+  --color-danger-hover: #fca5a5;
+  --color-danger-muted: rgba(248, 113, 113, 0.12);
+  --color-warning: #fbbf24;
+
+  --color-live: #34d399;
+  --color-matching: #fbbf24;
+  --color-ended: #64748b;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(56, 189, 248, 0.15);
+}
+
+/* ---- Bootstrap 5 Overrides ---- */
+:root {
+  --bs-body-font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bs-body-bg: var(--color-bg);
+  --bs-body-color: var(--color-text-primary);
+  --bs-primary: var(--color-accent);
+  --bs-primary-rgb: 2, 132, 199;
+}
+
+[data-theme="dark"] {
+  --bs-body-bg: var(--color-bg);
+  --bs-body-color: var(--color-text-primary);
+  --bs-primary: var(--color-accent);
+  --bs-primary-rgb: 56, 189, 248;
 }
 
 /* ---- Global Reset ---- */
@@ -97,23 +113,16 @@
 *::before,
 *::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: var(--font-body);
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--color-bg);
   color: var(--color-text-primary);
   line-height: 1.6;
   min-height: 100vh;
   transition: background var(--transition-base), color var(--transition-base);
+  margin: 0;
 }
 
 a { color: var(--color-accent); text-decoration: none; }
@@ -122,13 +131,6 @@ a:hover { color: var(--color-accent-hover); }
 button {
   font-family: inherit;
   cursor: pointer;
-  border: none;
-  background: none;
-}
-
-input, textarea, select {
-  font-family: inherit;
-  font-size: inherit;
 }
 
 img, svg { display: block; max-width: 100%; }
@@ -138,13 +140,16 @@ img, svg { display: block; max-width: 100%; }
   color: #fff;
 }
 
-/* ---- Utility Classes ---- */
-.sr-only {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0,0,0,0); border: 0;
+/* ---- Glass Panel Utility ---- */
+.glass-panel {
+  background: var(--color-bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
 }
 
+/* ---- Animations ---- */
 .fade-in { animation: fadeIn var(--transition-slow) ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -154,6 +159,80 @@ img, svg { display: block; max-width: 100%; }
 .stagger-4 { animation-delay: 0.2s; }
 .stagger-5 { animation-delay: 0.25s; }
 
-.scrollbar-thin::-webkit-scrollbar { width: 6px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 3px; }
+/* ---- Custom Bootstrap overrides for cards ---- */
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.card-title {
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+.text-muted {
+  color: var(--color-text-muted) !important;
+}
+
+/* ---- Badge overrides ---- */
+.badge {
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+}
+
+/* ---- Nav overrides ---- */
+.navbar {
+  background: var(--color-bg-glass) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--color-border);
+}
+.navbar-brand {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--color-text-primary) !important;
+}
+.nav-link {
+  color: var(--color-text-secondary) !important;
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+.nav-link:hover,
+.nav-link.active {
+  color: var(--color-accent) !important;
+}
+
+/* ---- Form overrides ---- */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 0.25rem var(--color-accent-muted);
+}
+
+/* ---- Button overrides ---- */
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.btn-primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+.btn-outline-primary {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.btn-outline-primary:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* ---- Responsive helper ---- */
+@media (max-width: 767.98px) {
+  body { font-size: 0.9375rem; }
+}
