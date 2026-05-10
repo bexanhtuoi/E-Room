@@ -12,6 +12,17 @@ from app.rag.retrieval import RetrievalService
 from app.rag.file_handle import FileHandler
 
 
+class MockEmbeddings:
+    def __init__(self, return_vec: list[float]) -> None:
+        self._return_vec = return_vec
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._return_vec
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._return_vec for _ in texts]
+
+
 class TestTextChunker:
     def test_default_construction(self):
         chunker = TextChunker()
@@ -69,29 +80,33 @@ class TestEmbeddingService:
     def test_embed_query(self):
         svc = EmbeddingService()
         import asyncio, numpy as np
+        mock_vec = np.random.randn(svc._dim).tolist()
+        mock_emb = MockEmbeddings(mock_vec)
 
         async def _test():
-            with patch.object(svc, '_call_api', return_value=[np.random.randn(1536).tolist()]):
+            with patch.object(svc, '_get_embeddings', return_value=mock_emb):
                 vec = await svc.embed_query("test text")
                 return vec
 
         result = asyncio.run(_test())
         assert result is not None
-        assert len(result) == 1536
+        assert len(result) == svc._dim
 
     def test_embed_texts(self):
         svc = EmbeddingService()
         import asyncio, numpy as np
+        mock_vec = np.random.randn(svc._dim).tolist()
+        mock_emb = MockEmbeddings(mock_vec)
 
         async def _test():
-            with patch.object(svc, '_call_api', return_value=[np.random.randn(1536).tolist() for _ in range(5)]):
+            with patch.object(svc, '_get_embeddings', return_value=mock_emb):
                 vecs = await svc.embed_texts(["text1", "text2", "text3", "text4", "text5"])
                 return vecs
 
         result = asyncio.run(_test())
         assert len(result) == 5
         for v in result:
-            assert len(v) == 1536
+            assert len(v) == svc._dim
 
     def test_embed_empty_batch(self):
         svc = EmbeddingService()
@@ -189,10 +204,12 @@ class TestRetrievalService:
         import asyncio
 
         async def _test():
-            with patch.object(svc, '_vector_store', NumpyVectorStore()):
-                with patch.object(svc.embedding, 'embed_text', AsyncMock(return_value=[0.1] * 1536)):
-                    results = await svc.retrieve("test query", top_k=2)
-                    return results
+            mock_doc = MagicMock()
+            mock_doc.page_content = "test result"
+            mock_doc.metadata = {"source": "test"}
+            with patch('app.rag.retrieval.run_in_executor', AsyncMock(return_value=[mock_doc])):
+                results = await svc.retrieve("test query", top_k=2)
+                return results
 
         results = asyncio.run(_test())
         assert results is not None

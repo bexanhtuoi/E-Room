@@ -63,12 +63,18 @@ async def retrieve_relevant_documents(
 
 class RetrievalService:
     def __init__(self) -> None:
-        self._vs = init_vector_store()
+        self._vs = None
+
+    def _get_vs(self):
+        if self._vs is None:
+            self._vs = init_vector_store()
+        return self._vs
 
     async def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         try:
+            vs = self._get_vs()
             docs: list[Document] = await run_in_executor(
-                None, self._vs.similarity_search, query, top_k
+                None, vs.similarity_search, query, top_k
             )
         except Exception as e:
             logger.warning("retrieval_failed", extra={"error": str(e)})

@@ -14,7 +14,6 @@ logger = get_logger(__name__)
 
 
 class AgentExpert:
-    """AI expert that answers questions using RAG context and web search."""
 
     def __init__(self) -> None:
         self._llm_base = self._get_llm_base()
@@ -43,7 +42,6 @@ class AgentExpert:
             return os.getenv("LLM_API_KEY", "")
 
     async def _retrieve_rag_docs(self, query: str, room_id: str) -> list[dict[str, Any]]:
-        """Retrieve relevant documents from RAG vector store. Returns full doc list."""
         try:
             from app.rag.retrieval import retrieve_relevant_documents
             docs = await retrieve_relevant_documents(query, k=5)
@@ -76,19 +74,20 @@ class AgentExpert:
         return await loop.run_in_executor(None, _sync_post)
 
     def _extract_sources(self, docs: list[dict[str, Any]]) -> list[str]:
-        """Extract unique source identifiers from retrieved documents."""
         seen: set[str] = set()
         sources: list[str] = []
+
         for d in docs:
             metadata = d.get("metadata") or {}
             source = metadata.get("source") or metadata.get("filename") or metadata.get("title")
+
             if source and source not in seen:
                 seen.add(source)
                 sources.append(source)
+
         return sources
 
     async def answer(self, question: str, room_id: str) -> dict[str, Any]:
-        """Answer a question with RAG context and citations."""
         logger.info("expert_start", extra={"room_id": room_id, "question": question[:80]})
 
         docs = await self._retrieve_rag_docs(question, room_id)

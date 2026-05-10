@@ -13,7 +13,6 @@ logger = get_logger(__name__)
 
 
 class AgentCorrector:
-    """AI agent that corrects grammar and pronunciation for English learners."""
 
     def __init__(self) -> None:
         self._llm_base = self._get_llm_base()
@@ -42,7 +41,6 @@ class AgentCorrector:
             return os.getenv("LLM_API_KEY", "")
 
     async def correct(self, text: str, user_id: str) -> dict[str, Any]:
-        """Correct the given English text and return errors with explanations."""
         logger.info("corrector_start", extra={"user_id": user_id, "text_len": len(text)})
 
         payload = {

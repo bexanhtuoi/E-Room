@@ -14,7 +14,6 @@ router = APIRouter()
 
 @router.get("/status")
 async def get_infra_status() -> dict[str, object]:
-    """Quick status overview — returns config info without probing services."""
     redis_client = get_redis_client()
     video_service = VideoRoomService()
     livekit_service = LiveKitService()
@@ -47,15 +46,9 @@ async def get_infra_status() -> dict[str, object]:
 
 @router.get("/health")
 async def health_check() -> dict[str, object]:
-    """Deep health check — probes Redis, MinIO bucket, and LiveKit connectivity.
-    
-    Returns:
-        dict with status: "ok" | "degraded" | "down" and per-service details.
-    """
     checks: dict[str, object] = {}
     failures = 0
 
-    # --- Redis ---
     try:
         redis_client = get_redis_client()
         redis_pong = redis_client.ping()
@@ -64,7 +57,6 @@ async def health_check() -> dict[str, object]:
         checks["redis"] = {"status": "down", "error": str(e)}
         failures += 1
 
-    # --- MinIO ---
     try:
         minio_client = get_minio_client()
         bucket_exists = minio_client.bucket_exists(settings.minio_bucket)
@@ -85,10 +77,8 @@ async def health_check() -> dict[str, object]:
         }
         failures += 1
 
-    # --- LiveKit ---
     try:
         livekit_service = LiveKitService()
-        # Verify we can generate a token (server connectivity check)
         token = livekit_service.generate_admin_token("health-check-room")
         checks["livekit"] = {
             "status": "ok",
@@ -118,19 +108,10 @@ async def health_check() -> dict[str, object]:
 
 @router.get("/health/live")
 async def health_live() -> dict[str, str]:
-    """Lightweight liveness probe — always returns 200 if the API is running."""
     return {"status": "ok"}
 
 
-# ---------------------------------------------------------------------------
-# Rate-limit middleware dependency (usable by any router)
-# ---------------------------------------------------------------------------
-
 async def rate_limit_login(request: Request) -> None:
-    """FastAPI dependency: rate-limit login endpoint to 5 attempts / 15 min per IP.
-
-    Fails open — if Redis is unavailable the request is allowed.
-    """
     from fastapi import HTTPException, status
 
     from app.infrastructure.redis import RateLimiter
@@ -148,5 +129,4 @@ async def rate_limit_login(request: Request) -> None:
     except HTTPException:
         raise
     except Exception:
-        # Redis unavailable — fail open, don't block logins
         pass

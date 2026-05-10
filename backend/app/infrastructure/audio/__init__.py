@@ -26,7 +26,6 @@ class AudioConfig:
 
 
 class AudioBuffer:
-    """Per-user audio buffer with RMS-based speech detection and sequence ordering."""
 
     def __init__(self, user_id: str, config: AudioConfig) -> None:
         self.user_id = user_id
@@ -39,18 +38,20 @@ class AudioBuffer:
         self._lock = threading.Lock()
 
     def feed_chunk(self, seq: int, pcm: bytes) -> Optional[str]:
-        """Feed a PCM chunk. Returns 'speech_start', 'speech_end', or None."""
         import array
         with self._lock:
             expected = self._next_seq
             self._push_ordered(seq, pcm)
+
             if expected != seq:
                 return None
+
             return self._process_chunk(pcm)
 
     def _push_ordered(self, seq: int, pcm: bytes) -> None:
         if seq >= self._next_seq:
             heapq.heappush(self._seq_heap, (seq, pcm))
+
         while self._seq_heap and self._seq_heap[0][0] == self._next_seq:
             _, data = heapq.heappop(self._seq_heap)
             self._next_seq += 1
@@ -67,22 +68,29 @@ class AudioBuffer:
                 self._silent_chunks = 0
             else:
                 self._silent_chunks += 1
+
             self._buffer.extend(pcm)
+
             if self._silent_chunks >= self.config.silence_chunks:
                 self._speaking = False
                 self._silent_chunks = 0
                 return "speech_end"
+
         return None
 
     def _detect_speech(self, pcm: bytes) -> bool:
         import array
         import math
+
         if len(pcm) < 2:
             return False
+
         samples = array.array("h")
         samples.frombytes(pcm)
+
         if len(samples) == 0:
             return False
+
         rms = math.sqrt(sum(s * s for s in samples) / len(samples)) / 32768.0
         return rms > self.config.rms_threshold
 
@@ -102,14 +110,15 @@ class AudioBuffer:
 
 
 class AudioProcessor:
-    """Convert raw PCM to WAV format."""
 
     @staticmethod
     def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000, sample_width: int = 2, channels: int = 1) -> bytes:
         import struct
+
         byte_rate = sample_rate * sample_width * channels
         block_align = sample_width * channels
         data_size = len(pcm_data)
+
         header = struct.pack(
             "<4sI4s4sIHHIIHH4sI",
             b"RIFF", 36 + data_size, b"WAVE", b"fmt ", 16, 1,
@@ -120,7 +129,6 @@ class AudioProcessor:
 
 
 class AudioBufferManager:
-    """Thread-safe manager for multiple user audio buffers."""
 
     def __init__(self) -> None:
         self._buffers: dict[str, AudioBuffer] = {}

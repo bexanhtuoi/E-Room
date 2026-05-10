@@ -14,7 +14,6 @@ logger = get_logger(__name__)
 
 
 class AgentHeartbeat:
-    """Generates conversation starter questions for practice rooms."""
 
     def __init__(self) -> None:
         self._llm_base = self._get_llm_base()
@@ -50,14 +49,13 @@ class AgentHeartbeat:
         recent_messages: list[dict] | None = None,
         heartbeat_count: int = 1,
     ) -> dict[str, Any]:
-        """Generate a conversation starter question for the room."""
         logger.info("heartbeat_start", extra={"room_id": room_id, "heartbeat_count": heartbeat_count})
 
         tag_str = ", ".join(tags) if tags else "general English"
+
         last_msgs = recent_messages[-5:] if recent_messages else []
         msg_summary = "\n".join([f"{m.get('user_name', 'User')}: {m.get('content', '')[:100]}" for m in last_msgs])
 
-        style = ""
         if heartbeat_count == 1:
             style = "icebreaker, light, fun, easy to answer"
         elif heartbeat_count == 2:
