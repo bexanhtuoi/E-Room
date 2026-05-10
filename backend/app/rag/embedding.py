@@ -229,12 +229,87 @@ class EmbeddingService:
         return [self._zero_vector() for _ in texts]
 
 
-_embed_service: EmbeddingService | None = None
+# ---------------------------------------------------------------------------
+# Nomic embedding service (like flowassist)
+# ---------------------------------------------------------------------------
+
+_NOMIC_DIM = 768  # nomic-embed-text-v1.5 produces 768-dim vectors
 
 
-def get_embedding_service() -> EmbeddingService:
-    """Get or create the singleton EmbeddingService instance."""
+class NomicEmbeddingService:
+    """Text embedding via Nomic AI (like flowassist).
+
+    Uses langchain_nomic.NomicEmbeddings with nomic-embed-text-v1.5.
+    Produces 768-dimensional embeddings.
+    NOMIC_API_KEY from .env (same key as flowassist).
+    """
+
+    def __init__(self, api_key: str | None = None) -> None:
+        import os
+        self._api_key = api_key or os.getenv("NOMIC_API_KEY", "")
+        self._dim = _NOMIC_DIM
+        self._cache: dict[str, list[float]] = {}
+        self._nomic_emb = None
+
+    def _get_embeddings(self):
+        if self._nomic_emb is None:
+            from langchain_nomic import NomicEmbeddings
+            self._nomic_emb = NomicEmbeddings(
+                model="nomic-embed-text-v1.5",
+                nomic_api_key=self._api_key,
+            )
+        return self._nomic_emb
+
+    def _zero_vector(self) -> list[float]:
+        return [0.0] * self._dim
+
+    async def embed_query(self, text: str) -> list[float]:
+        if not text or not text.strip():
+            return self._zero_vector()
+        key = _cache_key(text)
+        if key in self._cache:
+            return self._cache[key]
+        import asyncio
+        emb = self._get_embeddings()
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, emb.embed_query, text)
+        self._cache[key] = result
+        return result
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        import asyncio
+        emb = self._get_embeddings()
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, emb.embed_documents, texts)
+
+    async def embed_text(self, text: str) -> list[float]:
+        return await self.embed_query(text)
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        return await self.embed_texts(texts)
+
+
+_embed_service: EmbeddingService | NomicEmbeddingService | None = None
+
+
+def get_embedding_service() -> EmbeddingService | NomicEmbeddingService:
+    """Get or create the singleton embedding service instance.
+
+    Prefers Nomic embeddings when NOMIC_API_KEY is set (like flowassist).
+    Falls back to OpenAI-compatible EmbeddingService.
+    """
     global _embed_service
-    if _embed_service is None:
-        _embed_service = EmbeddingService()
+    if _embed_service is not None:
+        return _embed_service
+
+    import os
+    nomic_key = os.getenv("NOMIC_API_KEY", "")
+    if nomic_key:
+        _embed_service = NomicEmbeddingService(api_key=nomic_key)
+        logger.info("embedding_service_nomic")
+        return _embed_service
+
+    _embed_service = EmbeddingService()
     return _embed_service

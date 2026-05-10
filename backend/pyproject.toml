@@ -29,6 +29,9 @@ dependencies = [
     "langchain-text-splitters>=1.1.0",
     "langgraph>=1.0.5",
     "langgraph-prebuilt>=1.0.5",
+    "langchain-nomic>=1.0.1",
+    "nomic>=3.9.0",
+    "tidb-vector>=0.0.15",
     "httpx>=0.28.1",
     "python-dotenv>=1.2.1",
 ]

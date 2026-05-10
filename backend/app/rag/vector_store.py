@@ -376,6 +376,166 @@ class PgVectorStore(BaseVectorStore):
             return result.scalar_one()
 
 
+class TiDBVectorStore(BaseVectorStore):
+    """Vector store backed by TiDB Cloud with native VECTOR type.
+
+    TiDB 8.4+ supports VECTOR(FLOAT32, dim) column type and
+    VEC_COSINE_DISTANCE function for cosine similarity search.
+    Uses mysql+pymysql connection with SSL (TiDB Cloud requires TLS).
+
+    Replaces PgVectorStore (PostgreSQL-only) for TiDB deployments.
+    Nomic embeddings produce 768-dimensional vectors (default dim).
+    """
+
+    def __init__(self, database_url: str, dim: int = 768) -> None:
+        try:
+            from sqlalchemy import create_engine, text
+        except ImportError:
+            raise RuntimeError("SQLAlchemy and pymysql are required for TiDBVectorStore.")
+        self._engine = create_engine(
+            database_url,
+            echo=False,
+            connect_args={"ssl": {"ssl_mode": "PREFERRED"}},
+        )
+        self._dim = dim
+        self._ensure_table()
+
+    def _get_table_name(self) -> str:
+        return "rag_embeddings"
+
+    def _ensure_table(self) -> None:
+        from sqlalchemy import text
+        with self._engine.connect() as conn:
+            conn.execute(text(f"""
+                CREATE TABLE IF NOT EXISTS {self._get_table_name()} (
+                    chunk_id VARCHAR(36) PRIMARY KEY,
+                    document_id VARCHAR(36) NOT NULL,
+                    text TEXT NOT NULL,
+                    embedding VECTOR(FLOAT32, {self._dim}),
+                    metadata JSON DEFAULT ('{{}}'),
+                    tag_id VARCHAR(36) DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+
+    def store_embeddings(self, items: list[dict[str, Any]]) -> int:
+        if not items:
+            return 0
+
+        from sqlalchemy import text
+        import json
+
+        rows: list[dict[str, Any]] = []
+        for item in items:
+            emb = item.get("embedding")
+            if emb is None:
+                continue
+            rows.append({
+                "chunk_id": str(item.get("chunk_id", str(uuid.uuid4()))),
+                "document_id": str(item.get("document_id", "")),
+                "text": str(item.get("text", "")),
+                "embedding": json.dumps(emb),
+                "metadata": json.dumps(item.get("metadata") or {}),
+                "tag_id": str(item.get("tag_id", "")),
+                "created_at": item.get("created_at") or datetime.now(timezone.utc).isoformat(),
+            })
+
+        if not rows:
+            return 0
+
+        with self._engine.begin() as conn:
+            for row in rows:
+                conn.execute(
+                    text(f"""
+                        INSERT INTO {self._get_table_name()}
+                            (chunk_id, document_id, text, embedding, metadata, tag_id, created_at)
+                        VALUES
+                            (:chunk_id, :document_id, :text, :embedding, :metadata, :tag_id, :created_at)
+                        ON DUPLICATE KEY UPDATE
+                            embedding = VALUES(embedding),
+                            text = VALUES(text),
+                            metadata = VALUES(metadata)
+                    """),
+                    row,
+                )
+
+        return len(rows)
+
+    def similarity_search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        tag_id: str | None = None,
+        document_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        from sqlalchemy import text
+        import json
+
+        vec_str = json.dumps(query_vector)
+        conditions: list[str] = []
+        params: dict[str, Any] = {"vec": vec_str, "top_k": top_k}
+
+        if tag_id and tag_id.strip():
+            conditions.append("tag_id = :tag_id")
+            params["tag_id"] = tag_id
+        if document_id and document_id.strip():
+            conditions.append("document_id = :doc_id")
+            params["doc_id"] = document_id
+
+        where_clause = ""
+        if conditions:
+            where_clause = "AND " + " AND ".join(conditions)
+
+        query = f"""
+            SELECT chunk_id, document_id, text,
+                   1 - VEC_COSINE_DISTANCE(embedding, :vec) AS score,
+                   metadata, tag_id, created_at
+            FROM {self._get_table_name()}
+            WHERE embedding IS NOT NULL
+            {where_clause}
+            ORDER BY VEC_COSINE_DISTANCE(embedding, :vec)
+            LIMIT :top_k
+        """
+
+        with self._engine.connect() as conn:
+            result = conn.execute(text(query), params)
+            rows = result.fetchall()
+
+        return [
+            {
+                "chunk_id": row[0],
+                "document_id": row[1],
+                "text": row[2],
+                "score": round(float(row[3]), 6),
+                "metadata": row[4] if isinstance(row[4], dict) else json.loads(row[4] or "{}"),
+                "tag_id": row[5] or "",
+                "created_at": row[6].isoformat() if row[6] else "",
+            }
+            for row in rows
+        ]
+
+    def delete_by_document(self, document_id: str) -> int:
+        from sqlalchemy import text
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                text(f"DELETE FROM {self._get_table_name()} WHERE document_id = :doc_id"),
+                {"doc_id": document_id},
+            )
+            return result.rowcount
+
+    def count(self) -> int:
+        from sqlalchemy import text
+        with self._engine.connect() as conn:
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {self._get_table_name()}"))
+            return result.scalar_one()
+
+
+def _is_tidb(url: str) -> bool:
+    """Check if database URL targets TiDB/MySQL."""
+    return url.startswith("mysql+pymysql://") or url.startswith("mysql://")
+
+
 def _is_postgres(url: str) -> bool:
     """Check if database URL targets PostgreSQL."""
     return url.startswith("postgresql://") or url.startswith("postgres://")
@@ -413,6 +573,14 @@ def get_vector_store() -> BaseVectorStore:
             return _vector_store
         except Exception as e:
             logger.warning("pgvector_init_failed_fallback_numpy", extra={"error": str(e)})
+
+    if _is_tidb(db_url):
+        try:
+            _vector_store = TiDBVectorStore(db_url)
+            logger.info("vector_store_tidb")
+            return _vector_store
+        except Exception as e:
+            logger.warning("tidb_vector_init_failed", extra={"error": str(e)})
 
     logger.info("vector_store_numpy", extra={"reason": "sqlite_dev_mode"})
     _vector_store = NumpyVectorStore()
