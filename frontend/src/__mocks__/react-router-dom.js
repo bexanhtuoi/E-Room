@@ -1,4 +1,3 @@
-// Mock for react-router-dom (ESM-only package, CRA 5 Jest compat)
 const React = require('react');
 
 function BrowserRouter({ children }) { return React.createElement(React.Fragment, null, children); }

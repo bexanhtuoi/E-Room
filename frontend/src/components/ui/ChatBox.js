@@ -39,7 +39,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
   const listRef = useRef(null);
   const storageKey = `eroom-chat-${roomId}`;
 
-  /* Load messages from localStorage on mount */
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -49,13 +48,12 @@ export function ChatBox({ roomId, visible, onToggle }) {
           setMessages(parsed.map(m => ({ ...m, time: new Date(m.time) })));
         }
       }
-    } catch { /* ignore corrupt data */ }
+    } catch {  }
   }, [storageKey]);
 
-  /* Save messages to localStorage on change */
   useEffect(() => {
     if (messages.length > 0) {
-      try { localStorage.setItem(storageKey, JSON.stringify(messages)); } catch { /* storage full */ }
+      try { localStorage.setItem(storageKey, JSON.stringify(messages)); } catch {  }
     }
   }, [messages, storageKey]);
 
@@ -108,7 +106,7 @@ export function ChatBox({ roomId, visible, onToggle }) {
 
   return (
     <aside className="chatbox-v2">
-      {/* Header */}
+
       <header className="chat-v2-header">
         <div className="chat-v2-header-info">
           <div className="chat-v2-header-dot" />
@@ -124,7 +122,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
         </button>
       </header>
 
-      {/* Messages */}
       <div className="chat-v2-messages" ref={listRef}>
         {messages.length === 0 ? (
           <div className="chat-v2-empty">
@@ -184,7 +181,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Typing indicator */}
       {typing && (
         <div className="chat-v2-typing">
           <div className="chat-v2-typing-dots">
@@ -194,7 +190,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
         </div>
       )}
 
-      {/* Input */}
       <form className="chat-v2-input" onSubmit={handleSend}>
         <div className="chat-v2-input-wrapper">
           <input
@@ -219,7 +214,7 @@ export function ChatBox({ roomId, visible, onToggle }) {
       </form>
 
       <style>{`
-        /* ── Root ── */
+
         .chatbox-v2 {
           display: flex; flex-direction: column;
           width: 100%; height: 100%;
@@ -227,7 +222,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
-        /* ── Header ── */
         .chat-v2-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: 14px 16px;
@@ -264,7 +258,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           background: var(--color-danger-muted);
         }
 
-        /* ── Messages ── */
         .chat-v2-messages {
           flex: 1; overflow-y: auto; padding: 14px 12px;
           display: flex; flex-direction: column;
@@ -277,7 +270,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           background: var(--color-border-strong); border-radius: 4px;
         }
 
-        /* ── Empty state ── */
         .chat-v2-empty {
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; flex: 1; text-align: center;
@@ -297,7 +289,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           color: var(--color-text-muted); font-size: 12px; margin: 0;
         }
 
-        /* ── Message row ── */
         .chat-v2-msg {
           display: flex; align-items: flex-end; gap: 8px;
           max-width: 92%; animation: msgIn 0.2s ease both;
@@ -311,7 +302,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Avatar ── */
         .chat-v2-avatar {
           width: 28px; height: 28px; min-width: 28px;
           border-radius: 50%; display: flex; align-items: center;
@@ -320,7 +310,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
-        /* ── Bubble ── */
         .chat-v2-bubble {
           display: flex; flex-direction: column;
           padding: 9px 13px; border-radius: 16px;
@@ -354,7 +343,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
         }
         .chat-v2-bubble.mine .chat-v2-text { color: #fff; }
 
-        /* ── Time ── */
         .chat-v2-time {
           font-size: 9px; color: var(--color-text-muted);
           align-self: flex-end; white-space: nowrap;
@@ -362,7 +350,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
         }
         .chat-v2-msg.mine .chat-v2-time { margin-right: 36px; }
 
-        /* ── Typing indicator ── */
         .chat-v2-typing {
           display: flex; align-items: center; gap: 8px;
           padding: 6px 18px; font-size: 11px;
@@ -385,7 +372,6 @@ export function ChatBox({ roomId, visible, onToggle }) {
           30% { transform: translateY(-5px); opacity: 1; }
         }
 
-        /* ── Input ── */
         .chat-v2-input {
           padding: 10px 12px 12px;
           border-top: 1px solid var(--color-border);

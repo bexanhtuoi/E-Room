@@ -207,7 +207,7 @@ export function HomePage() {
 
   return (
     <div className="home-page fade-in" style={{ minHeight: '100vh' }}>
-      {/* ── Hero ── */}
+
       <section className="hero-section py-5"
         style={{ background: 'linear-gradient(180deg, var(--color-bg-elevated) 0%, var(--color-bg) 100%)' }}>
         <Container>
@@ -251,7 +251,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── Stats Counter ── */}
       <section className="stats-section py-5" style={{ background: 'var(--color-bg)' }}>
         <Container>
           <div className="text-center mb-4">
@@ -267,7 +266,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── Features ── */}
       <section className="features-section py-5" style={{ background: 'var(--color-bg-surface)' }}>
         <Container>
           <div className="text-center mb-5">
@@ -285,7 +283,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── How It Works ── */}
       <section className="how-section py-5" style={{ background: 'var(--color-bg)' }}>
         <Container>
           <div className="text-center mb-5">
@@ -338,7 +335,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── Active Rooms ── */}
       <section className="rooms-section py-5" style={{ background: 'var(--color-bg-elevated)' }}>
         <Container>
           <div className="d-flex justify-content-between align-items-center mb-4">
@@ -365,7 +361,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── Testimonials ── */}
       <section className="testimonials-section py-5" style={{ background: 'var(--color-bg)' }}>
         <Container>
           <div className="text-center mb-5">
@@ -385,7 +380,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── Pricing Preview ── */}
       <section className="pricing-section py-5" style={{ background: 'var(--color-bg-surface)' }}>
         <Container>
           <div className="text-center mb-5">
@@ -452,7 +446,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── Contact Us ── */}
       <section id="contact-section" className="contact-section py-5" style={{ background: 'var(--color-bg-elevated)' }}>
         <Container>
           <div className="text-center mb-5">
@@ -496,7 +489,6 @@ export function HomePage() {
         </Container>
       </section>
 
-      {/* ── CTA ── */}
       <section className="cta-section py-5"
         style={{ background: 'linear-gradient(135deg, var(--color-accent-muted), var(--color-bg-surface))' }}>
         <Container className="text-center">

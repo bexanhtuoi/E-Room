@@ -90,14 +90,14 @@ export function LoginPage() {
     <div className="login-page fade-in" style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex' }}>
       <Container fluid className="d-flex p-0">
         <Row className="g-0 flex-grow-1">
-          {/* Left — Brand / Hero Panel */}
+
           <Col lg={5} xl={6} className="d-none d-lg-flex flex-column justify-content-center p-5 position-relative"
             style={{
               background: 'linear-gradient(160deg, var(--color-bg-elevated) 0%, var(--color-bg-surface) 100%)',
               overflow: 'hidden',
             }}
           >
-            {/* Ambient orbs */}
+
             <div className="position-absolute rounded-circle"
               style={{
                 width: 420, height: 420, top: '-12%', right: '-18%',
@@ -114,7 +114,7 @@ export function LoginPage() {
             />
 
             <div ref={contentRef} style={{ position: 'relative', zIndex: 1, maxWidth: 460 }}>
-              {/* Logo */}
+
               <div className="d-flex align-items-center gap-3 mb-5">
                 <div className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
                   style={{
@@ -134,7 +134,6 @@ export function LoginPage() {
                 </div>
               </div>
 
-              {/* Tagline */}
               <h2 className="fw-extrabold mb-3" style={{ fontFamily: 'Nunito, sans-serif', fontSize: '1.8rem', lineHeight: 1.2, color: 'var(--color-text-primary)' }}>
                 Your journey to <span className="gradient-text">fluent English</span> starts here.
               </h2>
@@ -142,7 +141,6 @@ export function LoginPage() {
                 Join thousands of learners practicing in structured video rooms with AI-powered feedback.
               </p>
 
-              {/* Feature list */}
               <ul className="list-unstyled d-flex flex-column gap-3">
                 {brandFeatures.map((item, i) => {
                   const Icon = item.icon;
@@ -161,7 +159,6 @@ export function LoginPage() {
                 })}
               </ul>
 
-              {/* Testimonial */}
               <div className="mt-5 p-3 rounded-3"
                 style={{
                   background: 'var(--color-bg-glass)',
@@ -185,12 +182,11 @@ export function LoginPage() {
             </div>
           </Col>
 
-          {/* Right — Form Panel */}
           <Col lg={7} xl={6} className="d-flex align-items-center justify-content-center p-4 p-lg-5"
             style={{ background: 'var(--color-bg)' }}
           >
             <div style={{ maxWidth: 440, width: '100%' }} className="fade-in-up">
-              {/* Mobile logo */}
+
               <div className="d-flex align-items-center gap-2 mb-4 d-lg-none">
                 <div className="d-flex align-items-center justify-content-center rounded-3"
                   style={{
@@ -203,7 +199,6 @@ export function LoginPage() {
                 <span className="fw-extrabold" style={{ fontFamily: 'Nunito, sans-serif', color: 'var(--color-text-primary)' }}>E-Room</span>
               </div>
 
-              {/* Heading */}
               <div className="mb-4">
                 <h2 className="fw-extrabold mb-1" style={{ fontFamily: 'Nunito, sans-serif', color: 'var(--color-text-primary)', fontSize: '1.7rem' }}>
                   {isRegister ? 'Create your account' : 'Welcome back'}
@@ -213,7 +208,6 @@ export function LoginPage() {
                 </p>
               </div>
 
-              {/* Social Login Buttons */}
               <div className="d-flex gap-2 mb-4">
                 <Button variant="outline-secondary" className="flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-2 rounded-3"
                   style={{ fontSize: '0.85rem', borderColor: 'var(--color-border-strong)' }}>
@@ -225,14 +219,12 @@ export function LoginPage() {
                 </Button>
               </div>
 
-              {/* Divider */}
               <div className="d-flex align-items-center gap-3 mb-4">
                 <div className="flex-grow-1" style={{ height: 1, background: 'var(--color-border)' }} />
                 <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>or</small>
                 <div className="flex-grow-1" style={{ height: 1, background: 'var(--color-border)' }} />
               </div>
 
-              {/* Form */}
               <Form onSubmit={handleSubmit}>
                 {isRegister && (
                   <Form.Group className="mb-3">
@@ -307,7 +299,6 @@ export function LoginPage() {
                   </InputGroup>
                 </Form.Group>
 
-                {/* Password strength indicator */}
                 {isRegister && password && (
                   <div className="mb-3 mt-2">
                     <div className="d-flex justify-content-between align-items-center mb-1">
@@ -335,7 +326,6 @@ export function LoginPage() {
                   </div>
                 )}
 
-                {/* Forgot password (login only) */}
                 {!isRegister && (
                   <div className="d-flex justify-content-end mb-3">
                     <Button variant="link" className="p-0 text-decoration-none small"
@@ -345,7 +335,6 @@ export function LoginPage() {
                   </div>
                 )}
 
-                {/* Terms checkbox (register only) */}
                 {isRegister && (
                   <Form.Group className="mb-3">
                     <Form.Check type="checkbox" id="agree-terms"
@@ -359,7 +348,6 @@ export function LoginPage() {
                   </Form.Group>
                 )}
 
-                {/* Error */}
                 {error && (
                   <Alert variant="danger" className="py-2 px-3 d-flex align-items-center gap-2 fade-in" style={{ fontSize: '0.82rem', borderRadius: 'var(--radius-md)' }}>
                     <HiExclamationTriangle size={16} style={{ flexShrink: 0 }} />
@@ -367,7 +355,6 @@ export function LoginPage() {
                   </Alert>
                 )}
 
-                {/* Submit */}
                 <Button type="submit" variant="primary" size="lg"
                   className="w-100 mt-2 fw-semibold d-flex align-items-center justify-content-center gap-2 rounded-3"
                   disabled={busy}
@@ -381,7 +368,6 @@ export function LoginPage() {
                 </Button>
               </Form>
 
-              {/* Toggle */}
               <p className="text-center mt-4 mb-0">
                 <small style={{ color: 'var(--color-text-muted)' }}>
                   {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}

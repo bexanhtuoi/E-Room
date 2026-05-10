@@ -14,11 +14,10 @@ export function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public */}
+
           <Route path="/" element={<AppShell><HomePage /></AppShell>} />
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected */}
           <Route path="/learning" element={
             <ProtectedRoute><AppShell><LearningPage /></AppShell></ProtectedRoute>
           } />
@@ -32,7 +31,6 @@ export function App() {
             <ProtectedRoute><RoomPage /></ProtectedRoute>
           } />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

@@ -13,7 +13,6 @@ import {
   HiUserPlus, HiUser,
 } from 'react-icons/hi2';
 
-/* ── Helpers ── */
 const SIZES = { topbar: 56, controls: 68 };
 const COLOR = {
   danger: 'var(--color-danger)',
@@ -59,7 +58,6 @@ function hashColor(name) {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-/* ── Control Button ── */
 function ControlBtn({ icon: Icon, active, onClick, label, danger, className = '' }) {
   return (
     <button
@@ -71,7 +69,6 @@ function ControlBtn({ icon: Icon, active, onClick, label, danger, className = ''
   );
 }
 
-/* ── MeetControls — lives inside LiveKitRoom for direct localParticipant access ── */
 function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRaised,
   showEmojiPicker, setShowEmojiPicker, sendEmoji, screenShareOn, setScreenShareOn }) {
   const { localParticipant } = useLocalParticipant();
@@ -79,7 +76,6 @@ function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRa
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
 
-  // Sync with actual LiveKit participant state
   useEffect(() => {
     if (localParticipant) {
       setMicOn(localParticipant.isMicrophoneEnabled ?? true);
@@ -188,7 +184,6 @@ function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRa
   );
 }
 
-/* ── ParticipantTracker ── */
 function ParticipantTracker({ onUpdate }) {
   const remoteParticipants = useRemoteParticipants();
   const { localParticipant } = useLocalParticipant();
@@ -217,7 +212,6 @@ function ParticipantTracker({ onUpdate }) {
   return null;
 }
 
-/* ── Emoji Fly ── */
 function EmojiFly({ emojis }) {
   return (
     <>
@@ -239,7 +233,6 @@ function EmojiFly({ emojis }) {
   );
 }
 
-/* ── Self Preview ── */
 function SelfPreview() {
   return (
     <div className="self-preview">
@@ -259,7 +252,6 @@ function SelfPreview() {
   );
 }
 
-/* ── Waiting ── */
 function WaitingForOthers() {
   return (
     <div className="waiting-card">
@@ -276,7 +268,6 @@ function WaitingForOthers() {
   );
 }
 
-/* ── Video area ── */
 function VideoArea({ isSharing, isHandRaised }) {
   const remoteParticipants = useRemoteParticipants();
   const hasRemote = Array.isArray(remoteParticipants) && remoteParticipants.length > 0;
@@ -300,7 +291,6 @@ function VideoArea({ isSharing, isHandRaised }) {
   );
 }
 
-/* ── Connecting ── */
 function ConnectingGate() {
   return (
     <div style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:14,color:'#888' }}>
@@ -311,13 +301,11 @@ function ConnectingGate() {
   );
 }
 
-/* ── Friends helpers (localStorage) ── */
 function getFriends() { try { return JSON.parse(localStorage.getItem('eroom-friends')||'[]'); } catch { return []; } }
 function addFriend(identity, name) { const f=getFriends(); if(!f.find(x=>x.id===identity)){f.push({id:identity,name,addedAt:Date.now()});localStorage.setItem('eroom-friends',JSON.stringify(f));} }
 function removeFriend(identity) { const f=getFriends().filter(x=>x.id!==identity); localStorage.setItem('eroom-friends',JSON.stringify(f)); }
 function isFriend(identity) { return getFriends().some(x=>x.id===identity); }
 
-/* ── Participants Panel ── */
 function ParticipantsPanel({ participants, onClose }) {
   const friends = getFriends();
   return (
@@ -428,9 +416,6 @@ function ParticipantsPanel({ participants, onClose }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   RoomPage
-   ═══════════════════════════════════════════════════════════ */
 export function RoomPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -464,7 +449,6 @@ export function RoomPage() {
   }, [roomId, getUserId]);
   const goBack = useCallback(() => { navigate('/learning'); }, [navigate]);
 
-  /* Leave cleanup — ensures /leave is called even on browser back / unmount */
   useEffect(() => {
     return () => {
       if (hasLeftRef.current) return;
@@ -476,14 +460,12 @@ export function RoomPage() {
     };
   }, [roomId, getUserId]);
 
-  /* Timer */
   useEffect(() => {
     if (phase !== 'connected') return;
     const iv = setInterval(() => setElapsed(prev => prev + 1), 1000);
     return () => clearInterval(iv);
   }, [phase]);
 
-  /* Clean up floating emojis */
   useEffect(() => {
     if (floatingEmojis.length === 0) return;
     const timeout = setTimeout(() => {
@@ -492,7 +474,6 @@ export function RoomPage() {
     return () => clearTimeout(timeout);
   }, [floatingEmojis]);
 
-  /* Hand raise notification listener */
   useEffect(() => {
     const handler = (e) => {
       setHandRaiseNotifs(prev => {
@@ -505,7 +486,6 @@ export function RoomPage() {
     return () => window.removeEventListener('hand-raise-notif', handler);
   }, []);
 
-  /* Clean up old hand raise notifications */
   useEffect(() => {
     if (handRaiseNotifs.length === 0) return;
     const timeout = setTimeout(() => {
@@ -514,7 +494,6 @@ export function RoomPage() {
     return () => clearTimeout(timeout);
   }, [handRaiseNotifs]);
 
-  /* Join room */
   useEffect(() => {
     let cancelled = false;
     async function joinAndGetToken() {
@@ -568,7 +547,6 @@ export function RoomPage() {
     setFloatingEmojis(prev => [...prev, { id, emoji, x: 30 + Math.random() * 40 + '%', y: 30 + Math.random() * 30 + '%' }]);
   }
 
-  /* ── Loading ── */
   if (phase === 'loading') {
     return (
       <div style={{ minHeight: '100vh', background: '#0a0a12', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -577,7 +555,6 @@ export function RoomPage() {
     );
   }
 
-  /* ── Error ── */
   if (phase === 'error') {
     return (
       <div style={{ minHeight: '100vh', background: '#0a0a12', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, textAlign: 'center', padding: 20 }}>
@@ -597,7 +574,6 @@ export function RoomPage() {
     );
   }
 
-  /* ── Left ── */
   if (phase === 'left') {
     return (
       <div style={{ minHeight: '100vh', background: '#0a0a12', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -632,10 +608,9 @@ export function RoomPage() {
   const showSidebar = activePanel === 'chat' || activePanel === 'participants';
   const participantCount = participantsList.length || 1;
 
-  /* ════════════════ Connected ════════════════ */
   return (
     <div className="meet-root">
-      {/* ── Top Bar ── */}
+
       <header className="meet-topbar">
         <div className="meet-topbar-left">
           <button className="meet-back" onClick={goBack} title="Back"><HiArrowLeft size={20} /></button>
@@ -663,7 +638,6 @@ export function RoomPage() {
         </div>
       </header>
 
-      {/* ── Main ── */}
       <div className="meet-main">
         <div className={`meet-video ${showSidebar ? 'with-chat' : 'full'}`}>
           <LiveKitRoom token={token} serverUrl={livekitUrl} video={true} audio={true} onDisconnected={handleDisconnected}
@@ -687,7 +661,6 @@ export function RoomPage() {
         )}
       </div>
 
-      {/* ── Hand raise notifications ── */}
       {handRaiseNotifs.map((n, i) => (
         <div key={n.id} style={{
           position: 'fixed', top: SIZES.topbar + 16 + (i * 52), right: 20,
@@ -702,7 +675,6 @@ export function RoomPage() {
         </div>
       ))}
 
-      {/* ═══ Styles ═══ */}
       <style>{`
         .meet-root{display:flex;flex-direction:column;height:100vh;width:100vw;background:#0a0a12;overflow:hidden;font-family:'Nunito',-apple-system,BlinkMacSystemFont,sans-serif;color:#e0e0e0}
         .meet-root,.meet-root *{scrollbar-width:none;-ms-overflow-style:none}
@@ -728,7 +700,6 @@ export function RoomPage() {
         .meet-chat-panel{flex:0 0 320px;min-width:280px;max-width:380px;display:flex;flex-direction:column;border-left:1px solid rgba(255,255,255,0.04);background:#13131f;animation:slideIn 0.2s ease both;padding-bottom:${SIZES.controls}px}
         @keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
 
-        /* ── Controls — fixed @ bottom like Google Meet ── */
         .meet-controls{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:center;height:${SIZES.controls}px;padding:0 16px;background:rgba(16,16,28,0.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(255,255,255,0.06);z-index:100}
         .meet-controls-center{display:flex;align-items:center;gap:8px}
         .ctrl-btn{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.08);color:#e0e0e0;border:none;cursor:pointer;transition:all 0.18s ease;position:relative}
@@ -740,7 +711,6 @@ export function RoomPage() {
         .ctrl-hangup{display:flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:50%;background:${COLOR.danger};color:#fff;border:none;cursor:pointer;transition:all 0.18s ease}
         .ctrl-hangup:hover{background:var(--color-danger-hover);transform:scale(1.08);box-shadow:0 0 20px rgba(239,68,68,0.3)}
 
-        /* ── Dark theme for sidebar ── */
         .meet-chat-panel .chatbox-v2{background:#13131f!important}
         .meet-chat-panel .chat-v2-header{border-bottom-color:rgba(255,255,255,0.06);padding:14px 16px}
         .meet-chat-panel .chat-v2-messages .chat-v2-bubble:not(.mine){background:#1a1a2e}

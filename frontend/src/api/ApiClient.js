@@ -8,7 +8,7 @@ function getToken() {
       return parsed.token || parsed.access_token || null;
     }
   } catch {
-    // ignore
+
   }
   return null;
 }
@@ -37,14 +37,13 @@ async function request(method, path, body = null) {
       const errBody = await response.json();
       detail = errBody.detail || errBody.message || '';
     } catch {
-      // ignore parse errors
+
     }
     const error = new Error(detail || `API ${response.status}: ${response.statusText}`);
     error.status = response.status;
     throw error;
   }
 
-  // 204 No Content
   if (response.status === 204) return null;
 
   return response.json();

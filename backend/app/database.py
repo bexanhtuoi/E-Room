@@ -9,7 +9,15 @@ from app.config import settings
 from app.log import get_logger
 
 log = get_logger(__name__)
-engine = create_engine(settings.database_url_sync or settings.database_url, echo=False)
+
+_db_url = settings.database_url_sync or settings.database_url
+
+# TiDB Cloud (MySQL) requires TLS — pass SSL via connect_args (pymysql expects a dict)
+_connect_args: dict = {}
+if _db_url.startswith("mysql"):
+    _connect_args["ssl"] = {"ssl_mode": "PREFERRED"}
+
+engine = create_engine(_db_url, echo=False, connect_args=_connect_args)
 
 
 def create_db_and_tables() -> None:

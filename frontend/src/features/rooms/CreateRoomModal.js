@@ -118,7 +118,7 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
             marginTop: 'auto', marginBottom: 'auto',
           }}
         >
-          {/* Header */}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
             <div>
               <h3 style={{
@@ -148,7 +148,7 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
           </div>
 
           <form onSubmit={handleSubmit}>
-            {/* Topic */}
+
             <label style={labelStyle}>
               <HiTag size={14} style={{ color: 'var(--color-accent)' }} />
               Room Topic *
@@ -162,7 +162,6 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
               onFocus={focusIn} onBlur={focusOut}
             />
 
-            {/* Description */}
             <label style={labelStyle}>
               <HiDocumentText size={14} style={{ color: 'var(--color-accent)' }} />
               Description
@@ -176,7 +175,6 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
               onFocus={focusIn} onBlur={focusOut}
             />
 
-            {/* English Level */}
             <label style={labelStyle}>
               <HiAcademicCap size={14} style={{ color: 'var(--color-accent)' }} />
               English Level
@@ -207,7 +205,6 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
               ))}
             </div>
 
-            {/* Max Participants */}
             <label style={labelStyle}>
               <HiUserGroup size={14} style={{ color: 'var(--color-accent)' }} />
               Max Participants
@@ -235,7 +232,6 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
               ))}
             </div>
 
-            {/* Tags */}
             <label style={labelStyle}>
               <HiTag size={14} style={{ color: 'var(--color-accent)' }} />
               Tags * <span style={{ fontWeight: 400, fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>(comma separated)</span>
@@ -267,7 +263,6 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
               ))}
             </div>
 
-            {/* Actions */}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4, borderTop: '1px solid var(--color-border)' }}>
               <button
                 type="button"

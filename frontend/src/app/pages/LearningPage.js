@@ -42,7 +42,7 @@ function RoomCard({ room }) {
       transition: 'all 0.25s ease',
     }}>
       <Card.Body className="d-flex flex-column justify-content-between gap-1 p-4">
-        {/* Topic + Status */}
+
         <div className="d-flex justify-content-between align-items-start gap-2">
           <Card.Title style={{
             fontFamily: "'Nunito', sans-serif", fontWeight: 800,
@@ -60,7 +60,6 @@ function RoomCard({ room }) {
           </Badge>
         </div>
 
-        {/* Description — 2 line clamp */}
         <Card.Text style={{
           color: 'var(--color-text-secondary)', fontSize: '0.83rem',
           lineHeight: 1.55,
@@ -70,7 +69,6 @@ function RoomCard({ room }) {
           {room.description || 'Join this room to practice English speaking skills.'}
         </Card.Text>
 
-        {/* Level */}
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '3px 10px', borderRadius: 99, marginBottom: 12,
@@ -80,7 +78,6 @@ function RoomCard({ room }) {
           <HiLanguage size={11} /> {level.toUpperCase()}
         </span>
 
-        {/* Tags */}
         <div className="d-flex flex-wrap align-items-center gap-2">
           {tags.slice(0, 3).map(tag => (
             <span key={tag} style={{
@@ -101,7 +98,6 @@ function RoomCard({ room }) {
           )}
         </div>
 
-        {/* Participants + Join */}
         <div className="d-flex justify-content-between align-items-center pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>
             <HiUsers size={14} /> {current}/{max}
@@ -203,7 +199,6 @@ export function LearningPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  /* Quick Match state */
   const [matchOpen, setMatchOpen] = useState(false);
   const [matchStep, setMatchStep] = useState(0);
   const [matchResult, setMatchResult] = useState(null);
@@ -233,25 +228,20 @@ export function LearningPage() {
 
   useEffect(() => { loadRooms(); }, []);
 
-  /* ── Quick Match Logic ── */
   function scoreRoom(room, config) {
     let score = 0;
 
-    /* Prefer active rooms */
     if (room.status === 'ACTIVE') score += 30;
     else if (room.status === 'IDLE') score += 10;
 
-    /* Has space available */
     const current = room.current_participants || 0;
     const max = room.max_participants || 5;
     if (current < max) score += 20 - Math.floor((current / max) * 10);
 
-    /* Level match */
     if (config.level && room.english_level) {
       if (room.english_level.toLowerCase() === config.level.toLowerCase()) score += 25;
     }
 
-    /* Interest/tag match */
     if (config.interests?.length > 0 && room.tags) {
       const roomTags = room.tags.map(t => t.toLowerCase());
       config.interests.forEach(interest => {
@@ -263,10 +253,8 @@ export function LearningPage() {
       });
     }
 
-    /* Prefer rooms with people already in them (social proof) */
     if (current > 0) score += 5;
 
-    /* Boost for rooms with descriptions (better quality) */
     if (room.description && room.description.length > 30) score += 5;
 
     return score;
@@ -294,7 +282,7 @@ export function LearningPage() {
         setMatchStep(currentStep);
       } else {
         clearInterval(interval);
-        /* Perform the actual matching */
+
         try {
           const scored = rooms
             .filter(r => {
@@ -309,7 +297,7 @@ export function LearningPage() {
           if (scored.length === 0) {
             setMatchError('No suitable rooms found. Try adjusting your preferences or browse manually.');
           } else {
-            /* Pick from top 3 with some randomness */
+
             const top = scored.slice(0, Math.min(3, scored.length));
             const pick = top[Math.floor(Math.random() * top.length)];
             setMatchResult(pick.room);
@@ -371,7 +359,7 @@ export function LearningPage() {
   return (
     <div className="learning-page fade-in" style={{ minHeight: '80vh' }}>
       <Container className="py-4">
-        {/* Header */}
+
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
           <div>
             <h2 className="fw-extrabold mb-1 d-flex align-items-center gap-2" style={{ fontFamily: 'Nunito, sans-serif' }}>
@@ -381,7 +369,7 @@ export function LearningPage() {
             <p className="text-muted mb-0">Find a room, join a conversation, improve your English</p>
           </div>
           <div className="d-flex gap-2 flex-wrap">
-            {/* ── Quick Match Button ── */}
+
             <Button
               variant="primary"
               size="sm"
@@ -409,7 +397,6 @@ export function LearningPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <Row className="mb-4 g-2">
           {stats.map((stat, i) => {
             const Icon = stat.icon;
@@ -432,7 +419,6 @@ export function LearningPage() {
           })}
         </Row>
 
-        {/* Filters */}
         <div className="d-flex flex-column flex-md-row gap-3 mb-4">
           <div className="d-flex gap-1 flex-wrap">
             {filters.map(f => {
@@ -459,7 +445,6 @@ export function LearningPage() {
           </div>
         </div>
 
-        {/* Room Grid */}
         {loading ? (
           <div className="text-center py-5">
             <Spinner animation="border" variant="primary" />
@@ -508,7 +493,6 @@ export function LearningPage() {
         )}
       </Container>
 
-      {/* ── Quick Match Config Modal ── */}
       <Modal show={showConfig} onHide={() => setShowConfig(false)} centered contentClassName="bg-transparent border-0">
         <div className="p-4 rounded-4 scale-in"
           style={{
@@ -584,7 +568,6 @@ export function LearningPage() {
         </div>
       </Modal>
 
-      {/* ── Quick Match Progress Modal ── */}
       <Modal show={matchOpen && !matchResult && !matchError} onHide={resetMatch} centered
         contentClassName="bg-transparent border-0">
         <div className="p-5 rounded-4 text-center"
@@ -606,7 +589,6 @@ export function LearningPage() {
         </div>
       </Modal>
 
-      {/* ── Quick Match Result Modal ── */}
       <Modal show={matchOpen && (matchResult || matchError)} onHide={resetMatch} centered
         contentClassName="bg-transparent border-0">
         {matchResult ? (
@@ -644,7 +626,6 @@ export function LearningPage() {
         ) : null}
       </Modal>
 
-      {/* ── Create Room Modal ── */}
       {showCreateRoom && (
         <CreateRoomModal
           onClose={() => setShowCreateRoom(false)}
