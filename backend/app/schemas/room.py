@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class RoomCreateRequest(BaseModel):
     topic: str = Field(min_length=3, max_length=200)
-    tag_ids: list[str] = Field(default_factory=list, min_length=1)
+    tag_ids: list[str] = Field(default_factory=list)
     max_participants: int = Field(default=5, ge=2, le=50)
     is_public: bool = True
 

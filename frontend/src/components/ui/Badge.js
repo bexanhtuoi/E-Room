@@ -1,6 +1,5 @@
 const STATUS_VARS = {
   live: { bg: 'var(--color-success-muted)', fg: 'var(--color-success)', dot: 'var(--color-live)' },
-  matching: { bg: 'rgba(251,191,36,0.12)', fg: 'var(--color-warning)', dot: 'var(--color-matching)' },
   ended: { bg: 'rgba(100,116,139,0.12)', fg: 'var(--color-ended)', dot: 'var(--color-ended)' },
   tag: { bg: 'var(--color-accent-muted)', fg: 'var(--color-accent)', dot: null },
 };

@@ -29,7 +29,7 @@ export function App() {
             <ProtectedRoute><AppShell><PaymentPage /></AppShell></ProtectedRoute>
           } />
           <Route path="/rooms/:roomId" element={
-            <ProtectedRoute><AppShell><RoomPage /></AppShell></ProtectedRoute>
+            <ProtectedRoute><RoomPage /></ProtectedRoute>
           } />
 
           {/* Fallback */}

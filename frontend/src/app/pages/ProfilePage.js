@@ -122,7 +122,7 @@ export function ProfilePage() {
                   <h6 className="fw-bold mb-3 d-flex align-items-center gap-1"><HiShieldCheck size={16} style={{ color: 'var(--color-success)' }} /> Interests</h6>
                   <div className="d-flex flex-wrap gap-1">
                     {['technology', 'business', 'travel', 'music', 'gaming'].map(tag => (
-                      <Badge key={tag} className="rounded-pill px-3 py-2 fw-medium" style={{ background: 'var(--color-accent-muted)', color: 'var(--color-accent)', fontSize: '0.75rem' }}>#{tag}</Badge>
+                      <span key={tag} className="rounded-pill px-3 py-2 fw-medium" style={{ display: 'inline-block', background: 'var(--color-accent-muted)', color: 'var(--color-accent)', fontSize: '0.75rem', fontWeight: 600 }}>#{tag}</span>
                     ))}
                   </div>
                 </Card.Body>
@@ -145,7 +145,7 @@ export function ProfilePage() {
                 <Col key={idx} md={4} className="mb-3">
                   <Card className={`h-100 border-0 shadow-sm ${plan.popular ? 'border-primary' : ''}`} style={plan.popular ? { borderTop: '3px solid var(--color-accent)' } : {}}>
                     <Card.Body className="d-flex flex-column text-center p-4">
-                      {plan.popular && <Badge bg="primary" className="mb-2 align-self-center rounded-pill">Popular</Badge>}
+                      {plan.popular && <span className="badge bg-primary mb-2 align-self-center rounded-pill">Popular</span>}
                       <h5 className="fw-bold">{plan.name}</h5>
                       <div className="display-6 fw-bold my-2">{plan.price}</div>
                       <ul className="list-unstyled text-muted small flex-grow-1 text-start">

@@ -45,5 +45,8 @@ def create_refresh_token(subject: str, expires_delta: timedelta | None = None) -
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
-def decode_token(token: str) -> dict[str, Any]:
-    return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+def decode_token(token: str) -> dict[str, Any] | None:
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    except jwt.PyJWTError:
+        return None

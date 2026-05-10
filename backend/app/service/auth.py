@@ -52,7 +52,7 @@ class AuthService:
         except InvalidTokenError:
             return None
 
-        if payload.get("type") != "refresh":
+        if payload is None or payload.get("type") != "refresh":
             return None
 
         token_hash = hash_token(refresh_token)

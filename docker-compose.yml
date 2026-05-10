@@ -30,23 +30,6 @@ services:
       redis:
         condition: service_healthy
 
-  postgres:
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: engconnect
-      POSTGRES_USER: engconnect_app
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U engconnect_app -d engconnect"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     container_name: e_room_redis
@@ -131,6 +114,5 @@ services:
       - frontend
 
 volumes:
-  postgres_data:
   redis_data:
   minio_data:

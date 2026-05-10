@@ -54,14 +54,14 @@ export function PaymentPage() {
           <div className="text-center mb-4">
             <HiCreditCard size={40} className="mb-2" style={{ color: 'var(--color-accent)' }} />
             <h2 className="fw-extrabold mb-1" style={{ fontFamily: 'Nunito, sans-serif' }}>Complete Subscription</h2>
-            <p className="text-muted">Upgrading to <Badge bg={plan.color} className="rounded-pill px-2 fw-semibold">{plan.name}</Badge></p>
+            <p className="text-muted">Upgrading to <span className={`badge bg-${plan.color} rounded-pill px-2 fw-semibold`}>{plan.name}</span></p>
           </div>
 
           <Row>
             <Col lg={5} className="mb-4 mb-lg-0">
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-4 d-flex flex-column">
-                  <Badge bg={plan.color} className="align-self-start mb-3 rounded-pill">{plan.name}</Badge>
+                  <span className={`badge bg-${plan.color} align-self-start mb-3 rounded-pill`}>{plan.name}</span>
                   <div className="mb-3"><span className="display-5 fw-bold">{plan.price}</span><span className="text-muted">/{plan.period}</span></div>
                   <ul className="list-unstyled flex-grow-1">
                     {plan.features.map(f => <li key={f} className="mb-2 d-flex align-items-center gap-2"><HiCheckCircle size={14} style={{ color: 'var(--color-success)' }} /><span className="small">{f}</span></li>)}

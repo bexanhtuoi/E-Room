@@ -54,6 +54,13 @@ def get_token(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     expires_at = payload.get("exp")
     if expires_at and isinstance(expires_at, (int, float)) and datetime.fromtimestamp(expires_at, UTC) < datetime.now(UTC):
         raise HTTPException(

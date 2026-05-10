@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     access_token_expires_minutes: int = 15
     refresh_token_expires_days: int = 7
 
+    llm_base_url: str = "http://localhost:20128/v1"
+    llm_model: str = "ds2api/deepseek-v4-flash-nothinking"
+    llm_api_key: str = "sk-a25797aebad34b33-cfw0o9-eab4bc80"
+
     log_level: str = "INFO"
     log_file: str = "log/app.log"
 

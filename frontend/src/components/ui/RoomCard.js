@@ -3,12 +3,11 @@ import { Avatar } from './Avatar';
 
 const STATUS_LABELS = {
   active: 'Live',
-  matching: 'Matching',
   ended: 'Ended',
 };
 
 export function RoomCard({ room, onClick }) {
-  const status = room?.status || 'matching';
+  const status = room?.status || 'live';
   const participantCount = room?.participants?.length || room?.participant_count || 0;
   const tags = room?.tags || [];
 

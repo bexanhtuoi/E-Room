@@ -149,10 +149,10 @@ class RedisCRUD:
         return self._client.publish(channel, _serialize(message))
 
     def acquire_lock(self, lock_name: str, ttl: int = 10) -> bool:
-        return self.setnx(f"engconnect:lock:{lock_name}", str(time.time()), ttl)
+        return self.setnx(f"eroom:lock:{lock_name}", str(time.time()), ttl)
 
     def release_lock(self, lock_name: str) -> int:
-        return self.delete(f"engconnect:lock:{lock_name}")
+        return self.delete(f"eroom:lock:{lock_name}")
 
     def rate_limit(self, key: str, max_requests: int, window_seconds: int) -> tuple[bool, int]:
         current = self.incr(key)
@@ -173,7 +173,7 @@ class RateLimiter:
         max_requests: int = 10,
         window_seconds: int = 60,
     ) -> tuple[bool, int]:
-        key = f"engconnect:ratelimit:{identifier}:{endpoint}"
+        key = f"eroom:ratelimit:{identifier}:{endpoint}"
         return self._crud.rate_limit(key, max_requests, window_seconds)
 
     def check_login(self, ip_address: str) -> tuple[bool, int]:

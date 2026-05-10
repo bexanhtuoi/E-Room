@@ -1,3 +1,4 @@
+from app.infrastructure.audio import AudioBuffer, AudioBufferManager, AudioConfig, AudioProcessor
 from app.infrastructure.celery import celery_app
 from app.infrastructure.event_bus import EventBus, event_bus
 from app.infrastructure.livekit import LiveKitService
@@ -29,4 +30,9 @@ __all__ = [
     "room_state_manager",
     "video_room_service",
     "websocket_manager",
+] + [
+    "AudioConfig",
+    "AudioBuffer",
+    "AudioProcessor",
+    "AudioBufferManager",
 ]
