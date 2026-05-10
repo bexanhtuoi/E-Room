@@ -15,48 +15,37 @@ router = APIRouter()
 @router.get("/status")
 async def get_infra_status() -> dict[str, object]:
     redis_client = get_redis_client()
-    video_service = VideoRoomService()
-    livekit_service = LiveKitService()
-
     redis_ok = False
     try:
         redis_ok = bool(redis_client.ping())
     except Exception:
         redis_ok = False
 
+    video_service = VideoRoomService()
+    livekit_service = LiveKitService()
+
     return {
         "redis": redis_ok,
-        "minio": {
-            "endpoint": settings.minio_endpoint,
-            "bucket": settings.minio_bucket,
-        },
-        "celery": {
-            "broker": settings.redis_url,
-        },
+        "minio": {"endpoint": settings.minio_endpoint, "bucket": settings.minio_bucket},
+        "celery": {"broker": settings.redis_url},
         "video": video_service.create_room_payload("demo-room", 5),
-        "livekit": {
-            "server": livekit_service.base_url,
-            "apiKey": livekit_service.api_key,
-        },
-        "websocket": {
-            "path": "/ws/rooms/{room_id}",
-        },
+        "livekit": {"server": livekit_service.base_url, "apiKey": livekit_service.api_key},
+        "websocket": {"path": "/ws/rooms/{room_id}"},
     }
 
 
-@router.get("/health")
-async def health_check() -> dict[str, object]:
-    checks: dict[str, object] = {}
-    failures = 0
-
+def _check_redis(checks: dict, failures: int) -> int:
     try:
         redis_client = get_redis_client()
         redis_pong = redis_client.ping()
         checks["redis"] = {"status": "ok" if redis_pong else "down", "ping_ms": None}
     except Exception as e:
         checks["redis"] = {"status": "down", "error": str(e)}
-        failures += 1
+        return failures + 1
+    return failures
 
+
+def _check_minio(checks: dict, failures: int) -> int:
     try:
         minio_client = get_minio_client()
         bucket_exists = minio_client.bucket_exists(settings.minio_bucket)
@@ -70,13 +59,14 @@ async def health_check() -> dict[str, object]:
             failures += 1
     except Exception as e:
         checks["minio"] = {
-            "status": "down",
-            "endpoint": settings.minio_endpoint,
-            "bucket": settings.minio_bucket,
-            "error": str(e),
+            "status": "down", "endpoint": settings.minio_endpoint,
+            "bucket": settings.minio_bucket, "error": str(e),
         }
         failures += 1
+    return failures
 
+
+def _check_livekit(checks: dict, failures: int) -> int:
     try:
         livekit_service = LiveKitService()
         token = livekit_service.generate_admin_token("health-check-room")
@@ -86,22 +76,32 @@ async def health_check() -> dict[str, object]:
             "token_generated": bool(token),
         }
     except Exception as e:
-        checks["livekit"] = {
-            "status": "down",
-            "server": settings.livekit_url,
-            "error": str(e),
-        }
+        checks["livekit"] = {"status": "down", "server": settings.livekit_url, "error": str(e)}
         failures += 1
+    return failures
 
-    overall = "ok" if failures == 0 else ("degraded" if failures <= 1 else "down")
-    status_code = 200 if overall == "ok" else (200 if overall == "degraded" else 503)
+
+def _overall_status(failures: int) -> tuple[str, int]:
+    if failures == 0:
+        return "ok", 200
+    if failures <= 1:
+        return "degraded", 200
+    return "down", 503
+
+
+@router.get("/health")
+async def health_check() -> dict[str, object]:
+    checks: dict[str, object] = {}
+    failures = 0
+
+    failures = _check_redis(checks, failures)
+    failures = _check_minio(checks, failures)
+    failures = _check_livekit(checks, failures)
+
+    overall, status_code = _overall_status(failures)
 
     return JSONResponse(
-        content={
-            "status": overall,
-            "service": "e-room-api",
-            "checks": checks,
-        },
+        content={"status": overall, "service": "e-room-api", "checks": checks},
         status_code=status_code,
     )
 
@@ -113,7 +113,6 @@ async def health_live() -> dict[str, str]:
 
 async def rate_limit_login(request: Request) -> None:
     from fastapi import HTTPException, status
-
     from app.infrastructure.redis import RateLimiter
 
     ip = request.client.host if request.client else "unknown"

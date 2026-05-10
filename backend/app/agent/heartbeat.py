@@ -41,30 +41,30 @@ class AgentHeartbeat:
         except ImportError:
             return os.getenv("LLM_API_KEY", "")
 
-    async def generate(
-        self,
-        room_id: str,
+    @staticmethod
+    def _heartbeat_style(count: int) -> str:
+        if count == 1:
+            return "icebreaker, light, fun, easy to answer"
+        elif count == 2:
+            return "deeper, thought-provoking, encourages personal reflection"
+        return "challenging, hypothetical, opinion-based, or speculative"
+
+    @staticmethod
+    def _build_user_prompt(
         topic: str,
-        tags: list[str] | None = None,
-        recent_messages: list[dict] | None = None,
-        heartbeat_count: int = 1,
-    ) -> dict[str, Any]:
-        logger.info("heartbeat_start", extra={"room_id": room_id, "heartbeat_count": heartbeat_count})
-
-        tag_str = ", ".join(tags) if tags else "general English"
-
+        tag_str: str,
+        recent_messages: list[dict] | None,
+        heartbeat_count: int,
+    ) -> str:
         last_msgs = recent_messages[-5:] if recent_messages else []
-        msg_summary = "\n".join([f"{m.get('user_name', 'User')}: {m.get('content', '')[:100]}" for m in last_msgs])
+        msg_summary = "\n".join([
+            f"{m.get('user_name', 'User')}: {m.get('content', '')[:100]}"
+            for m in last_msgs
+        ])
 
-        if heartbeat_count == 1:
-            style = "icebreaker, light, fun, easy to answer"
-        elif heartbeat_count == 2:
-            style = "deeper, thought-provoking, encourages personal reflection"
-        else:
-            style = "challenging, hypothetical, opinion-based, or speculative"
+        style = AgentHeartbeat._heartbeat_style(heartbeat_count)
 
-        system_prompt = HEARTBEAT_SYSTEM_TEMPLATE
-        user_prompt = f"""Room topic: {topic or "English conversation"}
+        return f"""Room topic: {topic or "English conversation"}
 Interests: {tag_str}
 Recent messages (last 5):
 {msg_summary or "No recent messages."}
@@ -76,10 +76,33 @@ Generate a JSON object with:
 - "context": why this question fits
 - "suggested_response": a sample answer"""
 
+    @staticmethod
+    def _build_heartbeat_result(result: dict, tag_str: str) -> dict[str, Any]:
+        return {
+            "question": result.get("question", f"What do you think about {tag_str}?"),
+            "context": result.get("context", "Conversation starter"),
+            "suggested_response": result.get(
+                "suggested_response", "That's an interesting question..."
+            ),
+        }
+
+    async def generate(
+        self,
+        room_id: str,
+        topic: str,
+        tags: list[str] | None = None,
+        recent_messages: list[dict] | None = None,
+        heartbeat_count: int = 1,
+    ) -> dict[str, Any]:
+        logger.info("heartbeat_start", extra={"room_id": room_id, "heartbeat_count": heartbeat_count})
+
+        tag_str = ", ".join(tags) if tags else "general English"
+        user_prompt = self._build_user_prompt(topic, tag_str, recent_messages, heartbeat_count)
+
         payload = {
             "model": self._llm_model,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": HEARTBEAT_SYSTEM_TEMPLATE},
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.8,
@@ -88,18 +111,12 @@ Generate a JSON object with:
 
         try:
             result = await self._call_llm(payload)
-            question = result.get("question", f"What do you think about {tag_str}?")
-            context = result.get("context", "Conversation starter")
-            suggested = result.get("suggested_response", "That's an interesting question...")
-            logger.info("heartbeat_done", extra={"room_id": room_id, "question": question[:50]})
-            return {"question": question, "context": context, "suggested_response": suggested}
+            response = self._build_heartbeat_result(result, tag_str)
+            logger.info("heartbeat_done", extra={"room_id": room_id, "question": response["question"][:50]})
+            return response
         except Exception as e:
             logger.error("heartbeat_failed", exc_info=True, extra={"room_id": room_id, "error": str(e)})
-            return {
-                "question": f"What's your favorite thing about {tag_str}?",
-                "context": "Default fallback question",
-                "suggested_response": "I really enjoy learning about this topic because...",
-            }
+            return self._build_heartbeat_result({}, tag_str)
 
     async def _call_llm(self, payload: dict) -> dict:
         url = f"{self._llm_base}/chat/completions"
