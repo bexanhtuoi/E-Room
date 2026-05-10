@@ -68,7 +68,6 @@ async def build_query(
         "query_routed",
         extra={"kind": kind, "input_len": len(user_input), "room_id": room_id},
     )
-
     try:
         if kind == "corrector":
             agent = AgentCorrector()

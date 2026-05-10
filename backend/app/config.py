@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     llm_model: str = "ds2api/deepseek-v4-flash-nothinking"
     llm_api_key: str = "sk-a25797aebad34b33-cfw0o9-eab4bc80"
 
+    nomic_api_key: str = ""
+
     log_level: str = "INFO"
     log_file: str = "log/app.log"
 

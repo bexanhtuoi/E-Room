@@ -18,8 +18,6 @@ class AgentNodeKind(str, Enum):
 
 
 class AgentNode:
-    """A configured agent node ready to process input."""
-
     __slots__ = ("kind", "name", "agent")
 
     def __init__(self, kind: AgentNodeKind, name: str, agent: Any) -> None:
@@ -39,15 +37,6 @@ _AGENT_CLASSES = {
 
 
 def create_agent_node(kind: AgentNodeKind | str, name: str = "") -> AgentNode:
-    """Create and initialize an agent node of the given kind.
-
-    Args:
-        kind: One of "corrector", "expert", or "heartbeat" (or AgentNodeKind enum).
-        name: Human-readable label for this node instance.
-
-    Returns:
-        An AgentNode wrapping a ready-to-use agent instance.
-    """
     if isinstance(kind, str):
         kind = AgentNodeKind(kind)
     agent_cls = _AGENT_CLASSES[kind]
@@ -58,9 +47,4 @@ def create_agent_node(kind: AgentNodeKind | str, name: str = "") -> AgentNode:
 
 
 def create_all_nodes() -> dict[AgentNodeKind, AgentNode]:
-    """Create all three agent nodes at once.
-
-    Returns:
-        Dict mapping each AgentNodeKind to its AgentNode.
-    """
     return {k: create_agent_node(kind=k) for k in AgentNodeKind}
