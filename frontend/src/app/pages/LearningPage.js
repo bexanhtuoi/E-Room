@@ -41,7 +41,7 @@ function RoomCard({ room }) {
       boxShadow: 'var(--shadow-card)',
       transition: 'all 0.25s ease',
     }}>
-      <Card.Body className="d-flex flex-column justify-content-between p-4">
+      <Card.Body className="d-flex flex-column justify-content-between gap-1 p-4">
         {/* Topic + Status */}
         <div className="d-flex justify-content-between align-items-start gap-2">
           <Card.Title style={{
@@ -73,7 +73,7 @@ function RoomCard({ room }) {
         {/* Level */}
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          padding: '3px 10px', borderRadius: 99,
+          padding: '3px 10px', borderRadius: 99, marginBottom: 12,
           background: 'var(--color-accent-muted)', color: 'var(--color-accent)',
           fontSize: '0.68rem', fontWeight: 700, alignSelf: 'flex-start',
         }}>
