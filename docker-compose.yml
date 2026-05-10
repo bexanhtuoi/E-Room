@@ -30,6 +30,25 @@ services:
       redis:
         condition: service_healthy
 
+  # ---- PostgreSQL + pgvector (optional — uncomment to use instead of TiDB Cloud) ----
+  # postgres:
+  #   image: pgvector/pgvector:pg17
+  #   container_name: e_room_postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: eroom
+  #     POSTGRES_PASSWORD: eroom
+  #     POSTGRES_DB: eroom
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U eroom"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: e_room_redis
@@ -116,3 +135,4 @@ services:
 volumes:
   redis_data:
   minio_data:
+  # postgres_data:

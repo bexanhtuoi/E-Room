@@ -40,11 +40,10 @@ function RoomCard({ room }) {
       background: 'var(--color-bg-elevated)',
       boxShadow: 'var(--shadow-card)',
       transition: 'all 0.25s ease',
-      minHeight: 260,
     }}>
-      <Card.Body className="d-flex flex-column p-4">
+      <Card.Body className="d-flex flex-column justify-content-between p-4">
         {/* Topic + Status */}
-        <div className="d-flex justify-content-between align-items-start gap-2 mb-3">
+        <div className="d-flex justify-content-between align-items-start gap-2">
           <Card.Title style={{
             fontFamily: "'Nunito', sans-serif", fontWeight: 800,
             fontSize: '1.05rem', margin: 0, color: 'var(--color-text-primary)',
@@ -64,7 +63,7 @@ function RoomCard({ room }) {
         {/* Description — 2 line clamp */}
         <Card.Text style={{
           color: 'var(--color-text-secondary)', fontSize: '0.83rem',
-          lineHeight: 1.55, marginBottom: 12,
+          lineHeight: 1.55,
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
         }}>
@@ -74,7 +73,7 @@ function RoomCard({ room }) {
         {/* Level */}
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          padding: '3px 10px', borderRadius: 99, marginBottom: 12,
+          padding: '3px 10px', borderRadius: 99,
           background: 'var(--color-accent-muted)', color: 'var(--color-accent)',
           fontSize: '0.68rem', fontWeight: 700, alignSelf: 'flex-start',
         }}>
@@ -82,7 +81,7 @@ function RoomCard({ room }) {
         </span>
 
         {/* Tags */}
-        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div className="d-flex flex-wrap align-items-center gap-2">
           {tags.slice(0, 3).map(tag => (
             <span key={tag} style={{
               display: 'inline-block', padding: '3px 8px',
