@@ -6,6 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from unittest.mock import MagicMock, patch
 
 from app.api.dependencies import get_db_session
+from app.api.routers.infra import rate_limit_login
 from app.main import app
 from app.model.user import User
 from app.security import hash_password
@@ -44,7 +45,12 @@ def db_session(engine):
 def client(db_session):
     def override_get_session():
         yield db_session
+
+    async def override_rate_limit(request=None):
+        pass  # no-op in tests — Redis may not be available
+
     app.dependency_overrides[get_db_session] = override_get_session
+    app.dependency_overrides[rate_limit_login] = override_rate_limit
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

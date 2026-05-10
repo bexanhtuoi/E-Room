@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlmodel import Session
 
 from app.api.dependencies import get_db_session
+from app.api.routers.infra import rate_limit_login
 from app.infrastructure.token_store import TokenStore
 from app.schemas import AuthTokenResponse, LoginRequest, RefreshTokenRequest, RegisterRequest, UserResponse
 from app.security import hash_token
@@ -33,7 +34,12 @@ async def register(payload: RegisterRequest, session: Session = Depends(get_db_s
 
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login(payload: LoginRequest, session: Session = Depends(get_db_session)) -> AuthTokenResponse:
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+    _rate_limit: None = Depends(rate_limit_login),
+) -> AuthTokenResponse:
     auth_service = AuthService(session)
     user = auth_service.authenticate_user(str(payload.email), payload.password)
     if user is None:
