@@ -15,6 +15,11 @@ backend/*.db
 frontend/node_modules/
 frontend/build/
 
+# .claude (rules only, NOT skills)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+
 # misc
 .vscode/
 .idea/

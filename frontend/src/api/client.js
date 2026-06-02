@@ -45,7 +45,15 @@ export async function fetchJson(path, options = {}) {
     const refreshed = await refreshTokens();
     if (refreshed) {
       headers['Authorization'] = `Bearer ${refreshed.access}`;
-      return fetch(`${API_BASE_URL}${path}`, { ...options, headers }).then((r) => r.json());
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+      if (!retryResponse.ok) {
+        const body = await retryResponse.json().catch(() => ({}));
+        const detail = Array.isArray(body.detail)
+          ? body.detail.map((e) => e.msg).join('; ')
+          : body.detail || `Request failed with status ${retryResponse.status}`;
+        throw new Error(detail);
+      }
+      return retryResponse.json();
     }
     clearTokens();
     window.dispatchEvent(new CustomEvent('auth:logout'));

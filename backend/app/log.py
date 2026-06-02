@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from logging.handlers import RotatingFileHandler
 
 from app.config import settings
 
@@ -22,12 +21,7 @@ def get_logger(name: str) -> logging.Logger:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
 
-    file_handler = RotatingFileHandler(
-        settings.log_file,
-        maxBytes=5_000_000,
-        backupCount=5,
-        encoding="utf-8",
-    )
+    file_handler = logging.FileHandler(settings.log_file, encoding="utf-8")
     file_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
 
     logger.addHandler(console_handler)

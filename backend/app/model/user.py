@@ -9,6 +9,8 @@ from app.model.common import EnglishLevel, TimestampedModel
 class UserBase(SQLModel):
     email: EmailStr = Field(index=True, unique=True)
     password_hash: str | None = None
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: str = Field(min_length=1, max_length=50)
     display_name: str = Field(index=True)
     avatar_url: str | None = None
     english_level: EnglishLevel | None = None
@@ -18,6 +20,8 @@ class UserBase(SQLModel):
     auto_join_enabled: bool = True
     profile_completed: bool = False
     email_verified: bool = False
+    is_admin: bool = False
+    is_superuser: bool = False
     is_active: bool = True
     is_banned: bool = False
     ban_reason: str | None = None

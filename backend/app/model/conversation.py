@@ -34,6 +34,7 @@ class Session(TimestampedModel, SessionBase, table=True):
 class SessionNoteBase(SQLModel):
     user_id: UUID = Field(foreign_key="users.id", index=True)
     session_id: UUID = Field(foreign_key="sessions.id", index=True)
+    title: str = Field(default="", max_length=255)
     content: str
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     word_count: int = 0

@@ -83,7 +83,7 @@ def auth_headers(client, test_user):
 
 @pytest.fixture
 def mock_redis():
-    with patch("app.infrastructure.redis.RedisCRUD") as mock:
+    with patch("app.infrastructure.redis_client.RedisCRUD") as mock:
         mock_instance = MagicMock()
         mock.return_value = mock_instance
         yield mock_instance

@@ -11,9 +11,18 @@ class TestConfig:
     def test_settings_exist(self):
         from app.config import settings
         assert settings.app_name == "E-Room API"
-        assert settings.llm_base_url == "http://localhost:20128/v1"
-        assert settings.llm_model.startswith("ds2api/deepseek")
-        assert len(settings.llm_api_key) > 10
+        assert settings.llm_base_url == "http://127.0.0.1:1234"
+        assert settings.llm_model == "google/gemma-4-e2b"
+        assert settings.llm_api_key == "sk-lm-tdSctD3c:eRRhBKL0vRtCMq14EeUr"
+        # DB components are now separate fields (production standard)
+        assert hasattr(settings, "db_user")
+        assert hasattr(settings, "db_password")
+        assert hasattr(settings, "db_host")
+        assert hasattr(settings, "db_port")
+        assert hasattr(settings, "db_name")
+        assert isinstance(settings.db_url, str)
+        assert isinstance(settings.db_url_sync, str)
+        assert isinstance(settings.db_connect_args, dict)
 
     def test_secret_key_set(self):
         from app.config import settings
@@ -75,17 +84,17 @@ class TestAgentImports:
     def test_corrector(self):
         from app.agent import AgentCorrector
         a = AgentCorrector()
-        assert a._llm_base
+        assert a._llm is not None
 
     def test_expert(self):
         from app.agent import AgentExpert
         a = AgentExpert()
-        assert a._llm_base
+        assert a._llm is not None
 
     def test_heartbeat(self):
         from app.agent import AgentHeartbeat
         a = AgentHeartbeat()
-        assert a._llm_base
+        assert a._llm is not None
 
 
 class TestRAGImports:
@@ -98,11 +107,11 @@ class TestRAGImports:
     def test_embedding_service(self):
         from app.rag import EmbeddingService
         s = EmbeddingService()
-        assert s._model == "text-embedding-3-small"
+        assert s._dim == 768
 
     def test_vector_store_tmp(self):
-        from app.rag import VectorStore
-        v = VectorStore()
+        from app.rag.vector_store import NumpyVectorStore
+        v = NumpyVectorStore()
         v.store_embeddings([{"embedding": [0.1] * 10, "text": "hi"}])
         r = v.similarity_search([0.1] * 10, top_k=1)
         assert len(r) == 1 and r[0]["text"] == "hi"

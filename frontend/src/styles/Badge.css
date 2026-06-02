@@ -1,0 +1,13 @@
+        .badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 2px 8px; border-radius: var(--radius-full);
+          background: var(--badge-bg); color: var(--badge-fg);
+          font-size: 11px; font-weight: 600; line-height: 1.5;
+          white-space: nowrap;
+        }
+        .badge-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: var(--dot-color);
+          box-shadow: 0 0 6px var(--dot-color);
+        }
+      

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from jwt import InvalidTokenError
 from sqlmodel import Session, select
 
-from app.infrastructure.token_store import TokenStore
+from app.service.token_store import TokenStore
 from app.model import RefreshToken, User
 from app.security import create_access_token, create_refresh_token, decode_token, hash_password, hash_token, verify_password
 
@@ -15,8 +15,8 @@ class AuthService:
         self.session = session
         self.token_store = TokenStore()
 
-    def register_user(self, email: str, password: str, display_name: str) -> User:
-        user = User(email=email, password_hash=hash_password(password), display_name=display_name)
+    def register_user(self, email: str, password: str, first_name: str, last_name: str) -> User:
+        user = User(email=email, password_hash=hash_password(password), first_name=first_name, last_name=last_name, display_name=f"{first_name} {last_name}")
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)

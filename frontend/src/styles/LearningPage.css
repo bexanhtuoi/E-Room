@@ -1,0 +1,7 @@
+        .learning-page .room-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .learning-page .room-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+        .learning-page .stat-card { transition: transform 0.15s ease; }
+        .learning-page .stat-card:hover { transform: translateY(-1px); }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 0.8s linear infinite; }
+      

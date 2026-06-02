@@ -8,10 +8,14 @@ from app.model.common import EnglishLevel
 class UserResponse(BaseModel):
     id: str
     email: EmailStr
+    first_name: str
+    last_name: str
     display_name: str
     english_level: EnglishLevel | None = None
     learning_goal: str | None = None
     profile_completed: bool = False
+    is_admin: bool = False
+    is_superuser: bool = False
 
 
 class UserProfileUpdateRequest(BaseModel):

@@ -1,111 +1,108 @@
 from __future__ import annotations
 
-import asyncio
-import json
-import os
 from typing import Any
 
-import requests
+import httpx
+from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.agent.base import call_llm_text
 from app.agent.prompt import EXPERT_SYSTEM_TEMPLATE
+from app.config import settings
 from app.log import get_logger
 
 logger = get_logger(__name__)
 
 
-class AgentExpert:
+def _extract_sources(docs: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    sources: list[str] = []
+    for d in docs:
+        metadata = d.get("metadata") or {}
+        source = metadata.get("source") or metadata.get("filename") or metadata.get("title")
+        if source and source not in seen:
+            seen.add(source)
+            sources.append(source)
+    return sources
 
-    def __init__(self) -> None:
-        self._llm_base = self._get_llm_base()
-        self._llm_model = self._get_llm_model()
-        self._api_key = self._get_api_key()
 
-    def _get_llm_base(self) -> str:
-        try:
-            from app.config import settings
-            return getattr(settings, "llm_base_url", os.getenv("LLM_BASE_URL", "http://localhost:20128/v1"))
-        except ImportError:
-            return os.getenv("LLM_BASE_URL", "http://localhost:20128/v1")
+async def _web_search(query: str, tag: str | None = None) -> tuple[str, list[str]]:
+    if not settings.brave_search_api_key:
+        return "", []
 
-    def _get_llm_model(self) -> str:
-        try:
-            from app.config import settings
-            return getattr(settings, "llm_model", os.getenv("LLM_MODEL", "ds2api/deepseek-v4-flash-nothinking"))
-        except ImportError:
-            return os.getenv("LLM_MODEL", "ds2api/deepseek-v4-flash-nothinking")
+    search_query = f"{query} {tag or ''}".strip()
 
-    def _get_api_key(self) -> str:
-        try:
-            from app.config import settings
-            return getattr(settings, "llm_api_key", os.getenv("LLM_API_KEY", ""))
-        except ImportError:
-            return os.getenv("LLM_API_KEY", "")
-
-    async def _retrieve_rag_docs(self, query: str, room_id: str) -> list[dict[str, Any]]:
-        try:
-            from app.rag.retrieval import retrieve_relevant_documents
-            docs = await retrieve_relevant_documents(query, k=5)
-            return docs if docs else []
-        except Exception as e:
-            logger.warning("rag_retrieval_failed", extra={"room_id": room_id, "error": str(e)})
-            return []
-
-    async def _generate_answer(self, system_prompt: str, user_prompt: str) -> str:
-        payload = {
-            "model": self._llm_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.5,
-        }
-
-        def _sync_post():
-            resp = requests.post(
-                f"{self._llm_base}/chat/completions",
-                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=30,
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                headers={
+                    "Accept": "application/json",
+                    "X-Subscription-Token": settings.brave_search_api_key,
+                },
+                params={"q": search_query, "count": 3},
             )
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            data = resp.json()
 
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, _sync_post)
+        results = []
+        sources = []
+        for item in data.get("web", {}).get("results", [])[:3]:
+            title = item.get("title", "")
+            snippet = item.get("description", "") or item.get("snippet", "")
+            url = item.get("url", "")
+            results.append(f"{title}: {snippet}"[:300])
+            if url:
+                sources.append(url)
 
-    def _extract_sources(self, docs: list[dict[str, Any]]) -> list[str]:
-        seen: set[str] = set()
-        sources: list[str] = []
+        return "\n\n".join(results), sources
+    except Exception as e:
+        logger.warning("Tra cứu web thất bại", extra={"query": query[:50], "error": str(e)})
+        return "", []
 
-        for d in docs:
-            metadata = d.get("metadata") or {}
-            source = metadata.get("source") or metadata.get("filename") or metadata.get("title")
 
-            if source and source not in seen:
-                seen.add(source)
-                sources.append(source)
+async def answer_expert(question: str, room_id: str, tags: list[str] | None = None) -> dict[str, Any]:
+    logger.info("Bắt đầu trả lời chuyên gia", extra={"room_id": room_id, "question": question[:80]})
 
-        return sources
+    tag_str = ", ".join(tags) if tags else None
 
-    async def answer(self, question: str, room_id: str) -> dict[str, Any]:
-        logger.info("expert_start", extra={"room_id": room_id, "question": question[:80]})
+    try:
+        from app.rag.retrieval import retrieve_relevant_documents
 
-        docs = await self._retrieve_rag_docs(question, room_id)
-        rag_context = "\n\n".join([d["text"][:500] for d in docs]) if docs else ""
-        sources = self._extract_sources(docs)
+        docs = await retrieve_relevant_documents(question, k=5)
+    except Exception as e:
+        logger.warning("Truy xuất RAG thất bại", extra={"room_id": room_id, "error": str(e)})
+        docs = []
 
-        system_prompt = EXPERT_SYSTEM_TEMPLATE
-        user_prompt = (
-            f"Question: {question}\n\n"
-            f"Relevant context from knowledge base:\n"
-            f"{rag_context or 'No relevant documents found.'}\n\n"
-            f"Provide a helpful answer with citations where applicable."
-        )
+    rag_context = "\n\n".join([d["text"][:500] for d in docs]) if docs else ""
+    sources = _extract_sources(docs)
 
-        try:
-            answer = await self._generate_answer(system_prompt, user_prompt)
-            logger.info("expert_done", extra={"room_id": room_id, "answer_len": len(answer)})
-            return {"answer": answer, "sources": sources}
-        except Exception as e:
-            logger.error("expert_failed", exc_info=True, extra={"room_id": room_id, "error": str(e)})
-            return {"answer": f"Sorry, I couldn't process your question: {e}", "sources": []}
+    web_context, web_sources = await _web_search(question, tag_str)
+    sources.extend(web_sources)
+
+    if rag_context:
+        combined = f"Knowledge base:\n{rag_context}"
+        if web_context:
+            combined += f"\n\nWeb search results:\n{web_context}"
+    elif web_context:
+        combined = f"Web search results:\n{web_context}"
+    else:
+        combined = "No relevant documents or web results found."
+
+    system_prompt = EXPERT_SYSTEM_TEMPLATE
+    user_prompt = (
+        f"Question: {question}\n\nContext:\n{combined}\n\n"
+        "Provide a helpful answer. If from the web, mention source URLs."
+    )
+
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ]
+
+    try:
+        answer = await call_llm_text(messages, temperature=0.5)
+        logger.info("Trả lời chuyên gia hoàn tất", extra={"room_id": room_id, "answer_len": len(answer)})
+        return {"answer": answer, "sources": list(dict.fromkeys(sources))}
+    except Exception as e:
+        logger.error("Trả lời chuyên gia thất bại", exc_info=True, extra={"room_id": room_id, "error": str(e)})
+        return {"answer": f"Sorry, I couldn't process your question: {e}", "sources": []}

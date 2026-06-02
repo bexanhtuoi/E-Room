@@ -4,52 +4,74 @@ from app.model import LeaderboardEntry, RoomSeries, TopicRoom, TopicRoomRegistra
 from app.service.base import CRUDRepository
 
 
-class RoomSeriesService:
+class RoomSeriesService(CRUDRepository):
     def __init__(self, session) -> None:
         self.session = session
-        self.repo = CRUDRepository(RoomSeries)
+        super().__init__(RoomSeries)
 
-    def list_all(self):
-        return self.repo.get_many(self.session)
+    def list_all(self) -> list[RoomSeries]:
+        return self.get_many(self.session)
 
     def list_series_by_tag(self, tag_id: str) -> list[RoomSeries]:
-        return [series for series in self.repo.get_many(self.session) if series.tag_id == tag_id]
+        return [
+            series
+            for series in self.get_many(self.session)
+            if series.tag_id == tag_id
+        ]
+
+    def get_by_id(self, id) -> RoomSeries | None:
+        return self.get_one(self.session, id=id)
 
 
-class TopicRoomService:
+class TopicRoomService(CRUDRepository):
     def __init__(self, session) -> None:
         self.session = session
-        self.repo = CRUDRepository(TopicRoom)
+        super().__init__(TopicRoom)
 
-    def list_all(self):
-        return self.repo.get_many(self.session)
+    def list_all(self) -> list[TopicRoom]:
+        return self.get_many(self.session)
 
-    def list_upcoming_rooms(self, tag_id: str | None = None) -> list[TopicRoom]:
-        rooms = self.repo.get_many(self.session)
+    def list_upcoming_rooms(
+        self, tag_id: str | None = None
+    ) -> list[TopicRoom]:
+        rooms = self.get_many(self.session)
         if tag_id is None:
             return rooms
         return [room for room in rooms if room.tag_id == tag_id]
 
+    def get_by_id(self, id) -> TopicRoom | None:
+        return self.get_one(self.session, id=id)
 
-class TopicRoomRegistrationService:
+
+class TopicRoomRegistrationService(CRUDRepository):
     def __init__(self, session) -> None:
         self.session = session
-        self.repo = CRUDRepository(TopicRoomRegistration)
+        super().__init__(TopicRoomRegistration)
 
-    def list_all(self):
-        return self.repo.get_many(self.session)
+    def list_all(self) -> list[TopicRoomRegistration]:
+        return self.get_many(self.session)
 
-    def list_registrations(self, topic_room_id: str) -> list[TopicRoomRegistration]:
-        return [registration for registration in self.repo.get_many(self.session) if registration.topic_room_id == topic_room_id]
+    def list_registrations(
+        self, topic_room_id: str
+    ) -> list[TopicRoomRegistration]:
+        return [
+            reg
+            for reg in self.get_many(self.session)
+            if reg.topic_room_id == topic_room_id
+        ]
 
 
-class LeaderboardService:
+class LeaderboardService(CRUDRepository):
     def __init__(self, session) -> None:
         self.session = session
-        self.repo = CRUDRepository(LeaderboardEntry)
+        super().__init__(LeaderboardEntry)
 
-    def list_all(self):
-        return self.repo.get_many(self.session)
+    def list_all(self) -> list[LeaderboardEntry]:
+        return self.get_many(self.session)
 
     def list_by_tag(self, tag_id: str) -> list[LeaderboardEntry]:
-        return [entry for entry in self.repo.get_many(self.session) if entry.tag_id == tag_id]
+        return [
+            entry
+            for entry in self.get_many(self.session)
+            if entry.tag_id == tag_id
+        ]

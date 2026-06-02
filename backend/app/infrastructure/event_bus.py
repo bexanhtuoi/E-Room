@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
-from app.infrastructure.redis import RedisCRUD, get_redis_client
+from app.infrastructure.redis_client import RedisCRUD, get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class EventBus:
     def __init__(self) -> None:
         self._redis = RedisCRUD(get_redis_client())
-        self._subscribers: dict[str, list[Callable]] = {}
+        self._subscribers: dict[str, list[Callable[[dict], None]]] = {}
 
     def publish(self, channel: str, payload: dict[str, Any]) -> int:
         return self._redis.publish(channel, payload)
@@ -27,7 +27,7 @@ class EventBus:
             self._subscribers[channel] = [h for h in self._subscribers[channel] if h is not handler]
 
     async def start_listener(self, *channels: str) -> None:
-        pubsub = self._redis._client.pubsub()
+        pubsub = self._redis.pubsub()
         pubsub.subscribe(*channels)
         try:
             while True:

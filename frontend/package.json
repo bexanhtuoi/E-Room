@@ -1,57 +1,42 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "e-room-frontend",
+  "version": "0.2.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@livekit/components-react": "^2.9.21",
     "@livekit/components-styles": "^1.2.0",
+    "@tanstack/react-query": "^5.100.10",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
     "bootstrap": "^5.3.8",
+    "i18next": "^26.1.0",
+    "i18next-browser-languagedetector": "^8.2.1",
     "livekit-client": "^2.18.9",
     "react": "^19.2.6",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.2.6",
+    "react-i18next": "^17.0.7",
     "react-icons": "^5.6.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.15.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.5.0",
+    "jsdom": "^29.1.1",
+    "serve": "^14.2.6",
+    "vite": "^6.3.0",
+    "vitest": "^4.1.6"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "jest": {
-    "moduleNameMapper": {
-      "^react-router-dom$": "<rootDir>/src/__mocks__/react-router-dom.js",
-      "^@livekit/components-react$": "<rootDir>/src/__mocks__/@livekit/components-react.js",
-      "^livekit-client$": "<rootDir>/src/__mocks__/livekit-client.js",
-      "^@livekit/components-styles$": "<rootDir>/src/__mocks__/@livekit/components-styles.js"
-    },
-    "transformIgnorePatterns": [
-      "node_modules/(?!(react-router-dom|@remix-run|react-router|@livekit|livekit-client)/)"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vite test"
   }
 }

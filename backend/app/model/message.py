@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlmodel import JSON, Column, Field, SQLModel
+from sqlmodel import JSON, Column, Field, SQLModel, String
 
 from app.model.common import MessageType, TimestampedModel
 
@@ -10,7 +10,7 @@ from app.model.common import MessageType, TimestampedModel
 class MessageBase(SQLModel):
     room_id: UUID = Field(foreign_key="rooms.id", index=True)
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
-    content: str
+    content: str = Field(sa_column=Column(String(4000)))
     message_type: MessageType = MessageType.TEXT
     payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
 

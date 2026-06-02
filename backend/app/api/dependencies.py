@@ -3,14 +3,13 @@ from __future__ import annotations
 from collections.abc import Generator
 from datetime import UTC, datetime
 from typing import Annotated
-import hashlib
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query, status
 from jwt import InvalidTokenError
 from sqlmodel import Session
 
 from app.database import get_session
-from app.infrastructure.token_store import TokenStore
+from app.service.token_store import TokenStore
 from app.security import decode_token
 
 
@@ -35,8 +34,11 @@ def _extract_access_token(cookie: str | None, auth_header: str | None) -> str:
 def _check_blacklist(token: str) -> None:
     try:
         token_store = TokenStore()
-        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        if token_store.is_blacklisted(token_hash):
+        payload = decode_token(token)
+        if payload is None:
+            return
+        jti = payload.get("jti")
+        if jti and token_store.is_blacklisted(jti):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Token has been revoked",
@@ -92,7 +94,61 @@ def get_token(
     return _validate_payload(token)
 
 
+def _check_user_banned(user_id: str) -> None:
+    try:
+        from app.database import engine
+        from sqlmodel import Session as DBSession, text
+        with DBSession(engine) as session:
+            row = session.exec(
+                text("SELECT is_banned, ban_reason, strikes FROM users WHERE id = :uid"),
+                {"uid": user_id},
+            ).first()
+            if row is None:
+                return
+            if row.is_banned:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Account banned: {row.ban_reason or 'no reason provided'}",
+                )
+            if row.strikes >= 5:
+                session.exec(
+                    text("UPDATE users SET is_banned = TRUE, ban_reason = 'Strike limit exceeded: permanent ban' WHERE id = :uid"),
+                    {"uid": user_id},
+                )
+                session.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Account permanently banned due to strikes",
+                )
+            if row.strikes >= 3:
+                from datetime import UTC, datetime
+                strike_row = session.exec(
+                    text(
+                        "SELECT created_at FROM moderation_events "
+                        "WHERE user_id = :uid AND action = 'ban_24h' "
+                        "ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"uid": user_id},
+                ).first()
+                if strike_row:
+                    strike_time = strike_row.created_at
+                    if strike_time.tzinfo is None:
+                        strike_time = strike_time.replace(tzinfo=UTC)
+                    if datetime.now(UTC) - strike_time < __import__("datetime").timedelta(hours=24):
+                        remaining = __import__("datetime").timedelta(hours=24) - (datetime.now(UTC) - strike_time)
+                        hours_left = int(remaining.total_seconds() / 3600) + 1
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"Temporarily banned for 24h due to strikes. ~{hours_left}h remaining.",
+                        )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+
 def get_current_user(token_subject: Annotated[str, Depends(get_token)]) -> dict[str, str]:
+    _check_user_banned(token_subject)
     return {"id": token_subject, "name": "Authenticated User"}
 
 

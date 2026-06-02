@@ -8,9 +8,11 @@ from sqlmodel import Session
 from app.database import engine
 from app.log import get_logger
 from app.model.document import KnowledgeDocument, DocumentStatus
+from app.rag.chunking import TextChunker
+from app.rag.embedding import EmbeddingService
+from app.rag.vector_store import VectorStore
 
 logger = get_logger(__name__)
-
 
 def _read_doc_text(doc: KnowledgeDocument) -> str:
     if not doc.file_path:
@@ -21,18 +23,13 @@ def _read_doc_text(doc: KnowledgeDocument) -> str:
     except Exception:
         return ""
 
-
 def _mark_doc_status(session: Session, doc: KnowledgeDocument, status: DocumentStatus, chunk_count: int = 0) -> None:
     doc.status = status
     doc.chunk_count = chunk_count
     session.add(doc)
     session.commit()
 
-
 def _chunk_and_embed(text: str) -> list[tuple[str, list[float]]]:
-    from app.rag.chunking import TextChunker
-    from app.rag.embedding import EmbeddingService
-
     chunker = TextChunker(chunk_size=512, chunk_overlap=64)
     chunks = chunker.chunk_text(text)
 
@@ -42,7 +39,6 @@ def _chunk_and_embed(text: str) -> list[tuple[str, list[float]]]:
     embed_service = EmbeddingService()
     vectors = asyncio.run(embed_service.embed_batch(chunks))
     return list(zip(chunks, vectors))
-
 
 def _build_vector_items(doc_id: int, pairs: list[tuple[str, list[float]]], source: str, tag: str) -> list:
     return [
@@ -59,7 +55,6 @@ def _build_vector_items(doc_id: int, pairs: list[tuple[str, list[float]]], sourc
         )
         for i, (chunk, vec) in enumerate(pairs)
     ]
-
 
 @shared_task(name="eroom.load_room_knowledge", bind=True, max_retries=3, default_retry_delay=10)
 def load_room_knowledge(self, document_id: int) -> dict:
@@ -84,17 +79,16 @@ def load_room_knowledge(self, document_id: int) -> dict:
             tag = str(doc.tag_id) if doc.tag_id else ""
             items = _build_vector_items(document_id, pairs, doc.file_path or "", tag)
 
-            from app.rag.vector_store import VectorStore
             vs = VectorStore()
             vs.add_batch(items)
 
             _mark_doc_status(session, doc, DocumentStatus.READY, len(pairs))
 
-            logger.info("rag_load_done", extra={"doc_id": document_id, "chunks": len(pairs)})
+            logger.info("Tải RAG hoàn tất", extra={"doc_id": document_id, "chunks": len(pairs)})
             return {"status": "completed", "chunks": len(pairs)}
 
     except Exception as e:
-        logger.error("rag_load_failed", exc_info=True)
+        logger.error("Tải RAG thất bại", exc_info=True)
         try:
             with Session(engine) as session:
                 doc = session.get(KnowledgeDocument, document_id)

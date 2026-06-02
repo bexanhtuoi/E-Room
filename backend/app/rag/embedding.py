@@ -30,6 +30,7 @@ def get_embedding_model(model_name: str = "nomic-embed-text-v1.5") -> NomicEmbed
 
 
 class EmbeddingService:
+
     def __init__(self, model_name: str = "nomic-embed-text-v1.5") -> None:
         self._model_name = model_name
         self._cache: dict[str, list[float]] = {}
@@ -43,7 +44,8 @@ class EmbeddingService:
 
     def _load_from_redis(self, key: str) -> list[float] | None:
         try:
-            from app.infrastructure.redis import RedisCRUD
+            from app.infrastructure.redis_client import RedisCRUD
+
             redis = RedisCRUD()
             cached = redis.get(f"emb:{key}")
             if cached:
@@ -54,7 +56,8 @@ class EmbeddingService:
 
     def _save_to_redis(self, key: str, vector: list[float]) -> None:
         try:
-            from app.infrastructure.redis import RedisCRUD
+            from app.infrastructure.redis_client import RedisCRUD
+
             redis = RedisCRUD()
             redis.set(f"emb:{key}", json.dumps(vector), ttl=86400)
         except Exception:
@@ -66,13 +69,17 @@ class EmbeddingService:
     async def embed_query(self, text: str) -> list[float]:
         if not text or not text.strip():
             return self._zero_vector()
+
         key = _cache_key(text)
+
         if key in self._cache:
             return self._cache[key]
+
         redis_val = self._load_from_redis(key)
         if redis_val is not None:
             self._cache[key] = redis_val
             return redis_val
+
         try:
             emb = self._get_embeddings()
             loop = asyncio.get_running_loop()
@@ -80,6 +87,7 @@ class EmbeddingService:
         except Exception as e:
             logger.warning("embed_failed", extra={"error": str(e)})
             result = self._zero_vector()
+
         self._cache[key] = result
         self._save_to_redis(key, result)
         return result
@@ -87,40 +95,54 @@ class EmbeddingService:
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+
         results: list[list[float] | None] = [None] * len(texts)
         uncached: list[tuple[int, str]] = []
+
         for idx, text in enumerate(texts):
             if not text or not text.strip():
                 results[idx] = self._zero_vector()
                 continue
+
             key = _cache_key(text)
+
             if key in self._cache:
                 results[idx] = self._cache[key]
                 continue
+
             redis_val = self._load_from_redis(key)
             if redis_val is not None:
                 self._cache[key] = redis_val
                 results[idx] = redis_val
                 continue
+
             uncached.append((idx, text))
+
         if not uncached:
             return [r for r in results if r is not None]
+
         emb = self._get_embeddings()
         loop = asyncio.get_running_loop()
+
         for batch_start in range(0, len(uncached), _BATCH_SIZE):
             batch = uncached[batch_start : batch_start + _BATCH_SIZE]
             batch_texts = [t for _, t in batch]
             batch_indices = [i for i, _ in batch]
+
             try:
-                vectors = await loop.run_in_executor(None, emb.embed_documents, batch_texts)
+                vectors = await loop.run_in_executor(
+                    None, emb.embed_documents, batch_texts
+                )
             except Exception as e:
                 logger.warning("embed_batch_failed", extra={"error": str(e)})
                 vectors = [self._zero_vector() for _ in batch_texts]
+
             for i, vec in zip(batch_indices, vectors):
                 results[i] = vec
                 key = _cache_key(texts[i])
                 self._cache[key] = vec
                 self._save_to_redis(key, vec)
+
         final: list[list[float]] = []
         for r in results:
             final.append(r if r is not None else self._zero_vector())

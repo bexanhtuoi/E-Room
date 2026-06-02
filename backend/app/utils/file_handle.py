@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +43,6 @@ def sha256_hex(data: bytes | str) -> str:
 
 
 def safe_filename(name: str) -> str:
-    import re
     return re.sub(r'[<>:"/\\|?*]', "_", name).strip(" .")
 
 
@@ -61,7 +62,6 @@ def delete_path(path: str, missing_ok: bool = True) -> bool:
     p = Path(path)
     try:
         if p.is_dir():
-            import shutil
             shutil.rmtree(p)
         elif p.is_file():
             p.unlink()

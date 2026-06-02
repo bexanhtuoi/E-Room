@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import time
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
@@ -75,7 +76,6 @@ def sync_retry(
                         delay,
                         exc,
                     )
-                    import time
                     time.sleep(delay)
             raise last_exception  # type: ignore[misc]
 

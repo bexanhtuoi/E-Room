@@ -14,11 +14,10 @@ class RoomCreateRequest(BaseModel):
 
 
 class RoomJoinRequest(BaseModel):
-    user_id: str
+    pass
 
 
 class RoomMatchRequest(BaseModel):
-    user_id: str
     tag_ids: list[str] = Field(default_factory=list)
 
 

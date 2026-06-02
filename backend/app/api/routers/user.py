@@ -8,6 +8,7 @@ from sqlmodel import Session
 from app.api.dependencies import get_current_user, get_db_session
 from app.model import User
 from app.schemas import UserResponse
+from app.service.user import UserService
 
 router = APIRouter()
 
@@ -27,7 +28,8 @@ async def get_me(
             profile_completed=False,
         )
 
-    user = session.get(User, user_id)
+    user_service = UserService(session)
+    user = user_service.get_by_id(user_id)
     if user is None:
         return UserResponse(
             id=str(user_id),

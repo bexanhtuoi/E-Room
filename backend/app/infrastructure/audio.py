@@ -1,95 +1,112 @@
 from __future__ import annotations
 
-import array
-import heapq
+import base64
 import math
 import struct
-from collections import defaultdict
-from typing import Any
+import time
+from collections import OrderedDict
+
+from app.config import settings
+from app.log import get_logger
+
+logger = get_logger(__name__)
 
 
 class AudioConfig:
-    def __init__(
-        self,
-        sample_rate: int = 16000,
-        sample_width: int = 2,
-        channels: int = 1,
-        chunk_ms: int = 20,
-        rms_threshold: float = 0.02,
-        silence_threshold_ms: int = 2000,
-    ) -> None:
-        self.sample_rate = sample_rate
-        self.sample_width = sample_width
-        self.channels = channels
-        self.chunk_ms = chunk_ms
-        self.rms_threshold = rms_threshold
-        self.silence_threshold_ms = silence_threshold_ms
-
-    @property
-    def chunk_size(self) -> int:
-        return self.sample_rate * self.sample_width * self.channels * self.chunk_ms // 1000
-
-    @property
-    def silence_chunks(self) -> int:
-        return self.silence_threshold_ms // self.chunk_ms
+    sample_rate: int = 16000
+    sample_width: int = 2
+    channels: int = 1
+    silence_threshold_ms: int = 400
+    rms_threshold: float = 0.04
+    max_buffer_duration: int = 30
 
 
 class AudioBuffer:
     def __init__(self, user_id: str, config: AudioConfig | None = None) -> None:
         self.user_id = user_id
         self.config = config or AudioConfig()
-        self._sentence: bytearray = bytearray()
-        self._speaking: bool = False
-        self._silent_chunks: int = 0
-        self._pending: list[tuple[int, bytes]] = []
-        self._next_seq: int = 0
-        self._seen_sequences: set[int] = set()
+        self._pending: OrderedDict[int, bytes] = OrderedDict()
+        self._last_seq: int = 0
+        self._finalized: bool = False
+        self._speech_segments: list[bytes] = []
+        self._speech_active: bool = False
+        self._last_audio_time: float = 0.0
 
-    def feed_chunk(self, seq: int, pcm: bytes) -> str | None:
-        if seq in self._seen_sequences:
+    def push(self, seq: int, data_b64: str) -> None:
+        if seq <= self._last_seq:
+            logger.debug("audio_buffer_seq_trùng",
+                extra={"user_id": self.user_id, "seq": seq})
+            return
+        pcm = base64.b64decode(data_b64)
+        self._pending[seq] = pcm
+        self._last_seq = seq
+        self._speech_segments.append(pcm)
+        self._speech_active = True
+        self._last_audio_time = time.time()
+        logger.debug("audio_buffer_chunk_đã_xếp_hàng",
+            extra={"user_id": self.user_id, "seq": seq, "size": len(pcm), "pending": len(self._pending)})
+
+    def _check_vad(self) -> str | None:
+        if not self._speech_active:
             return None
-        self._seen_sequences.add(seq)
 
-        heapq.heappush(self._pending, (seq, pcm))
-
-        result: str | None = None
-        while self._pending and self._pending[0][0] == self._next_seq:
-            _, chunk = heapq.heappop(self._pending)
-            self._next_seq += 1
-            detect = self._process_chunk(chunk)
-            if detect:
-                result = detect
-        return result
-
-    def _process_chunk(self, pcm: bytes) -> str | None:
-        if not pcm:
+        if not self._speech_segments:
             return None
-        rms = _compute_rms(pcm, self.config.sample_width)
+
+        latest = self._speech_segments[-1]
+        import struct
+
+        samples = struct.unpack(f"<{len(latest)//2}h", latest)
+        if not samples:
+            return None
+
+        import math
+
+        rms = math.sqrt(sum(s * s for s in samples) / len(samples)) / 32768.0
+        silence_ms = (time.time() - self._last_audio_time) * 1000
+
+        if rms < self.config.rms_threshold and silence_ms > self.config.silence_threshold_ms:
+            logger.debug("Phát hiện im lặng - kết thúc giọng nói",
+                extra={"user_id": self.user_id, "rms": round(rms, 4), "silence_ms": round(silence_ms, 0)})
+            return "speech_end"
+
         if rms >= self.config.rms_threshold:
-            self._sentence.extend(pcm)
-            self._silent_chunks = 0
-            if not self._speaking:
-                self._speaking = True
-                return "speech_start"
-            return None
-        if self._speaking:
-            self._silent_chunks += 1
-            self._sentence.extend(pcm)
-            if self._silent_chunks >= self.config.silence_chunks:
-                self._speaking = False
-                return "speech_end"
+            logger.debug("Phát hiện giọng nói",
+                extra={"user_id": self.user_id, "rms": round(rms, 4)})
+            return "speech_start"
+
         return None
 
+    def check_vad(self) -> str | None:
+        return self._check_vad()
+
+    def finalize(self) -> bytes | None:
+        self._speech_active = False
+        if not self._speech_segments:
+            return None
+        pcm = b"".join(self._speech_segments)
+        self._speech_segments.clear()
+        logger.debug("Kết thúc thu âm",
+            extra={"user_id": self.user_id, "pcm_bytes": len(pcm)})
+        return pcm
+
+    def feed_chunk(self, seq: int, pcm_bytes: bytes) -> str:
+        self._pending[seq] = pcm_bytes
+        self._speech_segments.append(pcm_bytes)
+        self._speech_active = True
+        self._last_audio_time = time.time()
+        if len(self._speech_segments) > 1:
+            return self._check_vad() or ""
+        return ""
+
     def get_sentence(self) -> bytes:
-        return bytes(self._sentence)
+        return self.finalize() or b""
 
     def reset(self) -> None:
-        self._sentence = bytearray()
-        self._speaking = False
-        self._silent_chunks = 0
         self._pending.clear()
-        self._next_seq = 0
-        self._seen_sequences.clear()
+        self._speech_segments.clear()
+        self._speech_active = False
+        self._finalized = False
 
 
 class AudioBufferManager:
@@ -104,55 +121,6 @@ class AudioBufferManager:
     def remove(self, user_id: str) -> None:
         self._buffers.pop(user_id, None)
 
-    def clear_all(self) -> None:
-        self._buffers.clear()
-
 
 class AudioProcessor:
-    @staticmethod
-    def pcm_to_wav(
-        pcm: bytes,
-        sample_rate: int = 16000,
-        sample_width: int = 2,
-        channels: int = 1,
-    ) -> bytes:
-        byte_rate = sample_rate * sample_width * channels
-        block_align = sample_width * channels
-        data_size = len(pcm)
-        header = struct.pack(
-            "<4sI4s4sIHHIIHH4sI",
-            b"RIFF",
-            36 + data_size,
-            b"WAVE",
-            b"fmt ",
-            16,
-            1,
-            channels,
-            sample_rate,
-            byte_rate,
-            block_align,
-            sample_width * 8,
-            b"data",
-            data_size,
-        )
-        return header + pcm
-
-
-def _compute_rms(pcm: bytes, sample_width: int) -> float:
-    if not pcm:
-        return 0.0
-    count = len(pcm) // sample_width
-    if count == 0:
-        return 0.0
-    if sample_width == 2:
-        samples = array.array("h", pcm)
-    elif sample_width == 1:
-        samples = array.array("b", pcm)
-    elif sample_width == 4:
-        samples = array.array("i", pcm)
-    else:
-        samples = array.array("h", pcm)
-    sum_sq = sum(float(s) * float(s) for s in samples[:count])
-    rms = math.sqrt(sum_sq / count)
-    max_val = float(1 << (sample_width * 8 - 1))
-    return rms / max_val if max_val > 0 else 0.0
+    pass

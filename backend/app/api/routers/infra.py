@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.infrastructure.redis import get_redis_client
-from app.infrastructure.video import VideoRoomService
 from app.infrastructure.livekit import LiveKitService
 from app.infrastructure.minio import get_minio_client
+from app.infrastructure.redis_client import RateLimiter, get_redis_client
+from app.infrastructure.video import VideoRoomService
 
 router = APIRouter()
 
@@ -29,7 +29,7 @@ async def get_infra_status() -> dict[str, object]:
         "minio": {"endpoint": settings.minio_endpoint, "bucket": settings.minio_bucket},
         "celery": {"broker": settings.redis_url},
         "video": video_service.create_room_payload("demo-room", 5),
-        "livekit": {"server": livekit_service.base_url, "apiKey": livekit_service.api_key},
+        "livekit": {"server": livekit_service.server_url, "apiKey": settings.livekit_api_key},
         "websocket": {"path": "/ws/rooms/{room_id}"},
     }
 
@@ -112,9 +112,6 @@ async def health_live() -> dict[str, str]:
 
 
 async def rate_limit_login(request: Request) -> None:
-    from fastapi import HTTPException, status
-    from app.infrastructure.redis import RateLimiter
-
     ip = request.client.host if request.client else "unknown"
     try:
         limiter = RateLimiter()

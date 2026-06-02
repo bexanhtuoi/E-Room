@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from datetime import datetime, timezone
+from io import BytesIO
 from typing import Any, BinaryIO
+from urllib.parse import urlparse
 
 import httpx
 
@@ -28,8 +31,6 @@ def extract_qa(item: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def extract_source_from_url(url: str) -> str:
-    from urllib.parse import urlparse
-
     path = urlparse(url).path if "://" in url else url
     name = os.path.basename(path)
     return os.path.splitext(name)[0]
@@ -66,15 +67,12 @@ class FileHandler:
         return []
 
     def _parse_markdown(self, text: str) -> list[str]:
-        import re
-
         sections = re.split(r"\n(?=#{1,4}\s)", text)
         return [s.strip() for s in sections if s.strip()]
 
     def _parse_pdf(self, content: bytes) -> list[str]:
         try:
             from PyPDF2 import PdfReader
-            from io import BytesIO
 
             reader = PdfReader(BytesIO(content))
             pages: list[str] = []
@@ -95,7 +93,6 @@ class FileHandler:
     def _parse_docx(self, content: bytes) -> list[str]:
         try:
             from docx import Document
-            from io import BytesIO
 
             doc = Document(BytesIO(content))
             paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
@@ -110,14 +107,14 @@ class FileHandler:
 
     async def upload_to_minio(self, filename: str, content: bytes) -> str | None:
         try:
-            from app.infrastructure.minio import MinioClient
+            from app.infrastructure.minio import MinioCRUD, get_minio_client
 
-            client = MinioClient()
+            client = MinioCRUD(client=get_minio_client())
             file_hash = hashlib.sha256(content).hexdigest()[:16]
             ext = os.path.splitext(filename)[1]
-            object_name = f"rag-docs/{file_hash}{ext}"
+            object_name = f"documents/{file_hash}{ext}"
 
-            client.upload_bytes(object_name, content, len(content))
+            client.put_object(object_name, content)
             return object_name
         except ImportError:
             logger.warning("MinioClient not available")

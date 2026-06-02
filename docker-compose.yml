@@ -6,7 +6,11 @@ services:
       - "8000:8000"
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    volumes:
+      - ./backend/app:/app/app
     depends_on:
+      tidb:
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -18,6 +22,8 @@ services:
     restart: unless-stopped
     env_file: ./backend/.env.docker
     depends_on:
+      tidb:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -30,24 +36,24 @@ services:
       redis:
         condition: service_healthy
 
-  # ---- PostgreSQL + pgvector (optional — uncomment to use instead of TiDB Cloud) ----
-  # postgres:
-  #   image: pgvector/pgvector:pg17
-  #   container_name: e_room_postgres
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_USER: eroom
-  #     POSTGRES_PASSWORD: eroom
-  #     POSTGRES_DB: eroom
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U eroom"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 5
+  tidb:
+    image: pingcap/tidb:v8.5.0
+    container_name: e_room_tidb
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+      - "10080:10080"
+    command:
+      - --store=unistore
+      - --path=/data
+    volumes:
+      - tidb_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:10080/status" ]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -75,15 +81,6 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
-
-  minio_init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_started
-    entrypoint: ["/bin/sh", "/config/init-buckets.sh"]
-    volumes:
-      - ./init-buckets.sh:/config/init-buckets.sh:ro
 
   livekit:
     image: livekit/livekit-server:latest
@@ -135,4 +132,5 @@ services:
 volumes:
   redis_data:
   minio_data:
+  tidb_data:
   # postgres_data:

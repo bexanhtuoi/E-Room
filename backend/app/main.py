@@ -1,25 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
-import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from sqlmodel import Session, text
 
 from app.api import api_router
 from app.config import settings
-from app.database import create_db_and_tables
+from app.database import create_db_and_tables, engine
+from app.infrastructure.celery_bridge import celery_bridge
 from app.log import get_logger
-from app.infrastructure.tag_seed import seed_default_tags
-from app.infrastructure.seed_data import seed_rooms
-from app.database import engine
-from sqlmodel import Session
-
-os.makedirs(settings.avatar_dir, exist_ok=True)
-os.makedirs(settings.upload_dir, exist_ok=True)
+from app.model import RoomParticipant
+from app.seed.seed_data import seed_rooms
+from app.seed.tag_seed import seed_default_tags
+from app.service.heartbeat import heartbeat_loop
+from app.service.model_warmup import warmup_models
+from app.ws.handlers import handle_audio_ws, handle_room_ws
 
 log = get_logger(__name__)
 
@@ -28,13 +26,21 @@ log = get_logger(__name__)
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     with Session(engine) as session:
-        inserted = seed_default_tags(session)
-        log.info("Seeded %s default tags", inserted)
+        inserted_tags = seed_default_tags(session)
+        log.info("Đã tạo %s thẻ tag mặc định", inserted_tags)
         inserted_rooms = seed_rooms(session)
-        log.info("Seeded %s sample rooms", inserted_rooms)
-    log.info("%s started", settings.app_name)
+        log.info("Đã tạo %s phòng mẫu", inserted_rooms)
+        session.exec(text("DELETE FROM room_participants"))
+        session.commit()
+        log.info("Đã xoá dữ liệu người tham gia cũ")
+    await warmup_models()
+    await celery_bridge.start()
+    hb_task = asyncio.create_task(heartbeat_loop())
+    log.info("%s đã khởi động", settings.app_name)
     yield
-    log.info("%s shutdown", settings.app_name)
+    hb_task.cancel()
+    await celery_bridge.stop()
+    log.info("%s đã tắt", settings.app_name)
 
 
 app = FastAPI(
@@ -52,28 +58,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- Security Headers ----
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "0"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=()"
-        )
-        return response
-
-app.add_middleware(SecurityHeadersMiddleware)
-
-app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 app.include_router(api_router, prefix="/api/v1")
+
+app.add_api_websocket_route("/ws/rooms/{room_id}", handle_room_ws)
+app.add_api_websocket_route("/ws/audio/{room_id}", handle_audio_ws)
 
 
 @app.get("/", tags=["root"])
 async def root() -> dict[str, str]:
-    return {"message": f"Welcome to {settings.app_name}"}
+    return {"message": f"Chào mừng đến với {settings.app_name}"}
 
 
 @app.get("/health", tags=["health"])

@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
-from app.api.dependencies import get_db_session
-from app.model import Tag
+from app.api.dependencies import get_current_user, get_db_session
+from app.model import Tag, UserTag
 from app.schemas import CustomTagCreateRequest, TagResponse, UserTagBulkAddRequest
-from app.service.tag import TagService
+from app.service.tag import TagService, UserTagService
 
 router = APIRouter()
 
@@ -35,5 +35,21 @@ async def create_custom_tag(payload: CustomTagCreateRequest, session: Session = 
 
 
 @router.post("/bulk-add", response_model=dict[str, int])
-async def add_user_tags(payload: UserTagBulkAddRequest) -> dict[str, int]:
-    return {"attachedCount": len(payload.tag_ids)}
+async def add_user_tags(
+    payload: UserTagBulkAddRequest,
+    session: Session = Depends(get_db_session),
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, int]:
+    user_id = current_user["id"]
+    user_tag_service = UserTagService(session)
+    existing_tags = user_tag_service.list_user_tags(user_id)
+    existing_tag_ids = {str(t.tag_id) for t in existing_tags}
+
+    attached = 0
+    for tag_id in payload.tag_ids:
+        if tag_id not in existing_tag_ids:
+            user_tag = UserTag(user_id=user_id, tag_id=tag_id)
+            user_tag_service.attach_tag(user_tag)
+            attached += 1
+
+    return {"attachedCount": attached}

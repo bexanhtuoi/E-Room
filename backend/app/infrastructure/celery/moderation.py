@@ -44,8 +44,8 @@ def scan_active_rooms(self) -> dict:
                 if room_flagged:
                     flagged_rooms.append(str(room.id))
             session.commit()
-        logger.info("moderation_scan_done", extra={"flagged_rooms": len(flagged_rooms), "flagged_messages": flagged_messages})
+        logger.info("Kiểm duyệt hoàn tất", extra={"flagged_rooms": len(flagged_rooms), "flagged_messages": flagged_messages})
     except Exception as e:
-        logger.error("moderation_scan_failed", exc_info=True)
+        logger.error("Kiểm duyệt thất bại", exc_info=True)
         raise self.retry(exc=e)
     return {"flagged_rooms": flagged_rooms, "flagged_messages": flagged_messages}

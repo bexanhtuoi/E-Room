@@ -1,30 +1,37 @@
-from __future__ import annotations
-
-from collections.abc import Generator
-
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
 
-import app.model
 from app.config import settings
-from app.log import get_logger
 
-log = get_logger(__name__)
+engine = create_engine(settings.database_url, echo=False, connect_args=settings.db_connect_args)
 
-_db_url = settings.database_url_sync or settings.database_url
 
-# TiDB Cloud (MySQL) requires TLS — pass SSL via connect_args (pymysql expects a dict)
-_connect_args: dict = {}
-if _db_url.startswith("mysql"):
-    _connect_args["ssl"] = {"ssl_mode": "PREFERRED"}
+def get_session() -> Session:
+    with Session(engine) as session:
+        yield session
 
-engine = create_engine(_db_url, echo=False, connect_args=_connect_args)
+
+def ensure_database_exists() -> None:
+    from urllib.parse import urlparse
+
+    url = settings.database_url
+    parsed = urlparse(url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    try:
+        tmp_engine = create_engine(base_url, echo=False, connect_args=settings.db_connect_args)
+        with tmp_engine.connect() as conn:
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{settings.db_name}`"))
+            conn.commit()
+        tmp_engine.dispose()
+    except Exception:
+        pass
 
 
 def create_db_and_tables() -> None:
+    import app.model  # noqa: F401
+
+    ensure_database_exists()
     SQLModel.metadata.create_all(engine)
-    log.info("Database tables initialized")
+    from app.log import get_logger
 
-
-def get_session() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        yield session
+    get_logger(__name__).info("Đã khởi tạo bảng dữ liệu")

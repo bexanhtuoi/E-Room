@@ -1,84 +1,105 @@
 from __future__ import annotations
 
-import os
+import json
+import time
 from typing import Any
 
-import requests
-import asyncio
+from openai import AsyncOpenAI
 
+from app.config import settings
 from app.agent.prompt import CORRECTOR_SYSTEM_TEMPLATE
 from app.log import get_logger
 
 logger = get_logger(__name__)
+client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
 
 
-class AgentCorrector:
+async def correct_text(text: str, user_id: str, pipeline_result: dict[str, Any]) -> dict[str, Any]:
+    _t0 = time.monotonic()
+    logger.info("Bắt đầu sửa lỗi phát âm",
+        extra={"user_id": user_id, "text": text, "text_len": len(text)})
 
-    def __init__(self) -> None:
-        self._llm_base = self._get_llm_base()
-        self._llm_model = self._get_llm_model()
-        self._api_key = self._get_api_key()
+    words = pipeline_result.get("words", [])
+    aligned = pipeline_result.get("aligned_phonemes", [])
+    word_context = _build_word_phoneme_context(pipeline_result.get("text", ""), words, aligned)
 
-    def _get_llm_base(self) -> str:
-        try:
-            from app.config import settings
-            return getattr(settings, "llm_base_url", os.getenv("LLM_BASE_URL", "http://localhost:20128/v1"))
-        except ImportError:
-            return os.getenv("LLM_BASE_URL", "http://localhost:20128/v1")
+    user_message = (
+        f"Người dùng nói: \"{text}\"\n\n"
+        f"Phân tích từng từ (điểm, phát âm):\n{json.dumps(word_context, ensure_ascii=False, indent=2)}\n\n"
+        f"Điểm tổng thể: {pipeline_result['scores']['overall']}/100\n"
+        f"Cần sửa lỗi: {pipeline_result['needs_remediation']}\n\n"
+        "Hãy đưa ra phản hồi phát âm chi tiết."
+    )
 
-    def _get_llm_model(self) -> str:
-        try:
-            from app.config import settings
-            return getattr(settings, "llm_model", os.getenv("LLM_MODEL", "ds2api/deepseek-v4-flash-nothinking"))
-        except ImportError:
-            return os.getenv("LLM_MODEL", "ds2api/deepseek-v4-flash-nothinking")
-
-    def _get_api_key(self) -> str:
-        try:
-            from app.config import settings
-            return getattr(settings, "llm_api_key", os.getenv("LLM_API_KEY", ""))
-        except ImportError:
-            return os.getenv("LLM_API_KEY", "")
-
-    async def correct(self, text: str, user_id: str) -> dict[str, Any]:
-        logger.info("corrector_start", extra={"user_id": user_id, "text_len": len(text)})
-
-        payload = {
-            "model": self._llm_model,
-            "messages": [
+    try:
+        resp = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
                 {"role": "system", "content": CORRECTOR_SYSTEM_TEMPLATE},
-                {"role": "user", "content": text},
+                {"role": "user", "content": user_message},
             ],
-            "temperature": 0.3,
-            "response_format": {"type": "json_object"},
+            temperature=0.3,
+            max_tokens=512,
+        )
+        llm_time = round(time.monotonic() - _t0, 2)
+        content = resp.choices[0].message.content or ""
+
+        result = _parse_correction_response(content, text)
+        logger.info("Sửa lỗi phát âm hoàn tất",
+            extra={"user_id": user_id, "text": text,
+                   "llm_s": llm_time,
+                   "errors_count": len(result.get("errors", [])),
+                   "has_feedback": bool(result.get("pronunciation_feedback"))})
+        return result
+    except Exception as e:
+        logger.error("Sửa lỗi phát âm thất bại",
+            exc_info=True, extra={"user_id": user_id, "error": str(e)})
+        return {
+            "corrected": text,
+            "explanation": "Không thể phân tích phát âm ngay lúc này.",
+            "pronunciation_feedback": "",
+            "errors": [],
+            "tts_text": text,
         }
 
-        try:
-            result = await self._call_llm(payload)
-            logger.info("corrector_done", extra={"user_id": user_id, "errors": len(result.get("errors", []))})
-            return result
-        except Exception as e:
-            logger.error("corrector_failed", exc_info=True, extra={"user_id": user_id, "error": str(e)})
+
+def _build_word_phoneme_context(
+    text: str, words: list[dict[str, Any]], aligned: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    word_map = {w["word"].lower(): w for w in words}
+    result = []
+    for entry in aligned:
+        word = entry.get("word", "")
+        word_info = word_map.get(word.lower(), {})
+        result.append({
+            "word": word,
+            "score": word_info.get("score", 0),
+            "pronunciation": entry.get("pronunciation", ""),
+            "phonemes": entry.get("phonemes", []),
+            "confidence": entry.get("confidence", 0),
+            "duration": entry.get("duration", 0),
+        })
+    return result
+
+
+def _parse_correction_response(content: str, original: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
             return {
-                "corrected": text,
-                "errors": [],
-                "score": 10,
-                "explanation": f"Correction unavailable: {e}",
+                "corrected": parsed.get("corrected", original),
+                "explanation": parsed.get("explanation", ""),
+                "pronunciation_feedback": parsed.get("pronunciation_feedback", ""),
+                "errors": parsed.get("errors", []),
+                "tts_text": parsed.get("tts_text", parsed.get("corrected", original)),
             }
+    except (json.JSONDecodeError, TypeError):
+        pass
 
-    async def _call_llm(self, payload: dict) -> dict:
-        url = f"{self._llm_base}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
-
-        def _sync_post():
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            return content if isinstance(content, dict) else __import__("json").loads(content)
-
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, _sync_post)
+    return {
+        "corrected": original,
+        "explanation": content,
+        "pronunciation_feedback": "",
+        "errors": [],
+        "tts_text": original,
+    }
