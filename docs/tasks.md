@@ -322,14 +322,11 @@ updated: 2026-06-02
 
 ## 🧠 PHẦN 5 — AI ENGINE
 
-### 5.1 Whisper (STT)
+### 5.1 FunASR (STT)
 
-- [ ] Thiết lập OpenAI Whisper API client
-- [ ] Chia đoạn âm thanh: buffer 3s, overlap 0.5s
-- [ ] Phát hiện im lặng: RMS energy < ngưỡng trong 2s
-- [ ] Loại bỏ trùng lặp transcript (LCS merging)
-- [ ] **Transcript hiển thị NGAY LẬP TỨC trên ChatWindow** qua WebSocket
-- [ ] Giai đoạn 2: tự host faster-whisper large-v3
+- [ ] Thiết lập FunASR SenseVoiceSmall model
+   - [ ] Config: `FUNASR_MODEL_PATH`
+- [ ] Giai đoạn 2: tối ưu FunASR model
 
 ### 5.2 LLM Integration
 
@@ -418,7 +415,7 @@ updated: 2026-06-02
 
 ### 7.1 TTS Engine Setup
 
-- [ ] Thiết lập OpenAI TTS API client (`tts-1`, voice `alloy`)
+- [ ] Thiết lập Supertonic ONNX model local
 - [ ] `TTSService` trong `application/services/tts.py`
 - [ ] `POST /api/tts/generate` — text → audio [Pro+ only]
 - [ ] Audio lưu vào Minio `ERoom-tts/{sha256}.mp3` (TTL 24h)
@@ -437,7 +434,7 @@ updated: 2026-06-02
 
 - [ ] Nếu TTS engine sập → ẩn nút TTS, vẫn hiện text sửa lỗi
 - [ ] Nếu Minio sập → trả audio base64 trực tiếp (max 1MB)
-- [ ] Đánh giá ElevenLabs Multilingual v2 cho Giai đoạn 3+
+- [ ] Đánh giá Supertonic model cho tiếng Việt
 
 ---
 
@@ -624,7 +621,7 @@ updated: 2026-06-02
 | 2. TAG SYSTEM | Backend + API + Matching + Frontend + Moderation | ~45 |
 | 3. API | FastAPI + Auth + Endpoints (80+) + WebSocket + Celery | ~140 |
 | 4. VIDEO SERVER | LiveKit setup + integration + scaling | ~35 |
-| 5. AI ENGINE | Whisper + LLM + Prompts + Embeddings + Intent Classifier | ~65 |
+| 5. AI ENGINE | FunASR + LLM + Prompts + Embeddings + Intent Classifier | ~65 |
 | 6. MINIO & RAG | Setup + Documents + Query Pipeline + Agent Loading | ~30 |
 | 7. TTS | Engine + Frontend + Fallback | ~15 |
 | 8. IMAGE MODERATION | NSFW Detector + Pipeline + UI | ~20 |
@@ -639,7 +636,7 @@ updated: 2026-06-02
 ```
 Giai đoạn 1 (MVP — ~350 tác vụ):
   DATABASE → TAG SYSTEM → API (Auth + Matching + Room + WebSocket cơ bản)
-  → LIVEKIT → AI ENGINE (Whisper + Corrector + Review + Embeddings)
+  → LIVEKIT → AI ENGINE (FunASR + Corrector + Review + Embeddings)
   → UI (Setup + Auth + Onboarding với Tag + Dashboard + Matching + Room cơ bản)
 
 Giai đoạn 2 (AI Agent — ~200 tác vụ):

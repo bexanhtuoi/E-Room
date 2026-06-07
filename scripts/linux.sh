@@ -81,12 +81,6 @@ run_in_terminal() {
 echo "      Starting API server (port 8000)..."
 run_in_terminal "E-Room API" "cd '$PROJECT_DIR/backend' && uv run python -m app.server"
 
-echo "      Starting Celery worker..."
-run_in_terminal "E-Room Celery Worker" "cd '$PROJECT_DIR/backend' && uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info"
-
-echo "      Starting Celery beat..."
-run_in_terminal "E-Room Celery Beat" "cd '$PROJECT_DIR/backend' && uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info"
-
 echo "      Starting Frontend (port 3000)..."
 run_in_terminal "E-Room Frontend" "cd '$PROJECT_DIR/frontend' && npm run dev"
 

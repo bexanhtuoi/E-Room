@@ -7,7 +7,7 @@ tags:
   - ERoom
   - infrastructure
 created: 2026-05-10
-updated: 2026-06-02
+updated: 2026-06-06
 ---
 
 # Triển khai & Vận hành
@@ -29,8 +29,6 @@ File: `docker-compose.yml` (root project)
 | Service | Container | Ports | Mục đích |
 |---------|-----------|-------|----------|
 | `api` | `e-room-api-1` | 8000 | FastAPI backend |
-| `celery_worker` | `e-room-celery_worker-1` | — | Xử lý tác vụ bất đồng bộ |
-| `celery_beat` | `e-room-celery_beat-1` | — | Lập lịch định kỳ (matching 5s, cleanup) |
 | `redis` | `e_room_redis` | 6379 | Queue, cache, pub/sub |
 | `minio` | `e-room-minio-1` | 9000, 9001 | Object storage (RAG docs, TTS, avatars, evidence) |
 | `minio_init` | — | — | Khởi tạo buckets (chạy 1 lần) |
@@ -47,8 +45,6 @@ graph TD
     nginx --> frontend
     api --> redis
     api --> minio
-    celery_worker --> redis
-    celery_beat --> redis
     livekit --> redis
     minio_init --> minio
 ```
@@ -133,11 +129,11 @@ mc ilm rule add --expire-days 1 local/ERoom-tts
 mc ilm rule add --expire-days 30 local/ERoom-evidence
 ```
 
-### 2.5 Celery Tasks (định kỳ)
+### 2.5 Background Tasks (in-process)
 
 | Task | Schedule | Mục đích |
 |------|----------|----------|
-| `run_matching_engine` | Mỗi 5s | Ghép cặp người dùng theo tag |
+| `run_matching_engine` | Mỗi 5s | Ghép cặp người dùng theo tag (asyncio loop) |
 | `cleanup_expired_rooms` | Mỗi 5 phút | Dọn phòng hết hạn |
 | `cleanup_expired_tokens` | Mỗi giờ | Xóa refresh token hết hạn |
 | `update_leaderboard` | CN 23:59 | Tính bảng xếp hạng tuần |
@@ -160,8 +156,14 @@ mc ilm rule add --expire-days 30 local/ERoom-evidence
 # ---- Database (Local MySQL) ----
 DATABASE_URL=mysql+pymysql://root:password@localhost:3306/eroom
 
-# ---- Nomic Embeddings ----
-NOMIC_API_KEY=nk-...
+# ---- LLM (llama.cpp) ----
+LLM_BASE_URL=http://localhost:8012/v1
+LLM_MODEL=gemma-4-E2B-it
+LLM_API_KEY=dev
+
+# ---- Embeddings (llama.cpp) ----
+EMBEDDING_BASE_URL=http://localhost:8013/v1
+EMBEDDING_MODEL=Qwen3-Embedding-0.6B
 
 # ---- Redis ----
 REDIS_URL=redis://localhost:6379/0
@@ -227,7 +229,7 @@ cd frontend && npm install && npm start
 - [ ] Redis: set password (`requirepass`)
 - [ ] Minio: đổi credentials mặc định
 - [ ] Backup: mysqldump schedule cho database
-- [ ] Monitoring: Celery Flower (port 5555, chỉ internal)
+- [ ] Monitoring: FastAPI + Prometheus metrics
 
 ### 4.3 SSL với Certbot
 
@@ -279,13 +281,6 @@ docker exec e-room-coturn-1 netstat -tulpn | grep 3478
 3. Kiểm tra coTURN đang chạy + port 3478 mở
 4. Xem LiveKit logs: tìm `ice connection state`
 
-### 5.4 Celery worker không nhận task
-
-```bash
-docker logs e-room-celery_worker-1 --tail 20
-# Kiểm tra Redis connection
-docker exec e_room_redis redis-cli ping  # Phải trả về PONG
-```
 
 ---
 

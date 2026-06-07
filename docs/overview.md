@@ -6,7 +6,7 @@ tags:
   - AI
   - edtech
 created: 2026-05-04
-updated: 2026-06-02
+updated: 2026-06-06
 status: development
 aliases:
   - E-Room
@@ -61,14 +61,17 @@ AI không phải add-on. AI là **người tham gia xuyên suốt** với 3 vai 
 
 ---
 
-> [!warning] Cập nhật 2026-06-02 — Kiến trúc thực tế
+> [!warning] Cập nhật 2026-06-07 — Kiến trúc thực tế
 > - **Database**: Local MySQL — **không phải** TiDB Cloud (xem [[decisions#ADR-021|ADR-021]])
 > - **Vector store**: `TiDBRawVectorStore` (MySQL table, pickle numpy, brute-force cosine) + `NumpyVectorStore` fallback
-> - **STT**: faster-whisper local (CPU) — **không phải** Whisper API
-> - **LLM**: LM Studio local (google/gemma-4-e2b) — **không phải** GPT-4o
-> - **TTS**: Chưa implement (chỉ có ElevenLabs config)
-> - **Image Moderation**: Chưa implement (Celery placeholder)
+> - **STT**: `faster-whisper small.en` (CUDA float16) — **không phải** FunASR SenseVoiceSmall, **không phải** Whisper API
+> - **Pronunciation scoring**: Whisper confidence + CMU Dictionary lookup (không phải GOP/Wav2Vec2)
+> - **LLM**: llama.cpp local (Gemma 4 E2B Q8_0, port 8012) — **không phải** GPT-4o
+> - **Embedding**: llama.cpp local (Qwen3 Embedding 0.6B Q8_0, port 8013)
+> - **TTS**: Supertonic local (CPU) — ONNX model
+> - **Image Moderation**: Chưa implement
 > - **coTURN**: Chưa cấu hình trong code
+> - **Không có Celery**: Mọi tác vụ chạy in-process (async/ThreadPoolExecutor)
 > - Chi tiết cấu trúc thực tế: [[project-structure]]
 
 ## Kiến trúc hệ thống (thiết kế)
@@ -91,44 +94,45 @@ AI không phải add-on. AI là **người tham gia xuyên suốt** với 3 vai 
 │  └────────────────────────┬───────────────────────────────────┘  │
 └───────────────────────────┼──────────────────────────────────────┘
                             │
-           ┌────────────────┼────────────────┐
-           ▼                ▼                ▼
+            ┌────────────────┼────────────────┐
+            ▼                ▼                ▼
 ┌─────────────────┐ ┌──────────────┐ ┌──────────────────────┐
-│  FastAPI BE     │ │ LiveKit SFU  │ │  Celery Workers      │
-│  (REST + WS)    │ │ (WebRTC)     │ │  (AI + RAG + Mod)    │
-└───────┬─────────┘ └──────┬───────┘ └────────┬─────────────┘
-        │                  │                  │
-        ▼                  │        ┌─────────┼──────────┐
-┌───────────────┐          │        ▼         ▼          ▼
-│  PostgreSQL   │          │  ┌──────────┐ ┌──────────┐ ┌──────────┐
-│  + pgvector   │          │  │  Whisper │ │ LLM/GPT  │ │ TTS      │
-└───────┬───────┘          │  │  (STT)   │ │ (Sửa/Q&A)│ │ Engine   │
-        │                  │  └──────────┘ └──────────┘ └──────────┘
-        ▼                  │        │          │          │
-┌───────────────┐          │        ▼          ▼          ▼
-│    Redis      │          │  ┌──────────────────────────────────┐
-│ Queue+Cache   │          │  │         TẦNG RAG                 │
-└───────────────┘          │  │  ┌──────────┐ ┌──────────────┐   │
-                           │  │  │  Minio   │ │ Web Search   │   │
-                           │  │  │ (Docs)   │ │ API          │   │
-                           │  │  └──────────┘ └──────────────┘   │
-                           │  └──────────────────────────────────┘
+│  FastAPI BE     │ │ LiveKit SFU  │ │                      │
+│  (REST + WS)    │ │ (WebRTC)     │ │   (In-process)       │
+└───────┬─────────┘ └──────┬───────┘ └──────────────────────┘
+        │                  │
+        ▼                  │
+┌───────────────┐          │
+│  MySQL        │          │
+│  + Vector     │          │
+│  Store        │          │
+│  (TiDBRaw)    │          │
+└───────┬───────┘          │
+        │                  │
+        ▼                  │
+┌───────────────┐          │
+│    Redis      │          │
+│  Cache+Queue  │          │
+└───────────────┘          │
                            │
         ┌──────────────────┘
         ▼
-┌──────────────────────┐    ┌──────────────────────┐
-│   coTURN Server      │    │  Image Moderation    │
-│   (NAT Traversal)    │    │  (NSFW Detection)    │
-└──────────────────────┘    └──────────────────────┘
+┌──────────────────────┐
+│   coTURN Server      │
+│   (NAT Traversal)    │
+└──────────────────────┘
 ```
 
-> [!warning] Cập nhật 2026-06-02
+> [!warning] Cập nhật 2026-06-07
 > Luồng dữ liệu dưới đây là **thiết kế mục tiêu**. Code thực tế đã implement:
-> - **Bước 5-6**: PronunciationPipeline local (Whisper base + Wav2Vec2) thay vì OpenAI Whisper API
-> - **LLM**: Local (LM Studio / google-gemma-4-e2b) thay vì GPT-4o
-> - **Bước 7**: TTS chưa implement (có config ElevenLabs)
-> - **Bước 10**: NSFW chưa implement (Celery moderation placeholder)
-> - **Bước 11**: Đánh giá qua PronunciationScorer, take note chưa implement
+> - **Bước 5-6**: PronunciationPipeline local — Whisper (faster-whisper small.en) + CMU Dictionary, **không phải** FunASR/Wav2Vec2
+> - **Pronunciation scoring**: Whisper confidence (avg_logprob → 0-100), **không phải** GOP/Wav2Vec2 forced alignment
+> - **LLM**: Local (llama.cpp / Gemma 4 E2B, port 8012) thay vì GPT-4o
+> - **Embedding**: Local (llama.cpp / Qwen3 Embedding 0.6B, port 8013)
+> - **Bước 7**: TTS: Supertonic local (CPU) — ONNX model
+> - **Không có Celery**: Mọi tác vụ chạy in-process (async/ThreadPoolExecutor)
+> - **Bước 10**: NSFW chưa implement
+> - **Bước 11**: Đánh giá qua PronunciationPipeline, take note chưa implement
 > - Chi tiết: [[dev-notes]], [[pronunciation-workflow]]
 
 ### Cách dữ liệu luân chuyển (theo kiến trúc mới)
@@ -139,13 +143,13 @@ AI không phải add-on. AI là **người tham gia xuyên suốt** với 3 vai 
 | 2 | Nhấn "Bắt đầu nói" | `POST /api/rooms/match` → tìm room phù hợp hoặc vào queue |
 | 3 | Tìm thấy người ghép | LiveKit tạo phòng, matching engine (Jaccard + 3-stage fallback) |
 | 4 | Agent giới thiệu | AI Briefing: chủ đề, câu hỏi mở đầu |
-| 5 | Người dùng nói | Âm thanh → WebSocket `/ws/audio` → PronunciationPipeline (Whisper base + Wav2Vec2 + CMU Dict) → transcript + pronunciation scores |
+| 5 | Người dùng nói | Âm thanh → WebSocket `/ws/audio` → PronunciationPipeline (Whisper + CMU Dict) → transcript + pronunciation scores |
 | 6 | AI sửa lỗi | Nếu overall < 70: LLM (local) sửa phát âm → trả về ChatWindow |
 | 7 | TTS | ⏳ Chưa implement |
-| 8 | Expert Q&A | Query router → RAG (Nomic + TiDBRawVectorStore) + Brave Search → LLM answer |
-| 9 | Phòng im lặng | Heartbeat loop (Celery beat 45s + asyncio) → LLM question |
+| 8 | Expert Q&A | Query router → RAG (OpenAIEmbed + TiDBRawVectorStore) + Brave Search → LLM answer |
+| 9 | Phòng im lặng | Heartbeat loop (asyncio) → LLM question |
 | 10 | Image Moderation | ⏳ Chưa implement |
-| 11 | Phiên kết thúc | PronunciationScorer scores. Note: ⏳ Chưa implement |
+| 11 | Phiên kết thúc | PronunciationPipeline scores. Note: ⏳ Chưa implement |
 | 12 | Người dùng xem lại | Vào Profile → Session History |
 
 ---
@@ -179,17 +183,15 @@ AI không phải add-on. AI là **người tham gia xuyên suốt** với 3 vai 
 | SQLModel | 0.0.38+ | ORM (SQLAlchemy-based) |
 | Alembic | 1.18+ | Database migrations |
 | Pydantic | 2+ | Xác thực dữ liệu |
-| Celery | 5.6+ | Hàng đợi tác vụ bất đồng bộ |
 | PyJWT | 2.12+ | JWT auth + xoay refresh token |
 | Argon2-cffi | 25+ | Băm mật khẩu (thay Passlib) |
 | Redis-py | 7.4+ | Redis client |
 | httpx | 0.28+ | HTTP client |
 | minio | 7+ | Object storage client (RAG docs) |
-| faster-whisper | 1.1+ | STT local (model `base`, CPU) |
-| transformers | 4.50+ | Wav2Vec2 phoneme alignment |
+| faster-whisper | 1.1+ | STT local (small.en, CUDA float16) |
 | langchain | 1.2+ | Document processing, agent orchestration |
 | langgraph | 1.0+ | Agent graph workflows |
-| nomic | 3.9+ | Nomic Embeddings API (768-dim) |
+| langchain-openai | 1.1+ | OpenAIEmbeddings (LM Studio) |
 | TiDBRawVectorStore | custom | Vector store (MySQL table, pickle numpy, brute-force cosine) |
 
 ### Hạ tầng
@@ -210,16 +212,16 @@ AI không phải add-on. AI là **người tham gia xuyên suốt** với 3 vai 
 
 | Dịch vụ | Nhà cung cấp | Model / Engine |
 |---------|-------------|----------------|
-| Chuyển giọng nói thành văn bản | Tự host (local) | faster-whisper `base` (CPU) |
-| Phoneme Alignment | Tự host (local) | Wav2Vec2-BASE-960h + CMU Dictionary |
-| Sửa lỗi & Expert Q&A | Tự host (LM Studio) | google/gemma-4-e2b (OpenAI-compatible) |
-| Nhịp tim AI | Tự host (LM Studio) | google/gemma-4-e2b |
-| Đánh giá phiên + Take Note | Tự host (LM Studio) | google/gemma-4-e2b |
-| TTS (Text-to-Speech) | Chưa implement | ⏳ ElevenLabs / OpenAI TTS |
-| Vector nhúng | Nomic API | nomic-embed-text-v1.5 (768-dim) |
+| Chuyển giọng nói thành văn bản | Tự host (local) | faster-whisper small.en (CUDA) |
+| Phoneme Lookup | Tự host (local) | CMU Dictionary (cmudict.json) |
+| Sửa lỗi & Expert Q&A | Tự host (llama.cpp) | Gemma 4 E2B Q8_0 (port 8012, OpenAI-compatible) |
+| Nhịp tim AI | Tự host (llama.cpp) | Gemma 4 E2B Q8_0 |
+| Đánh giá phiên + Take Note | Tự host (llama.cpp) | Gemma 4 E2B Q8_0 |
+| TTS (Text-to-Speech) | Tự host (CPU) | Supertonic ONNX |
+| Vector nhúng | Tự host (llama.cpp) | Qwen3 Embedding 0.6B Q8_0 (port 8013) |
 | Image Moderation | Chưa implement | ⏳ (nsfw_detector) |
 | Web Search | Brave Search API | Brave Search API (có config) |
-| Pronunciation Scoring | Self-contained pipeline | Whisper + Wav2Vec2 + CMU Dict + GOP |
+| Pronunciation Scoring | Self-contained pipeline | Whisper confidence + CMU Dict |
 
 ---
 
@@ -237,7 +239,8 @@ AI không phải add-on. AI là **người tham gia xuyên suốt** với 3 vai 
 | Minio API | 9000 | HTTP | localhost |
 | Minio Console | 9001 | HTTP | localhost |
 | coTURN | 3478, 5349 | UDP/TCP | Public |
-| Celery Flower | 5555 | HTTP | localhost (chỉ dev) |
+| LLM (Gemma 4 E2B) | 8012 | HTTP | localhost (llama.cpp) |
+| LLM (Qwen3 Embedding) | 8013 | HTTP | localhost (llama.cpp) |
 
 ---
 
@@ -269,12 +272,12 @@ MINIO_BUCKET=ERoom-rag-docs
 MINIO_SECURE=False
 
 # === AI ===
-OPENAI_API_KEY=sk-...
-WHISPER_MODEL=whisper-1
-LLM_MODEL_PRIMARY=gpt-4o
-LLM_MODEL_FALLBACK=gpt-4o-mini
-TTS_MODEL=tts-1
-TTS_VOICE=alloy
+LLM_BASE_URL=http://localhost:8012/v1
+LLM_MODEL=gemma-4-E2B-it
+LLM_API_KEY=dev
+EMBEDDING_BASE_URL=http://localhost:8013/v1
+EMBEDDING_MODEL=Qwen3-Embedding-0.6B
+BRAVE_SEARCH_API_KEY=BSA...
 
 # === WEB SEARCH ===
 BRAVE_SEARCH_API_KEY=BSA...
@@ -318,7 +321,7 @@ backend/app/
 ├── schemas/        # Pydantic DTOs (tương đương value_objects)
 ├── service/        # Business logic (tương đương application)
 ├── api/            # Routers + WebSocket (tương đương presentation)
-├── infrastructure/ # Celery, LiveKit, Minio, Redis, Audio, Video, WebSocket
+├── infrastructure/ # LiveKit, Minio, Redis, Audio, Video
 ├── agent/          # AI Agent 3-trong-1 (langchain create_agent)
 ├── rag/            # RAG pipeline (langchain: chunking, embedding, retrieval)
 └── utils/          # datetime_utils, file_handle, logging, retry, text, validation
@@ -415,7 +418,7 @@ domain → application → infrastructure → presentation
 
 ## Trạng thái hiện tại
 
-🟢 **Đang phát triển** — Backend đã implement gần đầy đủ (FastAPI + Celery + RAG + Pronunciation Pipeline). Frontend đang hoàn thiện UI components. Chi tiết: [[dev-notes]].
+🟢 **Đang phát triển** — Backend đã implement gần đầy đủ (FastAPI + RAG + Pronunciation Pipeline). Frontend đang hoàn thiện UI components. Chi tiết: [[dev-notes]].
 
 ---
 

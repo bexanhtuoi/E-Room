@@ -114,7 +114,7 @@ backend/
 │   │   ├── subscription.py           # SubscriptionService
 │   │   ├── series.py                 # SeriesService
 │   │   ├── notification.py           # NotificationService
-│   │   ├── heartbeat.py              # Asyncio heartbeat loop (song song Celery beat)
+│   │   ├── heartbeat.py              # Asyncio heartbeat loop
 │   │   ├── room_state.py             # Room state management
 │   │   ├── token_store.py            # JWT blacklist (Redis)
 │   │   └── model_warmup.py           # Model warmup on startup
@@ -130,27 +130,15 @@ backend/
 │   ├── infrastructure/               # External services & core pipelines
 │   │   ├── __init__.py               # Exports all singletons
 │   │   ├── audio.py                  # AudioConfig, AudioBuffer, AudioBufferManager
-│   │   ├── audio_pipeline.py         # PronunciationPipeline (Whisper + Wav2Vec2 + CMU)
-│   │   ├── audio_whisper.py          # faster-whisper model (base, CPU)
-│   │   ├── audio_wav2vec2.py         # Wav2Vec2 Aligner (forced alignment)
-│   │   ├── audio_scorer.py           # PronunciationScorer (Accuracy, GOP, Fluency, Prosody)
-│   │   ├── audio_dictionary.py       # CMU Dictionary (ARPAbet lookup)
-│   │   ├── phoneme_compare.py         # PhonemeComparator
-│   │   ├── celery_bridge.py          # Celery → WebSocket relay (Redis PubSub)
+│   │   ├── audio_whisper.py          # faster-whisper small.en (CUDA float16)
+│   │   ├── audio_pipeline.py         # PronunciationPipeline (Whisper + CMU + scoring)
+│   │   ├── audio_dictionary.py       # CMU Dictionary (ARPAbet lookup from cmudict.json)
+│   │   ├── pronunciation_audio.py    # gTTS pronunciation audio generation
 │   │   ├── event_bus.py              # EventBus (Redis pub/sub)
 │   │   ├── livekit.py                # LiveKitService (token, admin, webhook)
 │   │   ├── minio.py                  # MinioCRUD (S3-compatible object storage)
 │   │   ├── redis_client.py           # RedisCRUD + RateLimiter
-│   │   ├── websocket.py              # WebSocketManager (in-memory tracking)
 │   │   ├── video.py                  # VideoRoomService
-│   │   ├── room_state.py             # Room state management
-│   │   ├── celery/                   # Celery tasks
-│   │   │   ├── __init__.py           # Celery app (e_room) + beat schedule
-│   │   │   ├── ai.py                 # Transcription, correction, heartbeat
-│   │   │   ├── matching.py           # Matching engine (Jaccard + 3-stage fallback)
-│   │   │   ├── moderation.py         # Moderation scan (placeholder)
-│   │   │   ├── rag.py                # RAG knowledge indexing
-│   │   │   └── tts.py                # TTS generation (placeholder)
 │   │
 │   └── utils/                        # Utility functions
 │       ├── __init__.py
@@ -338,7 +326,7 @@ frontend/
 
 ```
 E-Room/
-├── docker-compose.yml                # 9 services (api, celery_worker, celery_beat, redis, minio, livekit, coturn, frontend, nginx)
+├── docker-compose.yml                # 8 services (api, redis, minio, livekit, coturn, frontend, nginx)
 ├── livekit.yaml                      # LiveKit SFU config (port 7880-7881, UDP 50000-50100)
 ├── turnserver.conf                   # coTURN config (port 3478 TCP+UDP)
 ├── nginx.conf                        # Reverse proxy (api, ws, frontend static)
@@ -355,9 +343,9 @@ E-Room/
 | Docs (cũ) | Code thực tế | Ghi chú |
 |-----------|-------------|---------|
 | Infra dạng `infrastructure/skill/` | Infra dạng `infrastructure/file.py` | Flat files, không subpackage con |
-| `infrastructure/audio/` | `infrastructure/audio_pipeline.py` + `audio_whisper.py` + `audio_wav2vec2.py` + `audio_scorer.py` | Pronunciation pipeline riêng |
+| `infrastructure/audio/` | `infrastructure/audio_pipeline.py` + `audio_whisper.py` | Pronunciation pipeline riêng |
 | `infrastructure/audio.py` | `infrastructure/audio.py` | AudioBuffer + AudioBufferManager (giống) |
-| `service/background_task.py` | ❌ Không tồn tại | Đã chuyển thành `celery/ai.py` + `service/heartbeat.py` |
+| `service/background_task.py` | ❌ Không tồn tại | Đã xóa |
 | `service/moderation.py` | ❌ Không tồn tại | Chưa implement |
 | `service/agent.py` | ❌ Không tồn tại | Agent logic trong `ws/speech.py` + `agent/` |
 | `rag/vector_store.py` (PGVector) | `rag/vector_store.py` (TiDBRawVectorStore + NumpyVectorStore fallback) | Không dùng pgvector thật |
@@ -370,8 +358,8 @@ E-Room/
 | howler.js | ❌ Chưa tích hợp | TTS chưa implement |
 | recharts | ❌ Chưa thấy dùng | Dashboard đang xây dựng |
 | sonner | ❌ Chưa thấy dùng | Dùng react-bootstrap Toast |
-| OpenAI TTS | ElevenLabs config | TTS chưa implement, có config key |
-| faster-whisper large-v3 | faster-whisper base (CPU) | Model nhỏ hơn, chạy local |
+| TTS | Supertonic ONNX | TTS local (CPU) |
+| faster-whisper small.en (CUDA) | faster-whisper base (CPU) | Model Whisper, chạy local |
 
 ---
 

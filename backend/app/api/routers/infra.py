@@ -27,14 +27,13 @@ async def get_infra_status() -> dict[str, object]:
     return {
         "redis": redis_ok,
         "minio": {"endpoint": settings.minio_endpoint, "bucket": settings.minio_bucket},
-        "celery": {"broker": settings.redis_url},
         "video": video_service.create_room_payload("demo-room", 5),
         "livekit": {"server": livekit_service.server_url, "apiKey": settings.livekit_api_key},
         "websocket": {"path": "/ws/rooms/{room_id}"},
     }
 
 
-def _check_redis(checks: dict, failures: int) -> int:
+def check_redis(checks: dict, failures: int) -> int:
     try:
         redis_client = get_redis_client()
         redis_pong = redis_client.ping()
@@ -45,7 +44,7 @@ def _check_redis(checks: dict, failures: int) -> int:
     return failures
 
 
-def _check_minio(checks: dict, failures: int) -> int:
+def check_minio(checks: dict, failures: int) -> int:
     try:
         minio_client = get_minio_client()
         bucket_exists = minio_client.bucket_exists(settings.minio_bucket)
@@ -59,14 +58,16 @@ def _check_minio(checks: dict, failures: int) -> int:
             failures += 1
     except Exception as e:
         checks["minio"] = {
-            "status": "down", "endpoint": settings.minio_endpoint,
-            "bucket": settings.minio_bucket, "error": str(e),
+            "status": "down",
+            "endpoint": settings.minio_endpoint,
+            "bucket": settings.minio_bucket,
+            "error": str(e),
         }
         failures += 1
     return failures
 
 
-def _check_livekit(checks: dict, failures: int) -> int:
+def check_livekit(checks: dict, failures: int) -> int:
     try:
         livekit_service = LiveKitService()
         token = livekit_service.generate_admin_token("health-check-room")
@@ -81,7 +82,7 @@ def _check_livekit(checks: dict, failures: int) -> int:
     return failures
 
 
-def _overall_status(failures: int) -> tuple[str, int]:
+def overall_status(failures: int) -> tuple[str, int]:
     if failures == 0:
         return "ok", 200
     if failures <= 1:
@@ -94,11 +95,11 @@ async def health_check() -> dict[str, object]:
     checks: dict[str, object] = {}
     failures = 0
 
-    failures = _check_redis(checks, failures)
-    failures = _check_minio(checks, failures)
-    failures = _check_livekit(checks, failures)
+    failures = check_redis(checks, failures)
+    failures = check_minio(checks, failures)
+    failures = check_livekit(checks, failures)
 
-    overall, status_code = _overall_status(failures)
+    overall, status_code = overall_status(failures)
 
     return JSONResponse(
         content={"status": overall, "service": "e-room-api", "checks": checks},

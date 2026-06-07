@@ -52,14 +52,6 @@ echo "      Starting API server (port 8000)..."
 osascript -e "tell app \"Terminal\" to do script \"cd '$PROJECT_DIR/backend' && uv run python -m app.server\"" 2>/dev/null || \
     xterm -e "cd '$PROJECT_DIR/backend' && uv run python -m app.server" &
 
-echo "      Starting Celery worker..."
-osascript -e "tell app \"Terminal\" to do script \"cd '$PROJECT_DIR/backend' && uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info\"" 2>/dev/null || \
-    xterm -e "cd '$PROJECT_DIR/backend' && uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info" &
-
-echo "      Starting Celery beat..."
-osascript -e "tell app \"Terminal\" to do script \"cd '$PROJECT_DIR/backend' && uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info\"" 2>/dev/null || \
-    xterm -e "cd '$PROJECT_DIR/backend' && uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info" &
-
 echo "      Starting Frontend (port 3000)..."
 osascript -e "tell app \"Terminal\" to do script \"cd '$PROJECT_DIR/frontend' && npm run dev\"" 2>/dev/null || \
     xterm -e "cd '$PROJECT_DIR/frontend' && npm run dev" &

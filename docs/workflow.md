@@ -150,12 +150,12 @@ graph TD
 
 ### Máy ghép cặp là gì?
 
-"Máy ghép cặp" (Matching Engine) thực chất là **một tác vụ nền chạy định kỳ** (Celery Beat, mỗi 5 giây). Nó làm nhiệm vụ:
+"Máy ghép cặp" (Matching Engine) thực chất là **một tác vụ nền chạy định kỳ** (FastAPI BackgroundTasks, mỗi 5 giây qua vòng lặp `while True` trong lifespan). Nó làm nhiệm vụ:
 - Quét tất cả người dùng đang chờ trong hàng đợi Redis
 - Tính điểm tương đồng về tag giữa các người dùng
 - Nhóm 3-5 người có tag giống nhau nhất vào cùng một phòng
 
-Không có server riêng hay service phức tạp — chỉ là 1 Celery task chạy mỗi 5s.
+Không có server riêng hay service phức tạp — chỉ là 1 background task chạy mỗi 5s trong cùng process FastAPI.
 
 ```mermaid
 sequenceDiagram
@@ -163,7 +163,7 @@ sequenceDiagram
     participant FE as Frontend (React)
     participant API as FastAPI
     participant RQ as Redis Queue
-    participant CEL as Celery Beat (Mỗi 5s)
+    participant BG as Background Task (Mỗi 5s)
     participant LK as LiveKit
     participant WS as WebSocket
 
@@ -178,22 +178,22 @@ sequenceDiagram
     end
 
     rect rgb(255, 248, 220)
-        Note over CEL,RQ: Celery Beat chạy mỗi 5 giây
-        CEL->>RQ: SET lock:matching NX EX 10 (distributed lock)
+        Note over BG,RQ: Background task chạy mỗi 5 giây
+        BG->>RQ: SET lock:matching NX EX 10 (distributed lock)
         alt Lock thành công
-            CEL->>RQ: Quét tất cả queue:tag:*
-            CEL->>CEL: Tính Jaccard similarity giữa các user trong queue
+            BG->>RQ: Quét tất cả queue:tag:*
+            BG->>BG: Tính Jaccard similarity giữa các user trong queue
             alt Tìm được 3-5 người có tag tương đồng
-                CEL->>LK: Tạo phòng mới
-                CEL->>CEL: Xác định agent_level từ tier của participants
-                CEL->>RQ: ZREM những người đã ghép khỏi queue
-                CEL->>WS: Phát sự kiện match_found cho từng user
+                BG->>LK: Tạo phòng mới
+                BG->>BG: Xác định agent_level từ tier của participants
+                BG->>RQ: ZREM những người đã ghép khỏi queue
+                BG->>WS: Phát sự kiện match_found cho từng user
                 WS-->>FE: {"room_token": "...", "agent_level": "advanced", "topic": "Vibe Coding"}
                 FE->>LK: Kết nối vào phòng với token
             else Chưa đủ người sau 30s
-                CEL->>WS: Đề xuất dự phòng
+                BG->>WS: Đề xuất dự phòng
             end
-            CEL->>RQ: DEL lock:matching
+            BG->>RQ: DEL lock:matching
         end
     end
 ```
@@ -217,8 +217,8 @@ sequenceDiagram
 3. Set trạng thái presence: `SET ERoom:user:{user_id}:presence "in_queue" EX 300`
 4. Frontend hiển thị QueueOverlay: animation + vị trí ước tính + thời gian chờ
 
-**Node 4 — Celery Beat chạy Máy ghép cặp (mỗi 5s):**
-1. **Distributed Lock:** `SET ERoom:lock:matching NX EX 10` — đảm bảo chỉ 1 worker chạy matching tại 1 thời điểm
+**Node 4 — Background task chạy Máy ghép cặp (mỗi 5s):**
+1. **Distributed Lock:** `SET ERoom:lock:matching NX EX 10` — đảm bảo chỉ 1 instance chạy matching tại 1 thời điểm
 2. Nếu không lấy được lock (worker khác đang chạy) → bỏ qua, đợi chu kỳ sau
 3. Lấy tất cả keys `ERoom:queue:tag:*`
 4. Với mỗi tag queue: lấy danh sách user (ZRANGE) + tags của từng user
@@ -263,7 +263,6 @@ sequenceDiagram
 - **t=60s:** Đề xuất phòng AI — tạo phòng với 1-2 người + AI avatar (bot). Hiển thị: "Chưa tìm thấy bạn. Bạn muốn vào phòng luyện tập với AI không?"
 
 > [!tip] Chi tiết triển khai (từ code)
-> - **Matching Engine**: `celery/matching.py` — Celery Beat task `run_matchmaking_tick` chạy mỗi 5s
 > - **Công thức Jaccard**: `score = topic_similarity*0.30 + tag_jaccard*0.30 + english_level_proximity*0.25 + subscription_tier_bonus*0.15`
 > - **Fallback 3 giai đoạn**:
 >   - 0-30s: threshold ≥ 0.3 (yêu cầu tag match)
@@ -287,68 +286,58 @@ sequenceDiagram
 
 > [!note] Đây là luồng dữ liệu CỐT LÕI — mô tả chính xác những gì xảy ra khi user nói vào micro
 
-> [!warning] Sự khác biệt so với code thực tế
-> - **Whisper**: Chạy local (faster-whisper `base` model, CPU), không gọi OpenAI API
-> - **LLM**: Local (LM Studio endpoint `http://127.0.0.1:1234/v1`, model `google/gemma-4-e2b`), không dùng GPT-4o
-> - **Âm thanh**: Xử lý synchronous qua `ws/speech.py:process_speech()`, không qua Celery broker cho transcription
-> - **Pronunciation pipeline**: Song song Whisper + Wav2Vec2 alignment + CMU Dictionary + GOP scoring (không chỉ Whisper đơn thuần)
-> - **Bỏ qua Celery cho speech**: `process_speech()` gọi `PronunciationPipeline.assess()` TRỰC TIẾP (async), chỉ correction mới qua Celery
+> [!warning] Cập nhật 2026-06-07 — Kiến trúc thực tế
+> - **STT**: `faster-whisper small.en` (CUDA float16 / CPU float32) — không phải FunASR SenseVoiceSmall
+> - **Pronunciation pipeline**: Whisper confidence scoring + CMU Dictionary lookup — không có Wav2Vec2, không có GOP, không có forced alignment
+> - **Xử lý**: Hoàn toàn async in-process (`asyncio.create_task`), **không có Celery**
+> - **Correction correction**: Chạy inline sau transcription trong cùng task, không qua queue
+> - **LLM**: OpenAI-compatible endpoint (có thể local llama.cpp hoặc cloud), configurable
 
 ```mermaid
 sequenceDiagram
     actor U as Người dùng nói
     participant MIC as Microphone (Browser)
     participant FE as Frontend (React)
-    participant WS as WebSocket /ws/audio/{room_id}
-    participant SP as process_speech()
+    participant WS as WebSocket /ws/audio
+    participant AB as AudioBuffer (VAD)
     participant PP as PronunciationPipeline
-    participant WH as faster-whisper base (CPU)
-    participant W2V as Wav2Vec2 Aligner
-    participant CMU as CMU Dictionary
-    participant SC as PronunciationScorer
-    participant LLM as Local LLM (LM Studio)
-    participant RQ as Redis (Celery Queue)
+    participant WH as faster-whisper small.en
+    participant CD as CMU Dictionary
+    participant LLM as LLM (OpenAI-compatible)
     participant DB as MySQL
 
-    Note over U,FE: Bước 1: User nói vào mic
+    Note over U,MIC: Bước 1: User nói vào mic
     U->>MIC: Giọng nói
-    MIC->>WS: Audio chunk (PCM base64, kèm seq + type)
-    WS->>WS: AudioBuffer.push(seq, data) → VAD detection
+    MIC->>WS: PCM chunk (base64, 2048 samples, ~128ms)
+    WS->>AB: AudioBuffer.push(seq, data)
 
-    Note over WS,SP: Bước 2: Phát hiện ngừng nói
-    WS->>WS: AudioBuffer.check_vad() → phát hiện silence > 400ms RMS
-    WS->>SP: process_speech(pcm_bytes)
+    Note over WS,AB: Bước 2: VAD phát hiện ngừng nói
+    AB->>AB: check_vad() → RMS < threshold > 2s
+    AB->>WS: speech_end → pcm_bytes
 
-    Note over SP,SC: Bước 3: PronunciationPipeline (SYNC, async)
-    SP->>PP: PronunciationPipeline.assess(pcm_bytes)
-    
-    PP->>WH: faster-whisper transcribe (local CPU)
-    WH-->>PP: segments, word_timestamps, confidences
-    
-    PP->>W2V: Wav2Vec2 alignment (pcm_data, text)
-    W2V-->>PP: aligned phonemes (start, end, confidence)
-    
-    PP->>CMU: CMU Dictionary lookup(word)
-    CMU-->>PP: expected phonemes (ARPAbet)
-    
-    PP->>SC: PronunciationScorer.compute_all()
-    SC-->>PP: {overall, accuracy, gop, fluency, prosody}
-    
-    PP-->>SP: {text, scores, words, aligned_phonemes, needs_remediation}
+    Note over WS,PP: Bước 3: PronunciationPipeline (async)
+    WS->>PP: asyncio.create_task(process_speech(pcm))
 
-    Note over SP,DB: Bước 4: Lưu transcript + correction
-    SP->>DB: INSERT message (type=transcript, content=text)
+    PP->>WH: transcribe (CUDA float16)
+    WH-->>PP: text, segments, avg_logprob
+
+    PP->>CD: CMU lookup cho mỗi từ
+    CD-->>PP: ARPAbet phonemes
+
+    PP->>PP: compute_word_scores(avg_logprob → 0-100)
+    PP-->>WS: {text, scores, words, phonemes, needs_remediation}
+
+    Note over WS,DB: Bước 4: Lưu transcript + correction
+    WS->>DB: INSERT message (type=transcript, content=text)
     
-    alt overall < 70
-        SP->>RQ: Celery task: generate_ai_correction(text)
-        RQ->>LLM: call_llm_json() → correct_text
-        LLM-->>RQ: {corrected, errors, score, pronunciation_feedback, tts_text}
-        RQ->>DB: INSERT message (type=ai_correction)
-        RQ->>WS: Publish ai_correction (qua Redis PubSub → CeleryBridge)
+    alt needs_remediation (overall < 70)
+        WS->>LLM: correct_text() inline
+        LLM-->>WS: {corrected, errors, pronunciation_feedback}
+        WS->>DB: INSERT message (type=ai_correction)
     else overall >= 70
-        Note over SP: Không cần correction
+        Note over WS: Không cần correction
     end
-    
+
     WS-->>FE: {"type": "transcript", "text": "...", "scores": {...}}
 ```
 
@@ -358,84 +347,72 @@ sequenceDiagram
 1. Browser dùng `navigator.mediaDevices.getUserMedia({audio: true})` để lấy audio stream
 2. LiveKit SDK nhận audio track và gửi qua WebRTC đến LiveKit SFU
 3. LiveKit SFU phân phối audio đến tất cả người tham gia khác trong phòng (họ nghe thấy user nói)
-4. Song song: AudioWorklet (chạy trong browser) capture audio chunks với format:
+4. Song song: `audioCapture.js` (Web Audio API ScriptProcessorNode) capture audio chunks với format:
    - Sample rate: 16kHz (tối ưu cho Whisper)
    - Channels: mono
    - Bit depth: 16-bit PCM
-   - Chunk size: ~500ms (~8000 samples)
+   - Chunk size: 2048 samples (~128ms)
+   - **Mute sync**: Khi user mute mic trên LiveKit, `audioCapture.setEnabled(false)` cũng dừng gửi chunk ngay lập tức (không xử lý transcript khi mute)
 
 **Bước 2 — Gửi audio chunk đến backend:**
-1. AudioWorklet chuyển PCM buffer → base64 string
-2. Gửi qua WebSocket đã kết nối (cùng connection với chat):
+1. `audioCapture.js` chuyển PCM buffer → base64 string
+2. Gửi qua WebSocket `/ws/audio` riêng (tách biệt với chat WebSocket):
    ```json
-   {"type": "audio_chunk", "data": "<base64_pcm>", "timestamp": 1234567890, "user_id": "uuid"}
+   {"type": "audio_chunk", "data": "<base64_pcm>", "seq": 1, "user_id": "uuid"}
    ```
-3. Audio chunk được gửi mỗi 500ms liên tục khi user đang nói
-4. Gửi kèm timestamp để backend có thể sắp xếp thứ tự nếu cần
+3. Audio chunk được gửi mỗi ~128ms liên tục khi user đang nói (và enabled)
+4. Gửi kèm `seq` để backend sắp xếp thứ tự nếu cần
 
-**Bước 3 — Celery xử lý bất đồng bộ:**
-1. WebSocket server nhận audio chunk → validate (auth, size < 1MB)
-2. Push vào Celery task queue qua Redis broker:
-   ```python
-   transcribe_audio_chunk.delay(audio_base64=chunk, user_id=user_id, room_id=room_id, sequence=seq)
-   ```
-3. Celery worker pick task từ queue → gửi audio chunk đến Whisper API
-4. Whisper API endpoint: `POST https://api.openai.com/v1/audio/transcriptions`
-   - Model: `whisper-1`
-   - Language: `en` (auto-detect nếu cần)
-   - Response format: `json`
-   - Temperature: `0` (deterministic output)
+**Bước 3 — WebSocket + AudioBuffer (VAD):**
+1. Backend nhận audio chunk → `AudioBuffer.push(seq, data)` → lưu vào buffer in-memory
+2. Tính RMS energy mỗi chunk → phát hiện speech/silence
+3. Khi RMS < threshold liên tục > 2s → `AudioBuffer.finalize()` → trả về PCM bytes
+4. `asyncio.create_task(process_speech(pcm_bytes))` — chạy async trong event loop
 
-**Bước 4 — Hiển thị transcript NGAY LẬP TỨC:**
-1. Whisper trả về text sau ~1-2s → Celery gửi WebSocket event `transcript_update`
-2. Frontend nhận event → hiển thị text trong ChatWindow:
-   - **Màu xám + italic** = interim transcript (đang nói, có thể thay đổi)
-   - Có label nhỏ: `🎙️ An (đang nói...)`
-3. Mỗi chunk mới → append vào text hiện tại (không thay thế)
-4. **Đây là điểm mấu chốt:** transcript hiện ngay khi có kết quả từ Whisper, không đợi AI sửa lỗi
+**Bước 4 — PronunciationPipeline (Whisper + CMU):**
+1. `process_speech()` tạo `PronunciationPipeline` mới
+2. `pipeline.assess(pcm_data)` chạy trong `ThreadPoolExecutor` (vì Whisper không async):
+   - **Whisper STT**: `faster-whisper small.en` (CUDA float16) → text + segments
+   - Mỗi segment có `avg_logprob` → scale thành confidence score `[0.1, 1.0]`
+   - **CMU Dictionary lookup**: tra phoneme ARPAbet cho mỗi từ
+   - **Word score**: `probability × 100` (capped 100)
+   - **Overall score**: trung bình word scores
+3. Nếu `overall < 70` → `needs_remediation = True`
+4. Kết quả trả về: `{text, scores, words, phonemes, needs_remediation}`
 
-**Bước 5 — Phát hiện ngừng nói → transcript cuối cùng:**
-1. AudioWorklet theo dõi RMS energy của audio signal
-2. Khi RMS < ngưỡng (silence threshold) liên tục trong 2s → trigger `speech_end`
-3. Backend nhận `speech_end` → gộp tất cả audio chunks thành 1 segment hoàn chỉnh
-4. Gửi toàn bộ segment đến Whisper để có transcript chính xác nhất
-5. Kết quả final → lưu vào bảng `messages` (type=transcript, content=final_text)
-6. WebSocket event `transcript_update` với status="final"
-7. Frontend đổi text từ màu xám → **màu trắng** (hoàn chỉnh)
+**Bước 5 — Hiển thị transcript:**
+1. Backend gửi WebSocket event `transcript` → frontend hiển thị trong ChatWindow:
+   - Text transcript + word scores + overall score
+   - **Màu xám + italic** = interim (đang xử lý)
+   - **Màu trắng** = final transcript đã lưu
+2. Lưu vào bảng `messages` (type=transcript, content=text, scores)
 
-**Bước 6 — SONG SONG: AI sửa lỗi (Corrector):**
-1. **Chạy song song với bước 5** — không chờ transcript final mới sửa lỗi
-2. Ngay khi có final transcript → push Celery task `generate_ai_correction`
-3. Celery gửi transcript + tag context + user level đến LLM (GPT-4o)
-4. LLM prompt: "Phân tích đoạn text sau, tìm lỗi chính tả, ngữ pháp, phát âm..."
-5. Response format:
-   ```json
-   {
-     "has_errors": true,
-     "corrections": [
-       {"original": "I go to school yesterday", "corrected": "I went to school yesterday", 
-        "explanation": "Sai thì — 'yesterday' cần past tense 'went'", "type": "grammar", "severity": "major"}
-     ],
-     "overall_score": 7.5
-   }
-   ```
-6. Lưu correction vào bảng `messages` (type=ai_correction)
-7. WebSocket event `ai_correction` → frontend hiển thị CorrectionCard
+**Bước 6 — AI sửa lỗi (Corrector):**
+1. Chạy **inline** sau transcription (cùng `asyncio.create_task`)
+2. Nếu `needs_remediation` → gọi `corrector.correct_text()`:
+   - Gửi transcript + word scores + phonemes đến LLM (OpenAI-compatible)
+   - Prompt: phân tích lỗi ngữ pháp, chính tả, phát âm
+   - LLM trả về: `{corrected, errors, pronunciation_feedback, tts_text}`
+3. Nếu có TTS feedback → `generate_pronunciation_audio()` (gTTS) → base64 audio
+4. Lưu correction vào bảng `messages` (type=ai_correction)
+5. WebSocket event `ai_correction` → frontend hiển thị CorrectionCard
 
 ### Sơ đồ dữ liệu đơn giản
 
 ```
-Giọng nói → Micro → AudioWorklet (PCM 16kHz) 
+Giọng nói → Micro → audioCapture.js (PCM 16kHz, 2048 samples) 
     │
     ├──► LiveKit SFU (WebRTC) → Người khác nghe thấy
     │
-    └──► WebSocket → FastAPI → Redis Queue → Celery Worker 
+    └──► WebSocket /ws/audio → AudioBuffer (VAD) → process_speech()
             │
-            ├──► Whisper API → Text transcript
+            ├──► faster-whisper small.en → Text transcript
             │         │
-            │         └──► ChatWindow (HIỂN THỊ NGAY)
+            │         ├──► CMU Dictionary → phoneme scores
+            │         │
+            │         └──► ChatWindow (transcript + word scores)
             │
-            └──► GPT-4o (sửa lỗi) → Correction JSON 
+            └──► LLM (corrector) → Correction JSON 
                       │
                       └──► ChatWindow (CorrectionCard)
 ```
@@ -445,10 +422,10 @@ Giọng nói → Micro → AudioWorklet (PCM 16kHz)
 | Chỉ số | Mục tiêu | Ghi chú |
 |--------|--------|--------|
 | Audio chunk từ browser → WebSocket server | < 100ms | Ping network |
-| WebSocket server → Celery queue | < 10ms | Redis LPUSH |
-| Celery → Whisper API → text | < 2s | P95, phụ thuộc OpenAI |
-| Celery → LLM → correction | < 5s | GPT-4o P95 |
-| Transcript hiển thị lần đầu | < 2s từ lúc nói | End-to-end |
+| Whisper STT → text | < 2s | P95, CUDA float16 |
+| PronunciationPipeline (Whisper + CMU) | < 3s | P95 |
+| LLM correction | < 5s | P95 |
+| Transcript hiển thị lần đầu | < 3s từ lúc ngừng nói | End-to-end |
 | Phát hiện ngừng nói | 2s silence | RMS threshold |
 
 ---
@@ -505,7 +482,7 @@ stateDiagram-v2
 **Giai đoạn CREATED → AGENT_LOADING:**
 1. Phòng được tạo (từ matching hoặc manual create)
 2. Trạng thái: `CREATED`, chưa có agent
-3. User đầu tiên join → trigger Celery task `initialize_room_agent`
+3. User đầu tiên join → trigger khởi tạo agent
 4. **Nạp RAG (Minio):** Tìm tài liệu trong `ERoom-rag-docs/{tag_slug}/` → embed → TiDBRawVectorStore / NumpyVectorStore
 5. **Web Search:** Brave Search cho keywords liên quan tag để có context up-to-date
 6. **Build system prompt:** Kết hợp guardrail + tag context + role instructions
@@ -608,7 +585,7 @@ sequenceDiagram
 2. Frontend kiểm tra Redis cache `ERoom:tts:{sha256(text+lang)}`
 3. Nếu cache miss → `POST /api/tts/generate {text, language, speed}`
 4. Backend kiểm tra: user phải có subscription Pro+
-5. Gọi TTS engine (OpenAI tts-1, voice alloy, format mp3)
+5. Gọi TTS engine (Supertonic ONNX model)
 6. Lưu audio vào Minio `ERoom-tts/{sha256}.mp3` TTL 24h
 7. Cache URL trong Redis TTL 24h
 8. Trả về `{audio_url, duration}`
@@ -631,7 +608,7 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A["Video Call Đang chạy"] --> B["Celery Beat: mỗi 8-10s"]
+    A["Video Call Đang chạy"] --> B["Background task: mỗi 8-10s"]
     B --> C["Chụp frame từ LiveKit track (JPEG 320x240)"]
     C --> D["Gửi đến NSFW Detector"]
     D --> E{"NSFW Confidence > 0.85?"}
@@ -654,7 +631,7 @@ graph TD
 
 ### Các bước chi tiết
 
-1. Celery Beat task `moderation_scan` chạy mỗi **8-10 giây** cho mỗi phòng ACTIVE
+1. Background task `moderation_scan` chạy mỗi **8-10 giây** cho mỗi phòng ACTIVE
 2. Với mỗi participant đang bật video:
    - Server gửi WebSocket event `request_video_frame` → client
    - Client chụp 1 frame từ video track (JPEG, 320x240 quality) → gửi `video_frame_capture`
@@ -771,7 +748,7 @@ graph TD
 
 > [!note] Triển khai: [[ERoom/features#F-AI-06|F-AI-06]]
 
-- Khi user rời phòng (không phải phòng kết thúc — phòng luôn sống): Celery task `generate_session_note` chạy
+- Khi user rời phòng (không phải phòng kết thúc — phòng luôn sống): background task `generate_session_note` chạy
 - Tổng hợp transcript + corrections của user trong phiên → LLM tạo note markdown
 - Lưu vào `session_notes`
 - WebSocket event `note_ready` → thông báo "Ghi chú phiên đã sẵn sàng"
@@ -807,7 +784,6 @@ graph TD
 
     subgraph Backend["TẦNG BACKEND"]
         API["FastAPI Server"]
-        CEL["Celery Workers"]
     end
 
     subgraph Realtime["TẦNG THỜI GIAN THỰC"]
@@ -822,10 +798,10 @@ graph TD
     end
 
     subgraph AI["TẦNG AI"]
-        WH["Whisper STT"]
-        LLM["GPT-4o / GPT-4o-mini"]
-        TTS_E["TTS Engine"]
-        EMB["text-embedding-3-small"]
+        WH["faster-whisper STT"]
+        LLM["Gemma 4 E2B (llama.cpp :8012)"]
+        TTS_E["Supertonic TTS"]
+        EMB["Qwen3 Embedding (llama.cpp :8013)"]
         NSFW["NSFW Detector"]
         SEARCH["Brave Search API"]
     end

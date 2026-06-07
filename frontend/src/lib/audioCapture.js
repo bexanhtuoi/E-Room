@@ -4,7 +4,7 @@ const SAMPLE_RATE = 16000;
 const CHUNK_INTERVAL_MS = 100;
 const BUFFER_SIZE = 2048;
 
-export function createAudioCapture(roomId, token, audioWsRef, onStateChange) {
+export function createAudioCapture(roomId, token, audioWsRef, onStateChange, initialState = { enabled: true }) {
   let audioCtx = null;
   let source = null;
   let processor = null;
@@ -12,6 +12,7 @@ export function createAudioCapture(roomId, token, audioWsRef, onStateChange) {
   let ws = null;
   let seq = 0;
   let isActive = false;
+  let enabled = initialState.enabled;
 
   function connectWs() {
     const base = API_BASE_URL
@@ -30,7 +31,13 @@ export function createAudioCapture(roomId, token, audioWsRef, onStateChange) {
     isActive = true;
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      } catch {
+        console.warn('Audio constraints not supported, trying without echo cancellation');
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
       source = audioCtx.createMediaStreamSource(stream);
       processor = audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
@@ -38,7 +45,7 @@ export function createAudioCapture(roomId, token, audioWsRef, onStateChange) {
       onStateChange?.(true);
 
       processor.onaudioprocess = (e) => {
-        if (!isActive) return;
+        if (!isActive || !enabled) return;
         const input = e.inputBuffer.getChannelData(0);
         const pcm16 = new Int16Array(input.length);
         for (let i = 0; i < input.length; i++) {
@@ -54,8 +61,11 @@ export function createAudioCapture(roomId, token, audioWsRef, onStateChange) {
         }
       };
 
+      const muteGain = audioCtx.createGain();
+      muteGain.gain.value = 0;
       source.connect(processor);
-      processor.connect(audioCtx.destination);
+      processor.connect(muteGain);
+      muteGain.connect(audioCtx.destination);
     } catch (err) {
       console.error('Audio capture failed:', err);
       isActive = false;
@@ -80,5 +90,7 @@ export function createAudioCapture(roomId, token, audioWsRef, onStateChange) {
     onStateChange?.(false);
   }
 
-  return { start, stop, get isActive() { return isActive; } };
+  function setEnabled(val) { enabled = val; }
+
+  return { start, stop, setEnabled, get isActive() { return isActive; } };
 }

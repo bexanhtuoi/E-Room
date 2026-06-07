@@ -18,26 +18,27 @@ if not exist backend\.env (
 
 REM ── Step 2: Docker infra ────────────────────────
 echo [2/6] Checking Docker infrastructure...
-docker ps --format "{{.Names}}" 2>nul | findstr /C:"e_room_tidb" >nul
-if %errorlevel% neq 0 (
-    echo        Starting Docker services: tidb, redis, minio, livekit, coturn...
-    docker compose up -d tidb redis minio livekit coturn
-    echo        Waiting for TiDB to be ready (this may take 20-30s first time)...
-    timeout /t 5 /nobreak >nul
-    docker compose exec tidb mysql -h 127.0.0.1 -P 4000 -u root -e "SELECT 1" 2>nul
-    if %errorlevel% neq 0 (
-        timeout /t 15 /nobreak >nul
+REM Use --skip-docker to bypass this check
+set "DOCKER_OK="
+if /i "%1"=="--skip-docker" goto :docker_skip
+start /b "" "%windir%\system32\cmd.exe" /c "docker ps --format {{.Names}} > %temp%\docker_ps.txt 2>nul"
+%windir%\system32\ping.exe -n 4 127.0.0.1 >nul
+if exist "%temp%\docker_ps.txt" (
+    for /f "usebackq delims=" %%i in ("%temp%\docker_ps.txt") do (
+        echo %%i | findstr /C:"e_room_tidb" >nul && set "DOCKER_OK=1"
     )
-    if %errorlevel% neq 0 (
-        echo        [ERROR] Docker failed to start. Is Docker Desktop running?
-        pause
-        exit /b 1
-    )
-    echo        Waiting for services to be ready...
-    timeout /t 8 /nobreak >nul
-) else (
-    echo        Docker services already running.
+    del "%temp%\docker_ps.txt" 2>nul
 )
+if defined DOCKER_OK (
+    echo        Docker services already running.
+) else (
+    echo        Docker services not detected. Attempting to start...
+    start /b "" "%windir%\system32\cmd.exe" /c "docker compose up -d tidb redis minio livekit coturn >nul 2>&1"
+)
+goto :docker_done
+:docker_skip
+echo        Skipped (--skip-docker flag).
+:docker_done
 
 REM ── Step 3: Backend dependencies ────────────────
 echo [3/6] Installing backend dependencies...
@@ -59,12 +60,6 @@ echo [5/6] Starting servers...
 
 echo        Starting API server (port 8000)...
 start "E-Room API" cmd /c "cd /d "%CD%\backend" && uv run python -m app.server"
-
-echo        Starting Celery worker...
-start "E-Room Celery Worker" cmd /c "cd /d "%CD%\backend" && uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info"
-
-echo        Starting Celery beat...
-start "E-Room Celery Beat" cmd /c "cd /d "%CD%\backend" && uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info"
 
 echo        Starting Frontend (port 3000)...
 start "E-Room Frontend" cmd /c "cd /d "%CD%\frontend" && npm run dev"

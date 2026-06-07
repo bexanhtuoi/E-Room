@@ -6,30 +6,74 @@ tags:
   - ML
   - workflow
 created: 2026-05-29
-updated: 2026-05-29
-status: design
+updated: 2026-06-07
+status: reference
 ---
 
 # Pronunciation Scoring Workflow
 
-> [!abstract] Pipeline chấm điểm phát âm local sử dụng Whisper + Wav2Vec2 song song
+> [!danger] Tài liệu tham khảo thiết kế — KHÔNG phải kiến trúc hiện tại
+> Tài liệu này mô tả kiến trúc **mục tiêu** (FunASR + Wav2Vec2 + GOP) dùng trong giai đoạn thiết kế.
+>
+> **Code thực tế** hiện dùng pipeline đơn giản hơn:
+> - **STT**: `faster-whisper small.en` (CUDA float16)
+> - **Phoneme lookup**: CMU Dictionary tĩnh (`cmudict.json`)
+> - **Scoring**: Whisper `avg_logprob` → confidence scale 0-100
+> - **Không có**: Wav2Vec2, forced alignment Viterbi, GOP scoring
+>
+> File code thực tế: `backend/app/infrastructure/audio_pipeline.py`
 
-## Kiến trúc tổng quan
+## Kiến trúc hiện tại
+
+```mermaid
+graph TD
+    Audio["Audio PCM<br/>16kHz, mono, raw bytes"]
+    
+    subgraph Pipeline["PronunciationPipeline"]
+        W["faster-whisper small.en<br/>CUDA float16 / CPU float32"]
+        DICT["CMU Dictionary<br/>cmudict.json (43K+ từ)"]
+        SCORE["Word score computation<br/>avg_logprob → 0-100"]
+    end
+    
+    Audio --> W
+    W --> DICT
+    W --> SCORE
+    DICT --> SCORE
+    SCORE --> Result["{text, scores, words, phonemes, needs_remediation}"]
+```
+
+### Chi tiết scoring
+
+| Bước | Mô tả | Input | Output |
+|------|-------|-------|--------|
+| 1 | Whisper transcribe | PCM bytes (float32 array) | segments: text + avg_logprob |
+| 2 | Scale confidence | avg_logprob (range ~ -4 to 0) | `min(max((logprob+2)/4, 0.1), 1.0)` |
+| 3 | CMU lookup | word → dictionary | ARPAbet phoneme sequence |
+| 4 | Word score | confidence × 100 | score per word (capped 100) |
+| 5 | Aggregate | mean of word scores | overall score 0-100 |
+| 6 | Remediation flag | overall < 70 | needs_remediation = True |
+
+> [!note] Scoring dựa trên confidence của Whisper, **không** phải GOP (Goodness of Pronunciation). GOP yêu cầu Wav2Vec2 alignment với Viterbi decoding để có frame-level logits — chưa implement.
+
+## Kiến trúc thiết kế (mục tiêu)
+
+> [!warning] Phần dưới đây là **thiết kế mục tiêu** — chưa implement.
+> Tham khảo khi nâng cấp pronunciation pipeline trong tương lai.
 
 ```mermaid
 graph TD
     Audio["Audio PCM<br/>3s, 16kHz, 48000 samples"]
     
     subgraph Parallel["Parallel Paths"]
-        P1["Path 1: Whisper (ASR)"]
+        P1["Path 1: FunASR (ASR)"]
         P2["Path 2: Wav2Vec2 (Phoneme)"]
     end
     
     Audio --> P1
     Audio --> P2
     
-    P1 --> Whisper["Whisper API<br/>~2s (network)"]
-    Whisper --> Transcript["{text, word_timestamps, word_confidences}"]
+    P1 --> FunASR["FunASR SenseVoiceSmall<br/>~1-2s (CPU)"]
+    FunASR --> Transcript["{text, word_timestamps, word_confidences}"]
     Transcript --> Gruut["gruut<br/>Text → IPA phonemes"]
     Gruut --> Expected["Expected phoneme sequence<br/>[h, ə, l, oʊ, w, ɜː, l, d]"]
     
@@ -62,25 +106,25 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant Audio as Audio PCM
-    participant Whisper as Whisper API
+    participant FunASR as FunASR SenseVoiceSmall
     participant W2V as Wav2Vec2 Model
     participant Gruut as gruut
     participant Aligner as Forced Aligner
     participant Scorer as Scorer
     
-    Audio->>Whisper: gửi audio (parallel)
+    Audio->>FunASR: gửi audio (parallel)
     Audio->>W2V: gửi audio (parallel)
     
-    Note over Whisper,W2V: ─── Parallel execution ───
+    Note over FunASR,W2V: ─── Parallel execution ───
     
     W2V->>W2V: Inference (CPU, ~1.5-3s)
     W2V->>Aligner: Matrix (150, 33) frame-level logits
     
-    Whisper->>Whisper: API call (network, ~2s)
-    Whisper-->>Whisper: {text, word_timestamps, confidences}
-    
-    Note over Gruut: ─── After Whisper done ───
-    Whisper->>Gruut: transcript text
+    FunASR->>FunASR: Inference (CPU, ~1-2s)
+    FunASR-->>FunASR: {text, word_timestamps, confidences}
+
+    Note over Gruut: ─── After FunASR done ───
+    FunASR->>Gruut: transcript text
     Gruut->>Gruut: Convert words → IPA phonemes
     Gruut->>Aligner: Expected phoneme sequence [h, ə, l...]
     
@@ -251,8 +295,8 @@ PronScore = Accuracy × 0.40 + Fluency × 0.25 + GOP × 0.20 + Prosody × 0.15
 
 | Tình huống | Kết quả |
 |------------|---------|
-| Whisper API fail | Vẫn chạy Wav2Vec2, chỉ lấy actual phoneme |
-| Wav2Vec2 fail | Chỉ lấy Whisper word confidence |
+| FunASR fail | Vẫn chạy Wav2Vec2, chỉ lấy actual phoneme |
+| Wav2Vec2 fail | Chỉ lấy FunASR word confidence |
 | Cả 2 fail | Corrector LLM vẫn chạy bình thường |
 | Pronunciation scores = null | Bỏ qua phần pron, chỉ hiển thị grammar correction |
 

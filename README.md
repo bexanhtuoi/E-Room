@@ -8,7 +8,7 @@
 |---|---|---|
 | **Frontend** | React 19, Bootstrap 5, react-router-dom 7, TanStack Query 5, Zustand 5 | UI, routing, state management, server state |
 | **Backend** | Python 3.13, FastAPI, Uvicorn | REST API, WebSocket, async workers |
-| **AI/ML** | LangChain, Faster-Whisper, Wav2Vec2, CMU Dictionary, Nomic Embeddings | ASR, phoneme alignment, pronunciation scoring, RAG embeddings |
+| **AI/ML** | LangChain, FunASR, Wav2Vec2, CMU Dictionary, Gemma 4 E2B, Qwen3 Embedding | ASR, phoneme alignment, pronunciation scoring, RAG embeddings |
 | **Orchestration** | Celery, Redis PubSub | Background tasks, event bus, scheduling |
 | **Database** | TiDB (local Docker, MySQL-compatible) | Relational storage, vector embeddings |
 | **Real-time** | LiveKit (WebRTC), WebSocket | Video rooms, audio streaming, chat |
@@ -62,7 +62,7 @@ E-Room/
 │   ├── mac.sh                   # One-click startup (macOS)
 │   └── linux.sh                 # One-click startup (Linux)
 │
-├── docker-compose.yml           # 10 services: api, celery_worker, celery_beat, tidb, redis, minio, livekit, coturn, frontend, nginx
+├── docker-compose.yml           # 8 services: api, tidb, redis, minio, livekit, coturn, frontend, nginx
 ├── nginx.conf                   # Non-SSL reverse proxy
 ├── nginx-ssl.conf               # SSL reverse proxy with Let's Encrypt
 ├── livekit.yaml                 # LiveKit WebRTC server config
@@ -220,7 +220,7 @@ All AI results are published to Redis PubSub channels (`room:transcript`, `room:
 
 - **Non-deterministic AI outputs** — LLM responses vary, making testing unreliable. → Structured output parsing (JSON mode) + fallback responses + retry decorators with exponential backoff.
 
-- **Cost & privacy** — Cloud AI services are expensive and raise data privacy concerns for voice data. → Local LLM inference via LM Studio / Ollama (OpenAI-compatible) + on-premise Whisper + local TiDB (Docker) + Nomic embeddings (remote but zero data retention).
+- **Cost & privacy** — Cloud AI services are expensive and raise data privacy concerns for voice data. → Local LLM inference via llama.cpp (Gemma 4 E2B port 8012 + Qwen3 Embedding port 8013) + on-premise FunASR + local MySQL (Docker) + local embeddings.
 
 - **Frontend complexity** — Video rooms, streaming chat, pronunciation cards, dark/light theme, and i18n must coexist. → Feature-based folder structure + Zustand stores + CSS variables + lazy-loaded routes with auth guards.
 
@@ -231,7 +231,9 @@ All AI results are published to Redis PubSub channels (`room:transcript`, `room:
 - Python 3.13+ with `uv` package manager
 - Node.js 22+
 - Docker Desktop (Windows / macOS) or Docker Engine (Linux)
-- Local LLM server (LM Studio / Ollama) running an OpenAI-compatible API at `http://127.0.0.1:1234/v1`
+- Local LLM server (llama.cpp) with two models:
+  - Gemma 4 E2B Q8_0 (text gen) — port **8012**, api_key `dev`
+  - Qwen3 Embedding 0.6B Q8_0 (embedding) — port **8013**, api_key `dev`
 
 ### One-Click Scripts
 
@@ -258,8 +260,9 @@ These scripts:
 cd E-Room
 cp backend/.env.example backend/.env
 
-# 2. Sửa backend/.env — cấu hình LLM_BASE_URL trỏ đến local LLM server
-#    e.g. LLM_BASE_URL=http://127.0.0.1:1234/v1
+# 2. Sửa backend/.env — cấu hình LLM_BASE_URL trỏ đến llama.cpp
+#    LLM_BASE_URL=http://localhost:8012/v1 (Gemma 4 E2B)
+#    EMBEDDING_BASE_URL=http://localhost:8013/v1 (Qwen3 Embedding)
 
 # 3. Start infra services
 docker compose up -d tidb redis minio livekit coturn
@@ -269,15 +272,7 @@ cd backend
 uv sync
 uv run python -m app.server
 
-# 5. Start Celery worker (terminal mới)
-cd backend
-uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info
-
-# 6. Start Celery beat (terminal mới)
-cd backend
-uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info
-
-# 7. Start frontend (terminal mới)
+# 5. Start frontend (terminal mới)
 cd frontend
 npm install
 npm run dev
@@ -297,9 +292,11 @@ Xem `backend/.env.example` cho danh sách đầy đủ. Các biến quan trọng
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_BASE_URL` | `http://127.0.0.1:1234/v1` | OpenAI-compatible LLM endpoint |
-| `LLM_MODEL` | `google/gemma-4-e2b` | Model name |
-| `NOMIC_API_KEY` | — | Nomic embeddings API key (RAG) |
+| `LLM_BASE_URL` | `http://localhost:8012/v1` | llama.cpp text gen endpoint (Gemma 4 E2B) |
+| `LLM_MODEL` | `gemma-4-E2B-it` | Model name |
+| `LLM_API_KEY` | `dev` | API key for llama.cpp |
+| `EMBEDDING_BASE_URL` | `http://localhost:8013/v1` | llama.cpp embedding endpoint (Qwen3) |
+| `EMBEDDING_MODEL` | `Qwen3-Embedding-0.6B` | Embedding model name |
 | `LIVEKIT_URL` | `ws://localhost:7880` | WebRTC server URL |
 | `STRIPE_SECRET_KEY` | — | Stripe payment processing |
 

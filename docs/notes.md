@@ -349,14 +349,13 @@ ERoom:{entity}:{identifier}:{subkey}
 | `ERoom:cache:rag:{tag_slug}:{query_hash}` | String | 1h | Cache RAG query |
 | `ERoom:cache:websearch:{hash}` | String | 1h | Cache web search |
 | `ERoom:cache:tts:{sha256}` | String | 24h | Cache TTS audio URL |
-| `ERoom:cache:embedding:{hash}` | String | 24h | Cache Nomic embeddings (768-dim) |
+| `ERoom:cache:embedding:{hash}` | String | 24h | Cache OpenAI embeddings |
 | `ERoom:blacklist:token:{jti}` | String | TTL còn lại | JWT blacklist (RedisCRUD) |
 | `ERoom:agent:{room_id}:rag_loaded` | String | Vĩnh viễn | Cờ RAG đã nạp |
 | `ERoom:moderation:scan:{room_id}` | String | 10s | Lock quét NSFW |
-| `room:transcript` | PubSub | — | Channel transcript từ Celery → Bridge |
-| `room:correction` | PubSub | — | Channel correction từ Celery → Bridge |
-| `room:heartbeat` | PubSub | — | Channel heartbeat từ Celery/Bridge |
-| `celery` (default) | Queue | — | Celery task queue |
+| `room:transcript` | PubSub | — | Channel transcript |
+| `room:correction` | PubSub | — | Channel correction |
+| `room:heartbeat` | PubSub | — | Channel heartbeat |
 
 ---
 
@@ -502,8 +501,7 @@ Response: `{"data": {"audio_url": "https://minio/ERoom-tts/abc123.mp3", "duratio
 "langchain-community>=0.4.1",
 "langchain-openai>=1.1.7",
 "langchain-text-splitters>=1.1.0",
-"langchain-nomic>=1.0.1",
-"nomic>=3.9.0",
+"langchain-openai>=1.1.7",
 ```
 
 ### 6.2 Vector Store — TiDBRawVectorStore + NumpyVectorStore
@@ -541,10 +539,10 @@ class VectorStore:
 Document Upload → Minio (ERoom-rag-docs/{tag_slug}/)
     │
     ▼
-Celery Task: index_document(doc_id)
+Background Task: index_document(doc_id)
     ├─ Parse (PyPDF2 / markdown parser)
     ├─ Chunk (TextChunker: RecursiveCharacterTextSplitter, 512 chars, overlap 64)
-    ├─ Embed (EmbeddingService: Nomic API, nomic-embed-text-v1.5, 768-dim)
+    ├─ Embed (EmbeddingService: OpenAIEmbeddings via LM Studio)
     │  └─ Cache: dict (in-memory) + Redis (TTL 24h)
     └─ Store (TiDBRawVectorStore / NumpyVectorStore)
 ```
@@ -574,35 +572,32 @@ Combine: RAG chunks + Web Search results
 agent.expert.answer_expert() → LLM (local) → answer
     │
     ▼
-WebSocket: ai_expert_response (via Redis PubSub → CeleryBridge)
+WebSocket: ai_expert_response (via Redis PubSub)
 ```
 
-### 6.5 Pronunciation Pipeline (quan trọng — không có trong langchain)
+### 6.5 Pronunciation Pipeline (thực tế)
+
+> [!warning] Tài liệu này mô tả kiến trúc **mục tiêu** cũ (FunASR + Wav2Vec2 + GOP).
+> Code thực tế dùng **faster-whisper small.en** + CMU Dictionary + confidence scoring.
+> Xem [[pronunciation-workflow]] và [[workflow#3. Luồng Dữ liệu Âm thanh]] cho phiên bản cập nhật.
 
 ```
 Audio PCM (16kHz, mono, int16)
     │
-    ├─► faster-whisper "base" model (CPU)
-    │   └─ segments, word_timestamps, word_confidences
-    │
-    ├─► Wav2Vec2-BASE-960h (CPU)
-    │   └─ forced alignment Viterbi → (150 frames × 33 phoneme classes)
-    │       └─ greedy decode → actual phoneme sequence
-    │       └─ Viterbi alignment → aligned phonemes (start, end, confidence)
+    ├─► faster-whisper small.en (CUDA)
+    │   └─ segments, text, avg_logprob
     │
     ├─► CMU Dictionary (ARPAbet)
     │   └─ lookup(word) → expected phonemes
     │
     ▼
-PronunciationScorer
-    ├─ compute_accuracy: 1 - edit_distance/total
-    ├─ compute_gop: log(P(p|audio) / max P(q≠p|audio))
-    ├─ compute_fluency: silence ratio analysis
-    ├─ compute_prosody: energy contour variation
-    └─ compute_pron_score: Accuracy×0.40 + GOP×0.20 + Fluency×0.25 + Prosody×0.15
+Confidence scoring
+    ├─ scale: min(max((avg_logprob+2)/4, 0.1), 1.0)
+    ├─ word_score: probability × 100
+    └─ overall: mean of word scores
     │
     ▼
-Output: {text, scores: {overall, accuracy, gop, fluency, prosody}, words: [{word, score, phonemes, duration}], aligned_phonemes, needs_remediation}
+Output: {text, scores: {overall, words: [{word, score, phonemes}]}, needs_remediation}
     │
     ▼
 Nếu overall < 70 → LLM correction (agent.corrector.correct_text)
@@ -614,7 +609,7 @@ Nếu overall >= 70 → chỉ lưu transcript, bỏ qua correction
 ## 7. NSFW DETECTION PIPELINE
 
 ```
-Celery Beat: Mỗi 8-10s / phòng ACTIVE
+Background task: Mỗi 8-10s / phòng ACTIVE
     │
     ▼
 Với mỗi participant đang bật video:
@@ -710,12 +705,12 @@ Bạn muốn thảo luận về chủ đề này không?"
 |--------|--------|-------------|
 | API response (không AI) | P95 < 200ms | Middleware logging |
 | Transcript hiển thị lần đầu | < 1s | WebSocket latency |
-| Sửa lỗi AI | P95 < 5s | Celery task duration |
-| Expert RAG Q&A | P95 < 8s | Celery task duration |
+| Sửa lỗi AI | P95 < 5s | Async task duration |
+| Expert RAG Q&A | P95 < 8s | Async task duration |
 | TTS audio generation | P95 < 3s | API + TTS engine |
 | Web Search | P95 < 1s | Brave API latency |
 | NSFW detection | P95 < 2s | Frame capture → result |
-| RAG knowledge loading | < 15s (khởi tạo phòng) | Celery task duration |
+| RAG knowledge loading | < 15s (khởi tạo phòng) | Async task duration |
 | Agent loading (Pro+) | < 15s | Room MATCHING→ACTIVE |
 | Ghép cặp tag | P95 < 5s | Queue → room created |
 | WebSocket events | P95 < 100ms | Publish → client receive |
@@ -731,7 +726,7 @@ Bạn muốn thảo luận về chủ đề này không?"
 | Mật khẩu | Argon2 (argon2-cffi, không còn Passlib) |
 | Prompt injection vào Agent | Guardrail prompt + intent classifier (regex) + misuse counter (3 strikes/h) |
 | Lạm dụng Agent (coding) | `agent/query.py:build_query()` regex pattern detection + intent classifier |
-| Ảnh nhạy cảm video call | ⏳ Chưa implement (Celery `moderation.py` placeholder) |
+| Ảnh nhạy cảm video call | ⏳ Chưa implement |
 | RAG document poisoning | Chỉ admin upload docs |
 | TTS abuse | ⏳ Chưa implement (RateLimiter.check_tts có code) |
 | Minio data leak | Presigned URLs, lifecycle rules (TTL audio 1d, evidence 30d) |

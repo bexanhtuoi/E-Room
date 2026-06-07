@@ -7,7 +7,7 @@ tags:
   - utils
   - ERoom
 created: 2026-05-10
-updated: 2026-06-02
+updated: 2026-06-06
 ---
 
 # Dev Notes
@@ -26,25 +26,24 @@ updated: 2026-06-02
 
 | Component | Trạng thái | Chi tiết |
 |-----------|-----------|----------|
-| Docker Compose | ✅ Đầy đủ | 9 services (api, celery_worker, celery_beat, redis, minio, livekit, coturn, frontend, nginx) |
+| Docker Compose | ✅ Đầy đủ | 8 services (api, redis, minio, livekit, coturn, frontend, nginx) |
 | LiveKit SFU | ✅ Chạy | Port 7880-7881, UDP 50000-50100 |
 | coTURN | ✅ Chạy | Port 3478 TCP+UDP |
 | FastAPI Backend | ✅ Chạy | Port 8000, 12 routers, 2 WS endpoints |
-| Celery Worker + Beat | ✅ Chạy | 6 periodic tasks (matching 5s, heartbeat 45s, moderation 10s...) |
-| Redis | ✅ Chạy | Queue (Celery), cache, pub/sub (CeleryBridge) |
+| Redis | ✅ Chạy | Cache, pub/sub, distributed locks |
 | Minio | ✅ Chạy | 4 buckets (rag-docs, tts, avatars, evidence) |
 | Nginx | ✅ Chạy | Reverse proxy port 80 |
 | Frontend (React 19) | ✅ Chạy | Port 3000 (Vite 6, Bootstrap 5, Zustand 5) |
 | MySQL | ✅ Kết nối | Local MySQL (SQLModel + PyMySQL) |
 | RAG Pipeline (langchain) | ✅ Hoạt động | Nomic 768-dim, TiDBRawVectorStore + NumpyVectorStore fallback |
-| Pronunciation Pipeline | ✅ Hoạt động | Whisper base (CPU) + Wav2Vec2 + CMU Dict + GOP Scorer |
-| AI Agent (local LLM) | ✅ Hoạt động | LM Studio endpoint (OpenAI-compatible), 3 roles via system prompts |
+| Pronunciation Pipeline | ✅ Hoạt động | faster-whisper small.en + CMU Dict + confidence scoring |
+| AI Agent (local LLM) | ✅ Hoạt động | llama.cpp endpoint (port 8012, OpenAI-compatible), 3 roles via system prompts |
 | Alembic Migrations | ✅ Setup | 2 versions |
 | Authentication | ✅ Đầy đủ | JWT access+refresh, Argon2, Redis blacklist, rate limiting |
 | Tag System | ✅ Đầy đủ | 53 preset tags, CRUD, search, bulk-add, custom tags |
 | Matching Engine | ✅ Đầy đủ | Jaccard similarity, 3-stage fallback (30s→45s→60s) |
 | WebSocket Chat | ✅ Đầy đủ | Chat messages, audio chunks, VAD detection, transcript relay |
-| WebSocket Audio | ✅ Đầy đủ | Audio streaming → Whisper → Wav2Vec2 → PronunciationPipeline |
+| WebSocket Audio | ✅ Đầy đủ | Audio streaming → Whisper → PronunciationPipeline |
 | Unit/Integration Tests | ✅ 142+/147 pass | 12 test modules |
 
 ### Đang Phát triển
@@ -53,7 +52,7 @@ updated: 2026-06-02
 |-----------|-----------|
 | Frontend ChatWindow (đầy đủ) | 🔄 Đang code — 9 components |
 | Frontend Onboarding Wizard | 🔄 Đang code — 5 steps |
-| TTS Integration | ⏳ Pending — ElevenLabs/OpenAI |
+| TTS Integration | ✅ Hoạt động | Supertonic ONNX model (CPU) |
 | NSFW Detection | ⏳ Pending — self-host nsfw_detector |
 | Subscription (Stripe) | ⏳ Pending — config có sẵn |
 | Expert RAG WebSocket events | 🔄 Đang code |
@@ -123,37 +122,48 @@ from app.utils.validation import is_valid_email, sanitize_input
 ```
 backend/tests/
 ├── conftest.py                       # Fixtures: engine (SQLite), db_session, client, test_user, auth_headers, mock_redis, mock_livekit
-├── test_edge_cases.py                # Unicode, XSS, SQL injection
-├── test_infrastructure.py            # Infrastructure tests
-├── test_minio.py                     # MinIO CRUD operations
-├── test_real_speech.py               # PronunciationPipeline tests
-├── test_redis.py                     # Redis CRUD + rate limiter
-├── test_token_store.py               # JWT blacklist
-├── test_websocket.py                 # WebSocket handler tests
-├── test_integration/
-│   ├── test_api_health.py            # Health checks (6 pass)
-│   ├── test_auth_api.py              # Auth flow (15 pass)
-│   ├── test_matching_pipeline.py     # Matching flow (10 pass)
-│   └── test_room_api.py              # Room CRUD (12 pass)
-└── test_unit/
-    ├── test_agent.py                 # Corrector, Expert, Heartbeat (16 pass)
-    ├── test_audio_pipeline.py        # Audio processing (8 pass)
-    ├── test_core.py                  # Core RAG imports (17 pass)
-    ├── test_matching.py              # Matching engine (9 pass)
-    ├── test_models.py                # SQLModel entities (8 pass)
-    ├── test_rag.py                   # Chunking, embedding, retrieval (25 pass)
-    └── test_security.py              # Auth, rate limiting (12 pass)
+├── api/                              # API endpoint tests
+│   ├── test_auth.py                  # Auth flows
+│   ├── test_edge_cases.py            # Unicode, XSS, SQL injection
+│   ├── test_health.py                # Health checks
+│   ├── test_rooms.py                 # Room CRUD
+│   └── test_users.py                 # User profile
+├── e2e/                              # End-to-end tests
+│   ├── test_full_flow.py             # Full pipeline (model inference, marked @slow)
+│   └── test_model_cache.py           # Model caching behavior
+├── integration/                      # Integration tests (cần DB/Redis thật)
+│   ├── test_audio_pipeline_int.py    # Audio pipeline
+│   ├── test_auth_service.py          # Auth service
+│   ├── test_redis.py                 # Redis CRUD + rate limiter (cần Redis)
+│   ├── test_token_store_int.py       # JWT blacklist
+└── unit/                             # Unit tests (no external deps)
+    ├── test_audio_buffer.py          # AudioBuffer VAD logic
+    ├── test_audio_dictionary.py      # CMU Dictionary
+    ├── test_audio_pipeline.py        # PronunciationPipeline (mocked)
+    ├── test_auth_middleware.py        # Auth middleware
+    ├── test_chunking.py              # Text chunking
+    ├── test_config.py                # Settings
+    ├── test_embedding.py             # Embedding service
+    ├── test_event_bus.py             # EventBus lifecycle
+    ├── test_logging_middleware.py    # Logging middleware
+    ├── test_minio.py                 # MinIO client (mocked)
+    ├── test_rate_limiter.py          # Rate limiter
+    ├── test_redis_crud.py            # RedisCRUD (mocked)
+    ├── test_security.py              # JWT + Argon2
+    ├── test_serialize.py             # Serialize/deserialize
+    └── test_vector_store.py          # Vector store
 ```
 
 ### 3.2 Chạy Test
 
 ```bash
 cd backend
-uv run python -m pytest tests/ -v --tb=short          # Tất cả
-uv run python -m pytest tests/test_unit/ -v            # Unit only
-uv run python -m pytest tests/test_integration/ -v     # Integration only
-uv run python -m pytest tests/test_rag.py -v           # RAG cụ thể
-uv run python -m pytest tests/ --cov=app --cov-report=term-missing  # Coverage
+uv run pytest -v --tb=short                     # Tất cả (trừ @slow)
+uv run pytest -v -m "not slow"                  # Chỉ fast tests
+uv run pytest tests/unit/ -v                    # Unit only
+uv run pytest tests/integration/ -v             # Integration only
+uv run pytest -v -m slow                        # Slow (cần model thật)
+uv run pytest --cov=app --cov-report=term-missing  # Coverage
 ```
 
 ### 3.3 Test Fixtures (conftest.py)
@@ -216,7 +226,7 @@ uv run python -m pytest tests/ --cov=app --cov-report=term-missing  # Coverage
 - ~~**TiDB Cloud latency**: ~50-100ms~~ ✅ **Không còn vấn đề** — đã switch sang MySQL local
 - **coTURN logs trống**: Log level mặc định thấp, thêm `--verbose` nếu cần debug
 - **LiveKit high CPU warning**: Thỉnh thoảng xuất hiện khi idle, không ảnh hưởng
-- **Hai hệ thống heartbeat song song**: Celery beat (`room_heartbeat_tick` 45s) + asyncio loop (`service/heartbeat.py`) — cần cleanup
+- **Heartbeat loop**: Asyncio loop (`service/heartbeat.py`) — chỉ còn 1 hệ thống
 
 ### 4.3 Code
 - **LangChain agent**: Đã refactor từ StateGraph → create_agent (single agent). Dùng langchain v1.2+ (không phải 0.3.x như docs cũ)
@@ -225,7 +235,7 @@ uv run python -m pytest tests/ --cov=app --cov-report=term-missing  # Coverage
 - **Alembic vs migrations/**: Có 2 thư mục migration (alembic + migrations), cần cleanup
 - **Mixed CRA/Vite env vars**: `api/client.js` dùng `process.env.REACT_APP_*`, `websocket.js` dùng `import.meta.env.VITE_*` — cần đồng bộ
 - **EventBus blocking**: `event_bus.py` dùng synchronous Redis polling trong async context
-- **Chồng chéo speech pipeline**: `celery/ai.py:transcribe_audio` và `ws/speech.py:process_speech` có overlapping functionality
+- **Chồng chéo speech pipeline**: `audio_pipeline.py:assess` và `process_speech` cần gọn lại
 
 ### 4.4 So sánh Docs vs Code
 
@@ -235,11 +245,12 @@ uv run python -m pytest tests/ --cov=app --cov-report=term-missing  # Coverage
 | TailwindCSS + shadcn/ui | Bootstrap 5 + react-bootstrap | UI framework hoàn toàn khác |
 | CRA | Vite 6 + vitest | Build toolchain khác |
 | howler.js | ❌ Chưa có | TTS chưa implement |
-| OpenAI TTS | Config ElevenLabs | API key có, chưa code |
+| Supertonic TTS | ONNX model local | Chạy local CPU |
 | recharts | ❌ Chưa dùng | Dashboard đang xây dựng |
 | react-hook-form + zod | ❌ Chưa dùng | Form validation thủ công |
-| Whisper API | faster-whisper base (CPU local) | Không gọi API, chạy local |
-| GPT-4o | google/gemma-4-e2b (LM Studio) | Local LLM, không OpenAI
+| FunASR (design doc) | faster-whisper small.en (CUDA) | Chạy local — docs cũ ghi FunASR |
+| GPT-4o | Gemma 4 E2B Q8_0 (llama.cpp port 8012) | Local LLM, không OpenAI
+| Nomic Embeddings | Qwen3 Embedding 0.6B (llama.cpp port 8013) | Local embedding, không Nomic API
 
 ---
 
@@ -256,7 +267,7 @@ curl http://localhost:7880          # → "OK"
 
 # 3. Backend (cần Python 3.13+)
 cd backend
-uv sync                            # Cài dependencies (có faster-whisper + torch)
+uv sync                            # Cài dependencies (faster-whisper, langchain, ...)
 uv run python -m app.server        # Chạy FastAPI (port 8000)
 
 # 4. Frontend (terminal khác)
@@ -276,9 +287,10 @@ uv run python -m pytest tests/ -v --tb=short
 ```
 
 > [!warning] Yêu cầu
-> - **LLM**: Cần LM Studio (hoặc OpenAI-compatible endpoint) tại `http://127.0.0.1:1234/v1` với model `google/gemma-4-e2b`
-> - **faster-whisper**: Tự động tải model `base` (~1.5GB) lần đầu chạy
-> - **Wav2Vec2**: Tự động tải `facebook/wav2vec2-base-960h` (~1.2GB) lần đầu chạy
+> - **LLM**: Cần llama.cpp server chạy model `gemma-4-E2B-it-Q8_0.gguf` tại port 8012
+> - **Embedding**: Cần llama.cpp server chạy model `Qwen3-Embedding-0.6B-Q8_0.gguf` tại port 8013
+> - **Whisper**: `faster-whisper small.en` — tự động tải lần đầu chạy (cache tại `weight/whisper/`)
+> - **CMU Dictionary**: `weight/cmudict.json` — tự động download từ GitHub nếu chưa có
 > - **MySQL**: Cần MySQL local (hoặc SQLite cho test tự động)
 
 ---
@@ -336,18 +348,17 @@ Không dùng `create_agent` từ langchain.agents. Code thực tế gọi LLM qu
 1. `get_llm()` → `ChatOpenAI` (OpenAI-compatible endpoint)
 2. LangChain `@tool` decorator cho `search_knowledge` (RAG retrieval tool)
 3. LangGraph (langgraph>=1.0.5) import sẵn nhưng chưa dùng
-4. LangChain Nomic embeddings: `langchain_nomic.NomicEmbeddings`
+4. LangChain OpenAI embeddings: `langchain_openai.OpenAIEmbeddings`
 
 ### Pronunciation Pipeline (không dùng langchain)
 
 ```
-Audio PCM (16kHz, mono) → faster-whisper base (CPU)
-    └── transcript text (song song với Wav2Vec2)
-        └── Wav2Vec2 Aligner (forced alignment Viterbi)
-            └── CMU Dictionary (ARPAbet lookup)
-                └── PronunciationScorer (Accuracy + GOP + Fluency + Prosody)
-                    └── overall score 0-100
-                        └── Nếu < 70: LLM correction
+Audio PCM (16kHz, mono) → faster-whisper small.en (CUDA)
+    └── transcript text + avg_logprob per segment
+        └── CMU Dictionary (ARPAbet lookup per word)
+            └── confidence scoring (avg_logprob → 0-100)
+                └── overall score 0-100
+                    └── Nếu < 70: LLM correction
 ```
 
 ---

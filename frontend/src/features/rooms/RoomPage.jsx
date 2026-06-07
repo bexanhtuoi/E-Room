@@ -64,7 +64,7 @@ function ControlBtn({ icon: Icon, active, onClick, label, danger, className = ''
 }
 
 function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRaised,
-  showEmojiPicker, setShowEmojiPicker, sendEmoji, screenShareOn, setScreenShareOn }) {
+  showEmojiPicker, setShowEmojiPicker, sendEmoji, screenShareOn, setScreenShareOn, onMicToggle }) {
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
   const [micOn, setMicOn] = useState(true);
@@ -79,13 +79,14 @@ function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRa
   }, [localParticipant]);
 
   const toggleMic = useCallback(async () => {
-    if (!localParticipant) { setMicOn(p => !p); return; }
+    if (!localParticipant) { setMicOn(p => { onMicToggle?.(!p); return !p; }); return; }
     try {
       const newState = !localParticipant.isMicrophoneEnabled;
       await localParticipant.setMicrophoneEnabled(newState);
       setMicOn(newState);
+      onMicToggle?.(newState);
     } catch (e) { console.warn('toggleMic:', e); }
-  }, [localParticipant]);
+  }, [localParticipant, onMicToggle]);
 
   const toggleCam = useCallback(async () => {
     if (!localParticipant) { setCamOn(p => !p); return; }
@@ -154,18 +155,15 @@ function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRa
           onClick={toggleHandRaise}
           label={handRaised ? 'Lower hand' : 'Raise hand'}
         />
-        <div style={{ position: 'relative' }}>
+        <div className="meet-controls__emoji-wrap">
           <ControlBtn icon={HiFaceSmile} active={showEmojiPicker}
             onClick={() => setShowEmojiPicker(prev => !prev)}
             label="Send reaction"
           />
           {showEmojiPicker && (
-            <div style={{ position: 'absolute', bottom: 54, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 4, padding: '6px 10px', borderRadius: 99, background: 'rgba(30,30,50,0.96)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 50 }}>
+            <div className="meet-controls__emoji-picker">
               {EMOJIS.map(emoji => (
-                <button key={emoji} onClick={() => sendEmoji(emoji)} style={{ fontSize: '1.3rem', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 8, transition: 'all 0.12s', lineHeight: 1 }}
-                  onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'scale(1.3)'; }}
-                  onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
-                >{emoji}</button>
+                <button key={emoji} onClick={() => sendEmoji(emoji)} className="meet-controls__emoji-btn">{emoji}</button>
               ))}
             </div>
           )}
@@ -285,7 +283,7 @@ function VideoArea({ isSharing, isHandRaised }) {
   }
 
   return (
-    <div style={{ position: 'relative', height: '100%' }}>
+    <div className="room-page__video-inner">
       {pinnedTrack ? (
         <div className="meet-focus-layout">
           <div className="meet-focus-main">
@@ -317,9 +315,9 @@ function VideoArea({ isSharing, isHandRaised }) {
 
 function ConnectingGate() {
   return (
-    <div style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:14,color:'#888' }}>
-      <div style={{ width:36,height:36,border:'3px solid rgba(255,255,255,0.1)',borderTopColor:COLOR.accent,borderRadius:'50%',animation:'gs 0.7s linear infinite' }} />
-      <p style={{ fontSize:14,margin:0 }}>Connecting to room...</p>
+    <div className="room-page__connecting-wrap">
+      <div className="room-page__connecting-spinner" />
+      <p className="room-page__connecting-text">Connecting to room...</p>
       
     </div>
   );
@@ -333,102 +331,59 @@ function isFriend(identity) { return getFriends().some(x=>x.id===identity); }
 function ParticipantsPanel({ participants, onClose }) {
   const friends = getFriends();
   return (
-    <aside style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--color-bg-elevated)' }}>
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <HiUserGroup size={18} style={{ color: 'var(--color-accent)' }} />
-          <h3 style={{ fontFamily: "'Nunito',sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Participants</h3>
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'var(--color-bg-surface)', padding: '2px 10px', borderRadius: 99, fontWeight: 600 }}>{participants?.length ?? 0}</span>
+    <aside className="room-page__panel">
+      <header className="room-page__panel-header">
+        <div className="room-page__panel-header-left">
+          <HiUserGroup size={18} className="room-page__panel-header-icon" />
+          <h3 className="room-page__panel-header-title">Participants</h3>
+          <span className="room-page__panel-header-count">{participants?.length ?? 0}</span>
         </div>
-        <button onClick={onClose} aria-label="Close" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', transition: 'all 0.15s' }}
-          onMouseOver={e => { e.currentTarget.style.color = 'var(--color-danger)'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
-          onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
-        >
+        <button onClick={onClose} aria-label="Close" className="room-page__panel-close-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
       </header>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+      <div className="room-page__panel-body">
         {participants.map((p, i) => {
           const alreadyFriend = isFriend(p.identity);
           return (
-            <div key={p.identity || i} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 8px', borderRadius: 12, transition: 'background 0.15s',
-            }}
-              onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-              onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
-            >
-              <div style={{
-                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                background: hashColor(p.name), color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 800, position: 'relative',
-              }}>
+            <div key={p.identity || i} className="room-page__panel-row">
+              <div className="room-page__panel-avatar" style={{ background: hashColor(p.name) }}>
                 {getInitials(p.name)}
-                <div style={{
-                  position: 'absolute', bottom: -1, right: -1,
-                  width: 12, height: 12, borderRadius: '50%',
-                  background: p.camOn ? 'var(--color-success)' : 'var(--color-text-muted)',
-                  border: '2px solid var(--color-bg-elevated)',
-                }} />
+                <div className="room-page__panel-dot" style={{ background: p.camOn ? 'var(--color-success)' : 'var(--color-text-muted)' }} />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)',
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
+              <div className="room-page__panel-row-name-wrap">
+                <div className="room-page__panel-row-name">
                   {p.name}
-                  {p.isLocal && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: 'rgba(255,255,255,0.12)', color: 'var(--color-accent)', fontWeight: 600 }}>You</span>}
+                  {p.isLocal && <span className="room-page__panel-you-badge">You</span>}
                 </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
-                  <span style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, color: p.micOn ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: p.micOn ? 'var(--color-success)' : 'var(--color-danger)' }} />
+                <div className="room-page__panel-status-row">
+                  <span className="room-page__panel-status-item" style={{ color: p.micOn ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                    <span className="room-page__panel-status-dot" style={{ background: p.micOn ? 'var(--color-success)' : 'var(--color-danger)' }} />
                     {p.micOn ? 'Mic on' : 'Muted'}
                   </span>
-                  <span style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, color: p.camOn ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: p.camOn ? 'var(--color-success)' : 'var(--color-danger)' }} />
+                  <span className="room-page__panel-status-item" style={{ color: p.camOn ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                    <span className="room-page__panel-status-dot" style={{ background: p.camOn ? 'var(--color-success)' : 'var(--color-danger)' }} />
                     {p.camOn ? 'Cam on' : 'Cam off'}
                   </span>
                 </div>
               </div>
               {!p.isLocal && (
                 alreadyFriend ? (
-                  <button onClick={() => removeFriend(p.identity)}
-                    style={{
-                      padding: '5px 10px', borderRadius: 99, flexShrink: 0,
-                      background: 'rgba(255,255,255,0.08)', color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer',
-                      fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
-                      display: 'flex', alignItems: 'center', gap: 3, transition: 'all 0.15s',
-                    }}
-                    onMouseOver={e => { e.currentTarget.style.background = 'var(--color-danger-muted)'; e.currentTarget.style.color = 'var(--color-danger)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)'; }}
-                    onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
-                  ><HiUser size={11} /> Friends</button>
+                  <button onClick={() => removeFriend(p.identity)} className="room-page__panel-btn-friend"><HiUser size={11} /> Friends</button>
                 ) : (
-                  <button onClick={() => addFriend(p.identity, p.name)}
-                    style={{
-                      padding: '5px 10px', borderRadius: 99, flexShrink: 0,
-                      background: 'rgba(255,255,255,0.06)', color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
-                      fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
-                      display: 'flex', alignItems: 'center', gap: 3, transition: 'all 0.15s',
-                    }}
-                    onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
-                    onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                  ><HiUserPlus size={11} /> Add Friend</button>
+                  <button onClick={() => addFriend(p.identity, p.name)} className="room-page__panel-btn-add"><HiUserPlus size={11} /> Add Friend</button>
                 ))}
             </div>
           );
         })}
       </div>
       {friends.length > 0 && (
-        <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Friends ({friends.length})</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <div className="room-page__panel-friends-section">
+          <div className="room-page__panel-friends-title">Friends ({friends.length})</div>
+          <div className="room-page__panel-friends-row">
             {friends.map(f => (
-              <span key={f.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 99, background: 'rgba(255,255,255,0.06)', color: '#ffffff', fontSize: 10, fontWeight: 600, border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', background: hashColor(f.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{getInitials(f.name)}</div>
+              <span key={f.id} className="room-page__panel-friend-tag">
+                <div className="room-page__panel-friend-avatar" style={{ background: hashColor(f.name) }}>{getInitials(f.name)}</div>
                 {f.name}
               </span>
             ))}
@@ -462,6 +417,7 @@ export function RoomPage() {
   const [wsSocket, setWsSocket] = useState(null);
   const audioWsRef = useRef(null);
   const audioCaptureRef = useRef(null);
+  const micEnabledRef = useRef(true);
   const [wsParticipants, setWsParticipants] = useState(0);
   const [retrySignal, setRetrySignal] = useState(0);
   const joinedRef = useRef(false);
@@ -604,7 +560,7 @@ export function RoomPage() {
     }
     const authToken = getTokens()?.access || '';
     if (!authToken) return;
-    const capture = createAudioCapture(roomId, authToken, audioWsRef);
+    const capture = createAudioCapture(roomId, authToken, audioWsRef, undefined, { enabled: micEnabledRef.current });
     audioCaptureRef.current = capture;
     capture.start();
     return () => {
@@ -612,6 +568,11 @@ export function RoomPage() {
       audioCaptureRef.current = null;
     };
   }, [phase, roomId]);
+
+  const handleMicToggle = useCallback((enabled) => {
+    micEnabledRef.current = enabled;
+    audioCaptureRef.current?.setEnabled(enabled);
+  }, []);
 
   const handleParticipantUpdate = useCallback((list) => {
     setParticipantsList(prev => {
@@ -636,7 +597,7 @@ export function RoomPage() {
 
   if (phase === 'loading') {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="room-page__loading-wrap">
         <ConnectingGate />
       </div>
     );
@@ -644,11 +605,11 @@ export function RoomPage() {
 
   if (phase === 'error') {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, textAlign: 'center', padding: 20 }}>
+      <div className="room-page__error-wrap">
         <HiShieldExclamation size={48} color={COLOR.danger} />
-        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, margin: 0, color: 'var(--color-text-primary)' }}>Failed to join room</h2>
-        <p style={{ color: '#888', fontSize: 14, maxWidth: 400, margin: 0 }}>{error}</p>
-        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+        <h2 className="room-page__error-title">Failed to join room</h2>
+        <p className="room-page__error-message">{error}</p>
+        <div className="room-page__error-actions">
           <button className="room-btn-sec" onClick={handleRetry}>Retry</button>
           <button className="room-btn-pri" onClick={goBack}>Back to Learning</button>
         </div>
@@ -659,29 +620,26 @@ export function RoomPage() {
 
   if (phase === 'left') {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 24, padding: '40px 32px', maxWidth: 440, width: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', animation: 'fadeInUp 0.4s ease both' }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+      <div className="room-page__left-wrap">
+        <div className="room-page__left-card">
+          <div className="room-page__left-icon-wrap">
             <HiCheckCircle size={36} color={COLOR.success} />
           </div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontWeight: 800, fontSize: '1.5rem', margin: '0 0 6px', color: 'var(--color-text-primary)' }}>You left the room</h2>
-          <p style={{ color: '#888', fontSize: '0.9rem', margin: '0 0 24px', lineHeight: 1.5 }}>
-            Thanks for participating in <strong style={{ color: 'var(--color-text-secondary)' }}>{roomName || 'the session'}</strong>!
+          <h2 className="room-page__left-title">You left the room</h2>
+          <p className="room-page__left-message">
+            Thanks for participating in <strong>{roomName || 'the session'}</strong>!
           </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 32, padding: '16px 0', marginBottom: 24, borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-text-primary)', fontFamily: 'Nunito, sans-serif' }}>{formatTime(savedElapsed || elapsed)}</div>
-              <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>Duration</div>
+          <div className="room-page__left-stats">
+            <div className="room-page__left-stat">
+              <div className="room-page__left-stat-value">{formatTime(savedElapsed || elapsed)}</div>
+              <div className="room-page__left-stat-label">Duration</div>
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-text-primary)', fontFamily: 'Nunito, sans-serif' }}>{participantsList.length || 1}</div>
-              <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>Participants</div>
+            <div className="room-page__left-stat">
+              <div className="room-page__left-stat-value">{participantsList.length || 1}</div>
+              <div className="room-page__left-stat-label">Participants</div>
             </div>
           </div>
-          <button onClick={goBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px', borderRadius: 99, background: 'var(--color-accent-gradient)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', fontFamily: 'inherit', boxShadow: '0 4px 20px var(--color-accent-glow)', transition: 'all 0.2s' }}
-            onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.filter = 'brightness(1.1)'; }}
-            onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.filter = 'brightness(1)'; }}
-          >Back to Learning <HiArrowRight size={16} /></button>
+          <button onClick={goBack} className="room-page__left-return-btn">Back to Learning <HiArrowRight size={16} /></button>
         </div>
         
       </div>
@@ -707,7 +665,7 @@ export function RoomPage() {
         </div>
         <div className="meet-topbar-right">
           {handRaised && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: 'rgba(251,191,36,0.15)', color: 'var(--color-warning)', fontSize: 11, fontWeight: 700, animation: 'pulse 1.5s ease-in-out infinite' }}>✋ Raised</span>
+            <span className="room-page__hand-raised-badge">✋ Raised</span>
           )}
           <button className={`meet-participant-count ${activePanel==='participants'?'active':''}`} onClick={openParticipants} title="View participants"
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: activePanel==='participants'?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', fontSize: 12, color: activePanel==='participants'?COLOR.accent:COLOR.muted, fontFamily: 'inherit', transition: 'all 0.15s' }}
@@ -724,11 +682,12 @@ export function RoomPage() {
       <div className="meet-main">
         <div className={`meet-video ${showSidebar ? 'with-chat' : 'full'}`}>
           <LiveKitRoom token={token} serverUrl={livekitUrl} video={true} audio={true} onDisconnected={handleDisconnected}
-            style={{ width: '100%', height: '100%' }} data-lk-theme="default">
+            className="room-page__livekit" data-lk-theme="default">
             <MeetControls onLeave={handleLeave} togglePanel={togglePanel} activePanel={activePanel}
               handRaised={handRaised} setHandRaised={setHandRaised}
               showEmojiPicker={showEmojiPicker} setShowEmojiPicker={setShowEmojiPicker}
-              sendEmoji={sendEmoji} screenShareOn={screenShareOn} setScreenShareOn={setScreenShareOn} />
+              sendEmoji={sendEmoji} screenShareOn={screenShareOn} setScreenShareOn={setScreenShareOn}
+              onMicToggle={handleMicToggle} />
             <ParticipantTracker onUpdate={handleParticipantUpdate} />
             <EmojiFly emojis={floatingEmojis} />
             <VideoArea isSharing={screenShareOn} isHandRaised={handRaised} />
@@ -736,14 +695,12 @@ export function RoomPage() {
           </LiveKitRoom>
         </div>
 
-        {activePanel === 'chat' && (
-          <aside className="meet-chat-panel"><ChatWindow
-            roomId={roomId}
-            visible={true}
-            onToggle={() => setActivePanel(null)}
-            wsSocket={wsSocket}
-          /></aside>
-        )}
+        <ChatWindow
+          roomId={roomId}
+          visible={activePanel === 'chat'}
+          onToggle={() => setActivePanel(null)}
+          wsSocket={wsSocket}
+        />
         {activePanel === 'participants' && (
           <aside className="meet-chat-panel"><ParticipantsPanel participants={participantsList} onClose={() => setActivePanel(null)} /></aside>
         )}

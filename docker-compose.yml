@@ -16,26 +16,6 @@ services:
       minio:
         condition: service_started
 
-  celery_worker:
-    build: ./backend
-    command: uv run celery -A app.infrastructure.celery.celery_app worker --loglevel=info
-    restart: unless-stopped
-    env_file: ./backend/.env.docker
-    depends_on:
-      tidb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  celery_beat:
-    build: ./backend
-    command: uv run celery -A app.infrastructure.celery.celery_app beat --loglevel=info
-    restart: unless-stopped
-    env_file: ./backend/.env.docker
-    depends_on:
-      redis:
-        condition: service_healthy
-
   tidb:
     image: pingcap/tidb:v8.5.0
     container_name: e_room_tidb
