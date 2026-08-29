@@ -13,7 +13,7 @@ from alembic import context
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Load all SQLModel table definitions before accessing metadata
-import app.model  # noqa: E402, F401
+import app.models  # noqa: E402, F401
 
 # Alembic Config object
 config = context.config
@@ -57,7 +57,7 @@ def run_migrations_online() -> None:
     from app.config import settings
 
     cfg = config.get_section(config.config_ini_section, {})
-    url = settings.database_url_sync or settings.database_url
+    url = settings.database_url
     if url:
         cfg["sqlalchemy.url"] = url
 

@@ -1,6 +1,7 @@
 services:
   api:
     build: ./backend
+    container_name: api
     command: uv run python -m app.server
     ports:
       - "8000:8000"
@@ -18,9 +19,51 @@ services:
       llama:
         condition: service_started
 
+  ai-worker:
+    build: ./backend
+    container_name: ai-worker
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=1 --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+      llama:
+        condition: service_started
+
+  ai-beat:
+    build: ./backend
+    container_name: ai-beat
+    command: uv run celery -A app.integration.celery.celery_app beat --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ai-observer:
+    build: ./backend
+    container_name: ai-observer
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=1 --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
   tidb:
     image: pingcap/tidb:v8.5.0
-    container_name: e_room_tidb
+    container_name: tidb
     restart: unless-stopped
     ports:
       - "4000:4000"
@@ -39,7 +82,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: e_room_redis
+    container_name: redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -53,6 +96,7 @@ services:
 
   minio:
     image: minio/minio:latest
+    container_name: minio
     command: server /data --console-address ":9001"
     restart: unless-stopped
     environment:
@@ -66,6 +110,7 @@ services:
 
   livekit:
     image: livekit/livekit-server:latest
+    container_name: livekit
     command: --config /etc/livekit.yaml --node-ip 192.168.1.9
     restart: unless-stopped
     environment:
@@ -74,35 +119,38 @@ services:
       - "7880:7880"
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
+      - "3478:3478/udp"
+      - "5349:5349"
     volumes:
-      - ./livekit.yaml:/etc/livekit.yaml:ro
+      - ./backend/livekit.yaml:/etc/livekit.yaml:ro
     depends_on:
       redis:
         condition: service_healthy
 
   llama:
     image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: llama
     entrypoint: ["/app/llama-server"]
-    command: ["-hf", "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL", "--host", "0.0.0.0", "--port", "8012", "-c", "4096"]
+    command: ["-hf", "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL", "--host", "0.0.0.0", "--port", "8012", "-c", "8192"]
     restart: unless-stopped
     ports:
       - "8012:8012"
     volumes:
       - llama_data:/root/.cache/huggingface
 
-  coturn:
-    image: coturn/coturn:latest
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
     restart: unless-stopped
     ports:
-      - "3478:3478"
-      - "3478:3478/udp"
+      - "6333:6333"
+      - "6334:6334"
     volumes:
-      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
-    command: ["-c", "/etc/coturn/turnserver.conf"]
+      - qdrant_data:/qdrant/storage
 
   frontend:
     build: ./frontend
-    container_name: e_room_frontend
+    container_name: frontend
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -112,20 +160,9 @@ services:
     stdin_open: true
     tty: true
 
-  nginx:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - api
-      - frontend
-
 volumes:
   redis_data:
   minio_data:
   tidb_data:
   llama_data:
-  # postgres_data:
+  qdrant_data:

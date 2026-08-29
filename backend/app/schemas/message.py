@@ -1,26 +1,25 @@
-from __future__ import annotations
+from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from app.model.common import MessageType
-
-
-class MessageCreateRequest(BaseModel):
-    room_id: str
-    content: str = Field(min_length=1)
+from app.models import MessageRole
 
 
-class TranscriptCreateRequest(BaseModel):
-    room_id: str
-    user_id: str
-    content: str = Field(min_length=1)
+class MessageCreateSchema(BaseModel):
+    room_id: int
+    text: str
+    role: Optional[MessageRole] = MessageRole.USER
+    meta_data: Optional[str] = None
 
 
 class MessageResponse(BaseModel):
-    id: str
-    room_id: str
-    user_id: str | None = None
-    content: str
-    message_type: MessageType
-    payload: dict = Field(default_factory=dict)
-    created_at: str | None = None
+    model_config = {"from_attributes": True}
+
+    id: int
+    room_id: int
+    user_id: Optional[int] = None
+    role: MessageRole
+    text: str
+    meta_data: Optional[str] = None
+    created_at: Optional[datetime] = None

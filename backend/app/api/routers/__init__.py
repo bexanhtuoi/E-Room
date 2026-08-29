@@ -1,14 +1,15 @@
-from app.api.routers.audio import router as audio
 from app.api.routers.auth import router as auth
-from app.api.routers.conversation import router as conversation
-from app.api.routers.health import router as health
-from app.api.routers.infra import router as infra
-from app.api.routers.leaderboard import router as leaderboard
+from app.api.routers.document import router as document
 from app.api.routers.message import router as message
-from app.api.routers.notes import router as notes
 from app.api.routers.notification import router as notification
 from app.api.routers.room import router as room
-from app.api.routers.series import router as series
-from app.api.routers.subscription import router as subscription
-from app.api.routers.tag import router as tag
 from app.api.routers.user import router as user
+
+__all__ = [
+    "auth",
+    "document",
+    "message",
+    "notification",
+    "room",
+    "user",
+]

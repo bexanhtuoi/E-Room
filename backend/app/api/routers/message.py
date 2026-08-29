@@ -1,59 +1,104 @@
-from __future__ import annotations
+﻿from typing import List, Optional
 
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlmodel import Session
 
-from app.api.dependencies import get_db_session, get_pagination_params
-from app.schemas import MessageCreateRequest, MessageResponse, TranscriptCreateRequest
-from app.service.message import MessageService
+from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
+from app.ai.tasks import enqueue_ai_job, mark_room_activity
+from app.database import get_session
+from app.models import MessageRole
+from app.schemas import MessageCreateSchema, MessageResponse
+from app.services import message_crud
 
 router = APIRouter()
 
 
-def message_to_response(message) -> MessageResponse:
-    if isinstance(message.created_at, str):
-        created_at = message.created_at
-    else:
-        created_at = message.created_at.isoformat() if message.created_at else None
-    return MessageResponse(
-        id=str(message.id),
-        room_id=str(message.room_id),
-        user_id=str(message.user_id) if message.user_id else None,
-        content=message.content,
-        message_type=message.message_type,
-        payload=message.payload,
-        created_at=created_at,
-    )
-
-
-@router.get("/", response_model=list[MessageResponse])
-async def list_messages(pagination: tuple[int, int] = Depends(get_pagination_params), session: Session = Depends(get_db_session)) -> list[MessageResponse]:
-    message_service = MessageService(session)
+@router.get("/", response_model=List[MessageResponse])
+def get_messages(
+    room_id: Optional[int] = Query(None, description="Filter messages by room_id"),
+    user_id: Optional[int] = Query(None, description="Filter messages by user_id"),
+    role: Optional[str] = Query(None, description="Filter messages by role (user/ai)"),
+    db: Session = Depends(get_session),
+    pagination: tuple[int, int] = Depends(get_pagination_params),
+) -> List[MessageResponse]:
     skip, limit = pagination
-    messages = message_service.list_all(skip=skip, limit=limit)
-    return [message_to_response(m) for m in messages]
+
+    filter_kwargs = {}
+    if room_id is not None:
+        filter_kwargs["room_id"] = room_id
+    if user_id is not None:
+        filter_kwargs["user_id"] = user_id
+    if role is not None:
+        filter_kwargs["role"] = role
+
+    messages = message_crud.get_many(db, skip=skip, limit=limit, **filter_kwargs)
+    return messages
 
 
-@router.get("/rooms/{room_id}", response_model=list[MessageResponse])
-async def list_room_messages(room_id: UUID, session: Session = Depends(get_db_session), limit: int = Query(200, ge=1, le=200)) -> list[MessageResponse]:
-    message_service = MessageService(session)
-    messages = message_service.list_room_messages(room_id, limit=limit)
-    return [message_to_response(m) for m in messages]
+@router.get("/count")
+def count_messages(
+    room_id: Optional[int] = Query(None, description="Filter count by room_id"),
+    user_id: Optional[int] = Query(None, description="Filter count by user_id"),
+    role: Optional[str] = Query(None, description="Filter count by role"),
+    db: Session = Depends(get_session),
+) -> dict:
+    filter_kwargs = {}
+    if room_id is not None:
+        filter_kwargs["room_id"] = room_id
+    if user_id is not None:
+        filter_kwargs["user_id"] = user_id
+    if role is not None:
+        filter_kwargs["role"] = role
+
+    return {"count": message_crud.count(db, **filter_kwargs)}
+
+
+@router.get("/{message_id}", response_model=MessageResponse)
+def get_message(message_id: int, db: Session = Depends(get_session)) -> MessageResponse:
+    db_message = message_crud.get_one(db, id=message_id)
+    if not db_message:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    return db_message
 
 
 @router.post("/", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def create_message(payload: MessageCreateRequest, session: Session = Depends(get_db_session)) -> MessageResponse:
-    message_service = MessageService(session)
-    message = message_service.create_transcript_message(UUID(payload.room_id), None, payload.content)
-    message.message_type = message.message_type.TEXT
-    saved_message = message_service.save(message)
-    return message_to_response(saved_message)
+def create_message(
+    message_in: MessageCreateSchema,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> MessageResponse:
+    obj_in_data = message_in.model_dump()
+    obj_in_data["user_id"] = request.state.current_user.id
+    obj_in_data["role"] = MessageRole.USER
+    new_message = message_crud.create(db, obj_in=obj_in_data)
+
+    mark_room_activity(message_in.room_id)
+    if message_in.text.lstrip().lower().startswith("@ai"):
+        query = message_in.text.lstrip()[3:].strip()
+        if query:
+            enqueue_ai_job(
+                message_in.room_id,
+                "answer",
+                query,
+                new_message.id,
+            )
+
+    return new_message
 
 
-@router.post("/transcripts", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def create_transcript(payload: TranscriptCreateRequest, session: Session = Depends(get_db_session)) -> MessageResponse:
-    message_service = MessageService(session)
-    message = message_service.create_transcript_message(UUID(payload.room_id), UUID(payload.user_id), payload.content)
-    return message_to_response(message)
+@router.delete("/{message_id}", response_model=MessageResponse)
+def delete_message(
+    message_id: int,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> MessageResponse:
+    db_message = message_crud.get_one(db, id=message_id)
+    if not db_message:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+    authorize_owner(db_message.user_id, request)
+
+    deleted_message = message_crud.delete(db, db_obj=db_message)
+    return deleted_message

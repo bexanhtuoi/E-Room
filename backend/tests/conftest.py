@@ -1,115 +1,85 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
 
-from app.api.dependencies import get_db_session
-from app.api.routers.infra import rate_limit_login
-from app.main import app
-from app.security import hash_password
+os.environ["DATABASE_URL"] = "sqlite:///./test_eroom.db"
+os.environ["SECRET_KEY"] = "test-secret-key-32-characters-minimum!"
+os.environ["LIVEKIT_API_KEY"] = "testkey"
+os.environ["LIVEKIT_API_SECRET"] = "test-secret-32-characters-long!!"
 
-TEST_DATABASE_URL = "sqlite:///./test_eroom.db"
-WEIGHT_DIR = Path(__file__).parent.parent / "app" / "weight"
+from app.main import app  # noqa: E402
+from app.security import hash_password  # noqa: E402
+
+PASSWORD = "Password123!"
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "e2e: End-to-end tests requiring all services")
-    config.addinivalue_line("markers", "slow: Tests taking >30s (model loads)")
-    config.addinivalue_line("markers", "requires_llm: Tests calling external LLM API")
-    config.addinivalue_line("markers", "requires_redis: Tests requiring Redis")
-    config.addinivalue_line("markers", "requires_db: Tests requiring database")
-
-
-@pytest.fixture(scope="session", autouse=True)
-def setup_env():
-    os.environ.setdefault("SUPERTONIC_CACHE_DIR", str(WEIGHT_DIR / "supertonic"))
+    config.addinivalue_line("markers", "requires_redis: Tests requiring a running Redis")
 
 
 @pytest.fixture(scope="session")
-def engine():
-    engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False}, echo=False)
-    SQLModel.metadata.create_all(engine)
-    yield engine
-    try:
-        os.remove("./test_eroom.db")
-    except OSError:
-        pass
-
-
-@pytest.fixture(scope="function")
-def db_session(engine):
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection)
-    try:
-        yield session
-    finally:
-        session.close()
-        if transaction.is_active:
-            transaction.rollback()
-        connection.close()
-
-
-@pytest.fixture
-def client(db_session):
-    def override_get_session():
-        yield db_session
-
-    async def override_rate_limit(request=None):
-        pass
-
-    app.dependency_overrides[get_db_session] = override_get_session
-    app.dependency_overrides[rate_limit_login] = override_rate_limit
+def client() -> TestClient:
     with TestClient(app) as test_client:
         yield test_client
-    app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def test_user(db_session):
-    from app.model.user import User
+def unique_email() -> str:
+    return f"user_{uuid.uuid4().hex[:8]}@test.com"
 
-    user = User(
-        email="test@example.com",
-        password_hash=hash_password("password123"),
-        first_name="Test",
-        last_name="User",
-        display_name="Test User",
-        english_level="B1",
-        learning_goal="Improve speaking",
-        profile_completed=True,
+
+def register(client: TestClient, email: str, full_name: str = "Test User") -> dict:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"full_name": full_name, "email": email, "password": PASSWORD},
     )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return {"id": str(user.id), "email": user.email, "password": "password123", "display_name": user.display_name}
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def login(client: TestClient, email: str) -> None:
+    response = client.post("/api/v1/auth/login", data={"username": email, "password": PASSWORD})
+    assert response.status_code == 200, response.text
 
 
 @pytest.fixture
-def auth_headers(client, test_user):
-    response = client.post("/api/v1/auth/login", json={"email": test_user["email"], "password": test_user["password"]})
-    if response.status_code == 200:
-        token = response.json()["access_token"]
-        return {"Authorization": f"Bearer {token}"}
-    return {"Authorization": "Bearer fake-token"}
+def alice(client: TestClient) -> dict:
+    user = register(client, unique_email(), "Alice Tester")
+    login(client, user["email"])
+    return user
+
+
+def make_user(client: TestClient, full_name: str = "Bob Tester") -> dict:
+    user = register(client, unique_email(), full_name)
+    return user
+
+
+def switch_to(client: TestClient, user: dict) -> None:
+    login(client, user["email"])
 
 
 @pytest.fixture
-def mock_redis():
-    with patch("app.infrastructure.redis_client.RedisCRUD") as mock:
-        mock_instance = MagicMock()
-        mock.return_value = mock_instance
-        yield mock_instance
+def ai_mocks():
+    with (
+        patch("app.api.routers.message.enqueue_ai_job") as message_enqueue,
+        patch("app.api.routers.room.enqueue_room_observer") as observer_enqueue,
+        patch("app.ai.tasks.enqueue_ai_job") as tasks_enqueue,
+    ):
+        message_enqueue.return_value = "mock-task-id"
+        tasks_enqueue.return_value = "mock-task-id"
+        yield {
+            "message_enqueue": message_enqueue,
+            "observer_enqueue": observer_enqueue,
+            "tasks_enqueue": tasks_enqueue,
+        }
 
 
-@pytest.fixture
-def mock_livekit():
-    with patch("app.infrastructure.livekit.LiveKitService") as mock:
-        mock_instance = MagicMock()
-        mock.return_value = mock_instance
-        yield mock_instance
+@pytest.fixture(scope="session")
+def redis_available() -> bool:
+    from app.integration.redis import ping
+
+    return ping()

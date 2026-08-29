@@ -1,51 +1,35 @@
-from __future__ import annotations
-
-import hashlib
-from datetime import UTC, datetime, timedelta
-from typing import Any
-from uuid import uuid4
+from datetime import timedelta
+from typing import Any, Optional, Union
 
 import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from passlib.context import CryptContext
 
 from app.config import settings
+from app.utils.datetime_utils import now_utc
 
-password_hasher = PasswordHasher()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    return password_hasher.hash(password)
+    return pwd_context.hash(password)
 
 
-def verify_password(password: str, hashed_password: str | None) -> bool:
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
     if not hashed_password:
         return False
-    try:
-        return password_hasher.verify(hashed_password, password)
-    except VerifyMismatchError:
-        return False
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+def create_access_token(data: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    if expires_delta:
+        expire = now_utc() + expires_delta
+    else:
+        expire = now_utc() + timedelta(minutes=settings.access_token_expires_minutes)
+    to_encode = {"exp": expire, "sub": str(data), "type": "access"}
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
-    now = datetime.now(UTC)
-    expires_at = now + (expires_delta or timedelta(days=settings.access_token_expires_days))
-    payload = {"sub": subject, "exp": expires_at, "iat": now, "type": "access", "jti": str(uuid4())}
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
-
-
-def create_refresh_token(subject: str, expires_delta: timedelta | None = None) -> str:
-    now = datetime.now(UTC)
-    expires_at = now + (expires_delta or timedelta(days=settings.refresh_token_expires_days))
-    payload = {"sub": subject, "exp": expires_at, "iat": now, "type": "refresh", "jti": str(uuid4())}
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
-
-
-def decode_token(token: str) -> dict[str, Any] | None:
+def decode_token(token: str) -> Optional[dict[str, Any]]:
     try:
         return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except jwt.PyJWTError:

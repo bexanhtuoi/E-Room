@@ -2,56 +2,41 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    hash_password,
-    hash_token,
-    verify_password,
-)
-
-RAW_PW = "MySecretPass123!"
-HASHED = hash_password(RAW_PW)
+from app.security import create_access_token, decode_token, hash_password, verify_password
 
 
-class TestPassword:
-    def test_hash_and_verify(self):
-        assert verify_password(RAW_PW, HASHED) is True
+class TestPasswordHashing:
+    def test_hash_and_verify_roundtrip(self):
+        hashed = hash_password("Password123!")
+        assert hashed != "Password123!"
+        assert verify_password("Password123!", hashed) is True
 
     def test_verify_wrong_password(self):
-        assert verify_password("wrong", HASHED) is False
+        hashed = hash_password("Password123!")
+        assert verify_password("WrongPassword!", hashed) is False
 
-    def test_verify_no_hash(self):
-        assert verify_password("pass", None) is False
+    def test_verify_empty_hash_returns_false(self):
+        assert verify_password("Password123!", None) is False
+        assert verify_password("Password123!", "") is False
 
-    def test_hash_token(self):
-        h = hash_token("my-token")
-        assert h != "my-token"
-        assert len(h) == 64
+    def test_same_password_produces_different_hashes(self):
+        first = hash_password("Password123!")
+        second = hash_password("Password123!")
+        assert first != second
 
 
-class TestJWT:
-    def test_create_and_decode_token(self):
-        token = create_access_token(subject="user-123")
+class TestAccessToken:
+    def test_token_roundtrip_contains_sub_and_type(self):
+        token = create_access_token(42)
         payload = decode_token(token)
-        assert payload is not None
-        assert payload["sub"] == "user-123"
-
-    def test_expired_token_returns_none(self):
-        token = create_access_token(subject="user", expires_delta=timedelta(seconds=-1))
-        payload = decode_token(token)
-        assert payload is None
-
-    def test_refresh_token(self):
-        token = create_refresh_token(subject="user-1")
-        payload = decode_token(token)
-        assert payload is not None
-        assert payload["type"] == "refresh"
-
-    def test_token_has_claims(self):
-        token = create_access_token(subject="user-1")
-        payload = decode_token(token)
-        assert "jti" in payload
+        assert payload["sub"] == "42"
+        assert payload["type"] == "access"
         assert "exp" in payload
-        assert "iat" in payload
+
+    def test_custom_expiry_is_respected(self):
+        token = create_access_token(7, expires_delta=timedelta(hours=3))
+        payload = decode_token(token)
+        assert payload["sub"] == "7"
+
+    def test_invalid_token_returns_none(self):
+        assert decode_token("not-a-jwt") is None

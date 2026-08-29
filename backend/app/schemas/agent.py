@@ -1,43 +1,63 @@
-from __future__ import annotations
+from enum import Enum
+from typing import List, Literal, Optional
 
-from typing import Any
-
-from pydantic import BaseModel
-
-from app.model.common import AgentLevel
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class AgentSelection(BaseModel):
-    name: str
-    mode: str = "auto"
+class AgentEnum(str, Enum):
+    auto = "auto"
+    knowledge = "knowledge"
 
 
-class AgentStatusResponse(BaseModel):
-    room_id: str
-    level: AgentLevel
-    heartbeat_quota: int
-    expert_enabled: bool
-    tts_enabled: bool
+class RagMetadata(BaseModel):
+    source: Optional[str] = None
+    location: Optional[str] = None
+    tag: Optional[str] = None
 
 
-class PronunciationScores(BaseModel):
-    overall: float
-    accuracy: float
-    gop: float
-    fluency: float
-    prosody: float
+class ShortTermMemoryMessage(BaseModel):
+    summary_message: Optional[str] = None
+    metadata: Optional[List[RagMetadata]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data):
+        if isinstance(data, dict):
+            if "summary_message" not in data and "summary" in data:
+                data["summary_message"] = data.pop("summary")
+        return data
 
 
-class PhonemeError(BaseModel):
-    expected: str
-    actual: str
-    word: str
-    confidence: float
+class KnowledgeAgentOutput(BaseModel):
+    text: str
+    image_url: Optional[List[str]] = None
 
 
-class CorrectedResult(BaseModel):
-    corrected: str
-    errors: list[dict[str, Any]]
-    score: int
-    pronunciation_feedback: str
-    tts_text: str
+class LongTermMemoryMessage(BaseModel):
+    store: bool = False
+    memory: Optional[str] = None
+
+    @field_validator("memory", mode="before")
+    @classmethod
+    def normalize_null_strings(cls, v):
+        if isinstance(v, str):
+            if v.strip().lower() in {"none", "null", "None", "NULL", "", "n/a", "na", " "}:
+                return None
+        return v
+
+
+class ChatMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str = Field(max_length=32768)
+
+
+class GradeDocuments(BaseModel):
+    binary_score: bool = Field(description="true if relevant, false if not relevant")
+
+
+class ChatCompletionRequest(BaseModel):
+    messages: List[ChatMessage]
+    model: Optional[str] = None
+    stream: bool = False
+    conversation_id: int
+    tool_choices: list[str] = []

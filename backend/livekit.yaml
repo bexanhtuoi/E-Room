@@ -1,0 +1,27 @@
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+
+redis:
+  address: redis:6379
+
+keys:
+  devkey: dev-secret-change-me-32-characters
+
+webhook:
+  api_key: devkey
+  urls:
+    - http://api:8000/api/v1/rooms/livekit/webhook
+
+# TURN tich hop: LiveKit tu cap thong tin TURN cho client qua signaling
+turn:
+  enabled: true
+  # TURN UDP chay duoc ngay local, khong can domain/cert
+  udp_port: 3478
+  # TLS TURN chi dung khi co domain cong khai tro ve server (production):
+  # domain: turn.your-domain.com
+  # tls_port: 5349
+  # external_tls: true

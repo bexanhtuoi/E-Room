@@ -1,138 +1,60 @@
 from __future__ import annotations
 
-
-class TestUnicodeEdgeCases:
-    def test_vietnamese_display_name(self, client):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"vn{unique}@test.com",
-                "password": "Pass123!",
-                "first_name": "Nguyễn",
-                "last_name": "Văn A",
-            },
-        )
-        assert response.status_code == 201
-        assert response.json()["display_name"] == "Nguyễn Văn A"
-
-    def test_vietnamese_topic(self, client, auth_headers):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/rooms",
-            json={
-                "name": f"room-{unique}",
-                "topic": "Tiếng Anh cho người đi làm",
-                "language": "en",
-            },
-            headers=auth_headers,
-        )
-        assert response.status_code in (200, 201)
-
-    def test_emoji_in_name(self, client):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"emoji{unique}@test.com",
-                "password": "Pass123!",
-                "first_name": "😀🎉🔥",
-                "last_name": "User",
-            },
-        )
-        assert response.status_code == 201
-
-    def test_arabic_chinese_mixed(self, client, auth_headers):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/rooms",
-            json={
-                "name": f"room-{unique}",
-                "topic": "Hello 你好 مرحبا",
-                "language": "en",
-            },
-            headers=auth_headers,
-        )
-        assert response.status_code in (200, 201)
+import pytest
+from fastapi.testclient import TestClient
 
 
-class TestInputValidation:
-    def test_empty_json_body(self, client):
-        response = client.post("/api/v1/auth/login", json={})
+@pytest.mark.parametrize(
+    "query",
+    ["?skip=-1", "?limit=0", "?limit=101"],
+)
+class TestPaginationValidation:
+    def test_invalid_pagination_returns_422(self, client: TestClient, query: str):
+        assert client.get(f"/api/v1/users/{query}").status_code == 422
+        assert client.get(f"/api/v1/rooms/{query}").status_code == 422
+        assert client.get(f"/api/v1/messages/{query}").status_code == 422
+        assert client.get(f"/api/v1/notifications/{query}").status_code == 422
+        assert client.get(f"/api/v1/documents/{query}").status_code == 422
+
+
+class TestUnauthorizedAccess:
+    def test_protected_endpoints_require_auth(self, alice: dict):
+        from app.main import app
+
+        raw = TestClient(app)
+
+        assert raw.get("/api/v1/users/me").status_code == 403
+        assert raw.post("/api/v1/rooms/", json={"name": "anon-room"}).status_code == 403
+        assert raw.post("/api/v1/messages/", json={"room_id": 1, "text": "x"}).status_code == 403
+        assert raw.post("/api/v1/documents/", json={"file_name": "a", "file_type": "pdf", "file_path": "p"}).status_code == 403
+        assert raw.get("/api/v1/notifications/").status_code == 403
+        assert raw.get("/api/v1/rooms/1/participants").status_code == 403
+        assert raw.post("/api/v1/rooms/1/token").status_code == 403
+
+
+class TestUnknownResources:
+    def test_unknown_room_returns_404(self, client: TestClient, alice: dict):
+        assert client.get("/api/v1/rooms/999999").status_code == 404
+        assert client.patch("/api/v1/rooms/999999", json={"topic": "x"}).status_code == 404
+
+    def test_unknown_user_returns_404(self, client: TestClient, alice: dict):
+        assert client.get("/api/v1/users/999999").status_code == 404
+
+    def test_unknown_message_and_document_return_404(self, client: TestClient, alice: dict):
+        assert client.get("/api/v1/messages/999999").status_code == 404
+        assert client.get("/api/v1/documents/999999").status_code == 404
+
+
+class TestSchemaValidation:
+    def test_register_missing_fields_returns_422(self, client: TestClient):
+        response = client.post("/api/v1/auth/register", json={"email": "half@test.com"})
         assert response.status_code == 422
 
-    def test_null_values(self, client):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"null{unique}@test.com",
-                "password": "Pass123!",
-                "first_name": None,
-                "last_name": None,
-            },
-        )
+    def test_create_message_missing_text_returns_422(self, client: TestClient, alice: dict):
+        response = client.post("/api/v1/messages/", json={"room_id": 1})
         assert response.status_code == 422
 
-    def test_extra_fields(self, client):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"extra{unique}@test.com",
-                "password": "Pass123!",
-                "first_name": "Test",
-                "last_name": "User",
-                "role": "admin",
-            },
-        )
-        assert response.status_code == 201
-
-    def test_xss_in_display_name(self, client):
-        import uuid
-
-        unique = uuid.uuid4().hex[:8]
-        response = client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"xss{unique}@test.com",
-                "password": "Pass123!",
-                "first_name": "<script>alert('xss')</script>",
-                "last_name": "User",
-            },
-        )
-        assert response.status_code == 201
-
-
-class TestHttpMethods:
-    def test_wrong_content_type(self, client):
-        response = client.post("/api/v1/auth/login", content=b"email=test&password=pass", headers={"Content-Type": "application/x-www-form-urlencoded"})
+    def test_notification_patch_requires_is_read(self, client: TestClient, alice: dict):
+        created = client.post("/api/v1/notifications/", json={"title": "t"}).json()
+        response = client.patch(f"/api/v1/notifications/{created['id']}", json={})
         assert response.status_code == 422
-
-    def test_unsupported_method(self, client):
-        response = client.put("/api/v1/auth/login", json={"email": "test@test.com", "password": "longenough"})
-        assert response.status_code == 405
-
-
-class TestConcurrencySimulation:
-    def test_rapid_registration_same_email(self, client):
-        import uuid
-
-        email = f"rapid{uuid.uuid4().hex[:8]}@test.com"
-        payload = {"email": email, "password": "Pass123!", "first_name": "Test", "last_name": "User"}
-        r1 = client.post("/api/v1/auth/register", json=payload)
-        r2 = client.post("/api/v1/auth/register", json=payload)
-        assert r1.status_code == 201
-        assert r2.status_code == 409
