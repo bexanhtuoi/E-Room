@@ -1,243 +1,104 @@
-# E-Room
+# E-Room `2.0.0`
 
-**E-Room** là nền tảng luyện nói tiếng Anh real-time với AI, hỗ trợ video call, đánh giá phát âm, và trợ lý AI thông minh. Người học có thể tham gia phòng thảo luận theo chủ đề, nhận phản hồi phát âm chi tiết theo từng từ, và cải thiện kỹ năng nói qua các buổi học có cấu trúc — tất cả đều chạy on-premise.
+**E-Room** là nền tảng luyện nói tiếng Anh theo nhóm nhỏ (tối đa 4 người/phòng) với video call real-time, transcript live từng người nói và trợ lý AI `@ai` streaming cả thinking lẫn câu trả lời. Toàn bộ AI chạy local (llama.cpp), dữ liệu ở on-premise.
 
-## Techstack
+## Tính năng chính
 
-| Layer | Technology | Purpose |
+- **Video rooms real-time** — LiveKit WebRTC, tối đa 4 seats, mic/cam/share màn hình, hand-raise, emoji reactions.
+- **Live transcript từng user** — worker nghe audio mỗi người, VAD cắt câu, faster-whisper (hoặc cloud STT) chuyển thành chữ, hiển thị kèm confidence badge.
+- **Trợ lý AI `@ai`** — mention `@ai` trong chat (hoặc nói "@ai ..." vào mic) để hỏi; đáp án stream từng từ qua LiveKit data channel, kèm thinking của model (reasoning) và quote lại câu hỏi gốc.
+- **RAG tài liệu + web search** — agent tự tra tài liệu upload (Qdrant vector store + reranker) và Tavily web search khi cần, stream thinking ("Searching documents…") trước đáp án.
+- **Heartbeat** — phòng đang live mà im lặng quá lâu sẽ được AI gợi chuyện bằng 1 câu hỏi.
+- **Vòng đời phòng 3 trạng thái** — `open` (trống) → `live` (có người) → `ended` (chết). Hết người thì về open, bỏ hoang 24h mới ended.
+- **Auth** — đăng ký/đăng nhập + Google OAuth, session cookie 7 ngày.
+- **Trang public** — Home/Pricing/Blog/Contact, Rooms (live trước → open sau → ended cuối, window 10 + infinite scroll), Profile, Onboarding.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite 6, react-router-dom 7, TanStack Query 5, LiveKit components-react 2 + livekit-client 2, i18next, Zustand |
+| Backend | Python 3.13, FastAPI, SQLModel, Uvicorn, Alembic migrations |
+| AI | LangChain 1.x + LangGraph (agent), llama.cpp server (Gemma text gen + Qwen3 embedding), faster-whisper STT, Qwen3 reranker, Tavily search |
+| Realtime | LiveKit (WebRTC video/audio/data channel) |
+| Jobs | Celery (ai, ai_observer, ai_transcriber queues) + beat, Redis |
+| Data | TiDB (MySQL-compatible), Qdrant (vectors), MinIO (S3 files) |
+| Auth | JWT cookie (HttpOnly) + Google OAuth |
+| Infra | Docker Compose (12 services), `uv` (Python), npm (Node) |
+
+## Luồng AI trong phòng
+
+```
+Mic/user ──▶ LiveKit room ──▶ ai-transcriber worker ──▶ VAD ──▶ STT ──▶ transcript (chat + DB)
+                                                                     │ "@ai ..." ──▶ enqueue job
+                                                                                          │
+Mic/user ◀── LiveKit data ──◀ stream từng từ + thinking ◀── agent (tools → thinking → tokens)
+                                                                                          │
+                                                                                   └──▶ lưu DB (poll hiển thị)
+```
+
+- Worker `ai-transcriber`/`ai-observer` join phòng như participant `ai_*` nhưng **không chiếm seat, không hiển thị** (webhook bỏ qua `ai_*`, frontend lọc).
+- Chat gõ `@ai` hoặc nói "@ai ..." đều trigger cùng 1 pipeline.
+
+## Vòng đời phòng
+
+| Status | Label UI | Nghĩa |
 |---|---|---|
-| **Frontend** | React 19, Bootstrap 5, react-router-dom 7, TanStack Query 5, Zustand 5 | UI, routing, state management, server state |
-| **Backend** | Python 3.13, FastAPI, Uvicorn | REST API, WebSocket, async workers |
-| **AI/ML** | LangChain, FunASR, Wav2Vec2, CMU Dictionary, Gemma 4 E2B, Qwen3 Embedding | ASR, phoneme alignment, pronunciation scoring, RAG embeddings |
-| **Orchestration** | Celery, Redis PubSub | Background tasks, event bus, scheduling |
-| **Database** | TiDB (local Docker, MySQL-compatible) | Relational storage, vector embeddings |
-| **Real-time** | LiveKit (WebRTC), WebSocket | Video rooms, audio streaming, chat |
-| **Auth** | JWT (PyJWT), Argon2, OAuth2 | Authentication & authorization |
-| **File Storage** | MinIO (S3-compatible) | File uploads, TTS audio storage |
-| **Payment** | Stripe | Subscription (free / pro / pro_plus) |
-| **Container** | Docker Compose | 9-service orchestration |
-| **I18n** | i18next (en + vi) | Full bilingual UI |
-| **Package Mgmt** | uv (Python), npm (Node.js) | Dependency management |
+| `idle` | Open | Phòng trống, vào được ngay |
+| `active` | Live now | Đang có người bên trong |
+| `ended` | Ended | Phòng chết (ẩn bớt, vẫn mở lại được qua link) |
 
-## Project Structure
+Người cuối out → về `open`. Trống quá `ROOM_EMPTY_END_SECONDS` (mặc định 24h) → `ended`.
+
+## Cấu trúc dự án
 
 ```
 E-Room/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routers/         # 14 FastAPI routers (auth, user, room, message, session, notes, series, subscription, tag, leaderboard, notification, infra, health, websocket)
-│   │   ├── agent/               # LLM agents (corrector, expert, heartbeat, query router) + LangChain tool
-│   │   ├── model/               # SQLModel ORM entities (User, Room, Message, Session, Subscription, v.v.)
-│   │   ├── schemas/             # Pydantic request/response schemas
-│   │   ├── service/             # Business logic (CRUD, auth, room state, heartbeat, token store)
-│   │   ├── rag/                 # RAG pipeline (Nomic embeddings, TiDB vector store, chunking, retrieval)
-│   │   ├── infrastructure/      # Celery workers, Redis, MinIO, LiveKit, audio pipeline (Whisper, Wav2Vec2)
-│   │   ├── ws/                  # WebSocket handlers (chat, audio streaming, VAD)
-│   │   ├── utils/               # Helpers (datetime, retry, validation, text normalization)
-│   │ ├── seed/                # Seeder (10 default rooms, 55 tags)
-│   │   ├── config.py            # Pydantic-settings configuration
-│   │   ├── database.py          # SQLModel engine & session
-│   │   ├── security.py          # JWT & Argon2 password utilities
-│   │   ├── log.py               # Logging configuration
-│   │   └── main.py              # FastAPI app entry point
-│   ├── alembic/                 # Database migrations
-│   ├── tests/                   # Test suite
-│   └── pyproject.toml           # Python dependencies (uv)
-│
-├── frontend/
-│   └── src/
-│       ├── api/                 # HTTP client with JWT auto-refresh
-│       ├── app/                 # Root layout, routing, auth/onboarding guards
-│       ├── components/          # UI primitives (Avatar, Badge, Card, Toast, Skeleton, Tag system)
-│       ├── context/             # ThemeContext (dark/light)
-│       ├── features/            # Feature modules (auth, chat, rooms, realtime, onboarding, sessions, notes, series, leaderboard, subscription, AI)
-│       ├── hooks/               # useAsyncResource
-│       ├── i18n/                # i18next config (en + vi, 600+ lines, 12 namespaces)
-│       ├── lib/                 # WebSocket, audio capture, constants, formatters, query client
-│       ├── stores/              # Zustand stores (agent, auth, room, subscription, tags)
-│       └── styles/              # CSS with dark/light theme via CSS variables (15 files)
-│
-├── scripts/
-│   ├── win.bat                  # One-click startup (Windows)
-│   ├── mac.sh                   # One-click startup (macOS)
-│   └── linux.sh                 # One-click startup (Linux)
-│
-├── docker-compose.yml           # 8 services: api, tidb, redis, minio, livekit, coturn, frontend, nginx
-├── nginx.conf                   # Non-SSL reverse proxy
-├── nginx-ssl.conf               # SSL reverse proxy with Let's Encrypt
-├── livekit.yaml                 # LiveKit WebRTC server config
-├── turnserver.conf              # coTURN STUN/TURN config
-└── dev.bat                      # Local development launcher (Windows)
+│   │   ├── ai/                # LLM agent (query/events/thinking), STT dispatcher,
+│   │   │                      # VAD, transcriber/observer workers, RAG retrieval,
+│   │   │                      # tools, prompts, celery tasks
+│   │   ├── api/routers/       # auth, google_auth, user, room, message,
+│   │   │                      # document, notification (+ infra/health)
+│   │   ├── integration/       # livekit token/webhook, redis, celery, minio
+│   │   ├── models/            # SQLModel: User, Room, Message, ...
+│   │   ├── schemas/           # Pydantic request/response + validation
+│   │   ├── services/          # CRUD repository (không business logic)
+│   │   ├── seeds/             # seed users/rooms/messages
+│   │   ├── config.py database.py security.py log.py main.py server.py
+│   ├── alembic/               # migrations (chạy `alembic upgrade head`)
+│   ├── tests/                 # unit / api / e2e / integration / security (pytest)
+│   ├── .env.example .env.docker
+│   └── pyproject.toml         # deps (uv)
+├── frontend/src/
+│   ├── api/                   # HTTP client (cookie auth)
+│   ├── app/                   # router, guards, pages (Home/Pricing/Blog/Contact/...)
+│   ├── features/              # rooms, chat (useRoomChat), auth, onboarding, ...
+│   ├── components/ data/ i18n/ lib/ stores/ styles/
+│   └── main.jsx
+├── scripts/                   # win.bat / mac.sh / linux.sh (chạy 1 lệnh)
+└── docker-compose.yml         # 12 services
 ```
 
-## Key Features
+## Services & ports
 
-- **Real-time Video/Audio Rooms** — LiveKit WebRTC rooms với chat, VAD (Voice Activity Detection), và audio streaming qua WebSocket.
-- **Pronunciation Assessment** — Pipeline 4 bước: Faster-Whisper ASR → Wav2Vec2 forced alignment → CMU Pronouncing Dictionary → Scorer (accuracy, GOP, fluency, prosody, composite).
-- **AI Pronunciation Correction** — LLM-based correction với phản hồi chi tiết (IPA, tongue/lip position, TTS text). Kích hoạt tự động khi điểm phát âm < 7/10.
-- **AI Expert** — Trả lời câu hỏi chuyên sâu kết hợp RAG (Nomic embeddings + TiDB vector store) + Brave web search + LLM answer.
-- **Heartbeat System** — AI sinh câu hỏi gợi chuyện định kỳ (45s) để duy trì hội thoại trong phòng.
-- **Matchmaking** — Thuật toán ghép cặp staged (initial → cross-tag → level-expand → AI room fallback) với Jaccard similarity + tier/level proximity.
-- **Session Notes** — Tự động tạo session note Markdown (summary, vocabulary, corrections, strengths, areas to improve) — Pro+ feature.
-- **Leaderboard** — Bảng xếp hạng tuần theo tag, tính điểm dựa trên thời gian nói + điểm trung bình.
-- **Subscription** — Stripe integration: free / pro / pro_plus tiers với quota management.
-- **Moderation** — NSFW/Spam pattern scanning (Celery beat, 10s interval).
-- **Dark/Light Theme** — Full theming via CSS variables (data-theme attribute).
-- **I18n** — Tiếng Anh và Tiếng Việt qua i18next.
-- **Role-Based Access** — User + ban system với strike tracking (3 strikes → 24h ban, 5 strikes → permanent).
-- **CORS + Rate Limiting** — Configurable CORS và Redis-based rate limiter (login, TTS).
-
-## Agent Workflow
-
-E-Room sử dụng **3 tác nhân AI độc lập** phối hợp qua Redis PubSub và Celery workers:
-
-### 1. Pronunciation Pipeline
-
-```
-  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-  │  WebSocket   │────▶│  AudioBuffer     │────▶│  VAD Detection  │
-  │  (PCM audio) │     │  (VAD buffering) │     │  (speech_end)   │
-  └─────────────┘     └──────────────────┘     └────────┬────────┘
-                                                         │
-                                                         ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │               PronunciationPipeline.assess()                  │
-  │  1. Faster-Whisper → ASR (text + segments)                   │
-  │  2. Wav2Vec2 Aligner → forced phoneme alignment              │
-  │  3. CMU Dictionary → lookup canonical phonemes per word      │
-  │  4. PronunciationScorer → accuracy(40%) + GOP(20%)           │
-  │     + fluency(25%) + prosody(15%) → composite score 0-10     │
-  └─────────────────────────┬────────────────────────────────────┘
-                            │
-              ┌─────────────┴─────────────┐
-              │                           │
-              ▼                           ▼
-       overall ≥ 7/10               overall < 7/10
-              │                           │
-              ▼                           ▼
-     ┌─────────────────┐       ┌─────────────────────────┐
-     │  Publish to     │       │  LLM Corrector Agent    │
-     │  Redis Channel  │       │  (semaphore=1, async)   │
-     │  "room:         │       │  → corrected text       │
-     │   transcript"   │       │  → errors list          │
-     └─────────────────┘       │  → pronunciation_feedback│
-                               │  → tts_text              │
-                               └────────────┬────────────┘
-                                            │
-                                            ▼
-                               ┌─────────────────────────┐
-                               │  Publish to Redis        │
-                               │  Channel "room:          │
-                               │   correction"            │
-                               └────────────┬────────────┘
-                                            │
-                                            ▼
-                               ┌─────────────────────────┐
-                               │  CeleryBridge → WebSocket│
-                               │  → Frontend (correction  │
-                               │    card + TTSPlayer)     │
-                               └─────────────────────────┘
-```
-
-### 2. AI Expert (RAG + Web Search)
-
-```
-  ┌─────────────┐     ┌────────────────────────────────────────────┐
-  │  WebSocket   │────▶│  answer_expert(question, room_id, tags)   │
-  │  "chat" msg  │     └────────────┬───────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    │                               │
-                    ▼                               ▼
-     ┌────────────────────────┐       ┌────────────────────────┐
-     │  RAG Retrieval         │       │  Brave Web Search      │
-     │  NomicEmbeddings →     │       │  (nếu có API key)      │
-     │  TiDB Vector Store     │       │  → top 3 web results   │
-     │  → top 5 passages      │       └────────────┬───────────┘
-     └────────────┬───────────┘                    │
-                  │                               │
-                  └───────────────┬───────────────┘
-                                  │
-                                  ▼
-                    ┌────────────────────────────┐
-                    │  LLM Answer Generation     │
-                    │  (ChatOpenAI, temp=0.5)    │
-                    │  → answer text + sources   │
-                    └────────────┬───────────────┘
-                                 │
-                                 ▼
-                    ┌────────────────────────────┐
-                    │  WebSocket → Frontend      │
-                    │  (ExpertResponse component) │
-                    └────────────────────────────┘
-```
-
-### 3. Heartbeat System (Conversation Starter)
-
-```
-  ┌─────────────┐     ┌──────────────────────────────────────────────┐
-  │  Celery Beat │────▶│  room_heartbeat_tick (every 45s)            │
-  │  scheduler   │     │  → query active rooms with participants     │
-  └─────────────┘     └────────────┬─────────────────────────────────┘
-                                    │
-                                    ▼
-                    ┌──────────────────────────────────────────────┐
-                    │  generate_heartbeat_question(room_id, topic) │
-                    │  → LLM (temp=0.7) với prompt đa dạng:       │
-                    │    Heartbeat 1: Icebreaker, light, fun       │
-                    │    Heartbeat 2: Thought-provoking, reflection │
-                    │    Heartbeat 3+: Challenging, speculative     │
-                    │  → {question, context, suggested_response}    │
-                    └────────────┬─────────────────────────────────┘
-                                 │
-                                 ▼
-                    ┌──────────────────────────────────────────────┐
-                    │  Redis PubSub → CeleryBridge → WebSocket     │
-                    │  → Frontend (HeartbeatMessage component)     │
-                    └──────────────────────────────────────────────┘
-```
-
-### 4. Background Pipeline (Celery Tasks)
-
-| Task | Schedule | Description |
+| Service | Port | Ghi chú |
 |---|---|---|
-| `matchmaking-heartbeat` | 5s | Jaccard matchmaking (initial → cross-tag → level → AI room) |
-| `room-moderation-scan` | 10s | NSFW/Spam regex scanning in active rooms |
-| `room-heartbeat-tick` | 45s | Generate conversation starters in active rooms |
-| `cleanup-expired-rooms` | 5min | Archive empty rooms older than 1h |
-| `cleanup-expired-tokens` | 1h | Delete expired JWT refresh tokens |
-| `weekly-leaderboard` | 1h | Compute leaderboard scores |
+| frontend (dev) | 3000 | Vite HMR |
+| api | 8000 | FastAPI + Swagger `/docs` |
+| livekit | 7880 | WebRTC (browser đổi host docker → localhost) |
+| llama (text gen) | 8012 | Gemma, OpenAI-compatible |
+| llama (embedding) | 8013 | Qwen3 Embedding |
+| qdrant | 6333 | Vector DB tài liệu |
+| tidb | 4000 | MySQL-compatible |
+| redis | 6379 | Queue + presence + heartbeat |
+| minio | 9000 | S3 files |
+| ai-worker / ai-observer / ai-transcriber / ai-beat | — | Celery (code bind-mount, restart là nạp) |
 
-All AI results are published to Redis PubSub channels (`room:transcript`, `room:correction`, `room:heartbeat`) and relayed to WebSocket clients via `CeleryBridge`.
+## Quick start
 
-## Problems & Solutions
-
-- **Pronunciation feedback complexity** — Giving word-level phonetic feedback requires ASR + phoneme alignment + dictionary lookup + scoring + LLM correction. → Built a 4-stage pipeline: Whisper → Wav2Vec2 → CMU → Scorer, with LLM post-correction only when score < 7/10, saving 90% of LLM calls.
-
-- **Real-time audio processing** — Streaming PCM audio over WebSocket requires VAD buffering, non-blocking pipeline, and concurrent user support. → `AudioBuffer` with sequence-based reassembly + per-user asyncio tasks + Celery offload for heavy inference.
-
-- **Multi-agent coordination** — Corrector, expert, heartbeat, moderation, and matchmaking must run concurrently without conflicts. → Redis PubSub as event bus + `CeleryBridge` as WebSocket relay; each agent subscribes to its own channel and publishes results asynchronously.
-
-- **Non-deterministic AI outputs** — LLM responses vary, making testing unreliable. → Structured output parsing (JSON mode) + fallback responses + retry decorators with exponential backoff.
-
-- **Cost & privacy** — Cloud AI services are expensive and raise data privacy concerns for voice data. → Local LLM inference via llama.cpp (Gemma 4 E2B port 8012 + Qwen3 Embedding port 8013) + on-premise FunASR + local MySQL (Docker) + local embeddings.
-
-- **Frontend complexity** — Video rooms, streaming chat, pronunciation cards, dark/light theme, and i18n must coexist. → Feature-based folder structure + Zustand stores + CSS variables + lazy-loaded routes with auth guards.
-
-## Quick Starts
-
-### Prerequisites
-
-- Python 3.13+ with `uv` package manager
-- Node.js 22+
-- Docker Desktop (Windows / macOS) or Docker Engine (Linux)
-- Local LLM server (llama.cpp) with two models:
-  - Gemma 4 E2B Q8_0 (text gen) — port **8012**, api_key `dev`
-  - Qwen3 Embedding 0.6B Q8_0 (embedding) — port **8013**, api_key `dev`
-
-### One-Click Scripts
-
-Start everything (infra containers + backend API + Celery workers + Frontend) with a single command:
+### 1 lệnh (khuyên dùng)
 
 | Platform | Command |
 |---|---|
@@ -245,171 +106,99 @@ Start everything (infra containers + backend API + Celery workers + Frontend) wi
 | macOS | `bash scripts/mac.sh` |
 | Linux | `bash scripts/linux.sh` |
 
-These scripts:
-1. Copy `.env.example` → `.env` nếu chưa tồn tại
-2. Spin up Docker containers (tidb, redis, minio, livekit, coturn)
-3. Install backend dependencies with `uv sync`
-4. Install frontend dependencies with `npm install`
-5. Start API server (port 8000), Celery worker, Celery beat, and Frontend (port 3000)
-6. Open `http://localhost:3000` in browser
-
-### Manual Setup
+### Thủ công
 
 ```bash
-# 1. Clone và copy env
-cd E-Room
-cp backend/.env.example backend/.env
+# 1. Env + infra
+cp backend/.env.example backend/.env   # sửa LLM_BASE_URL nếu cần
+docker compose up -d tidb redis minio livekit qdrant llama
 
-# 2. Sửa backend/.env — cấu hình LLM_BASE_URL trỏ đến llama.cpp
-#    LLM_BASE_URL=http://localhost:8012/v1 (Gemma 4 E2B)
-#    EMBEDDING_BASE_URL=http://localhost:8013/v1 (Qwen3 Embedding)
-
-# 3. Start infra services
-docker compose up -d tidb redis minio livekit coturn
-
-# 4. Start backend (API)
+# 2. Migrate DB
 cd backend
 uv sync
-uv run python -m app.server
+uv run alembic upgrade head
 
-# 5. Start frontend (terminal mới)
-cd frontend
+# 3. Backend API (terminal 1)
+uv run python -m app.server            # :8000
+
+# 4. Workers (mỗi worker 1 terminal)
+uv run celery -A app.integration.celery.celery_app worker --queues=ai --loglevel=INFO
+uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --loglevel=INFO
+uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --loglevel=INFO
+uv run celery -A app.integration.celery.celery_app beat --loglevel=INFO
+
+# 5. Frontend (terminal mới)
+cd ../frontend
 npm install
-npm run dev
+npm run dev                            # http://localhost:3000
 ```
 
-### Docker Compose (full stack)
+### Full Docker
 
 ```bash
 docker compose up --build
 ```
 
-This builds and starts all 10 services. No local Python or Node.js needed.
+## Biến môi trường chính
 
-### Environment Variables
+Xem đầy đủ ở `backend/.env.example`. Quan trọng nhất:
 
-Xem `backend/.env.example` cho danh sách đầy đủ. Các biến quan trọng:
-
-| Variable | Default | Description |
+| Variable | Default | Mô tả |
 |---|---|---|
-| `LLM_BASE_URL` | `http://localhost:8012/v1` | llama.cpp text gen endpoint (Gemma 4 E2B) |
-| `LLM_MODEL` | `gemma-4-E2B-it` | Model name |
-| `LLM_API_KEY` | `dev` | API key for llama.cpp |
-| `EMBEDDING_BASE_URL` | `http://localhost:8013/v1` | llama.cpp embedding endpoint (Qwen3) |
-| `EMBEDDING_MODEL` | `Qwen3-Embedding-0.6B` | Embedding model name |
-| `LIVEKIT_URL` | `ws://localhost:7880` | WebRTC server URL |
-| `STRIPE_SECRET_KEY` | — | Stripe payment processing |
+| `LLM_BASE_URL` | `http://localhost:8012/v1` | llama.cpp text gen |
+| `LLM_MODEL` | `gemma-4-E2B-it` | Model chat |
+| `EMBEDDING_BASE_URL` | `http://localhost:8013/v1` | llama.cpp embedding |
+| `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector DB (trong docker: `qdrant`) |
+| `LIVEKIT_URL` | `ws://localhost:7880` | WebRTC (trong docker: `ws://livekit:7880`) |
+| `ROOM_EMPTY_END_SECONDS` | `86400` | Phòng trống bao lâu thì ended |
+| `AI_TIMEOUT_SECONDS` | `300` | Trần 1 job AI |
+| `TAVILY_API_KEY` | — | Web search (không có thì agent bỏ qua) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Login Google (cần OAuth Client ID, không dùng service-account) |
 
-> **⚠️ Security:** `.env` và `.env.docker` chứa credentials thật (database, API keys). Đã được thêm vào `.gitignore` — không commit các file này.
+> ⚠️ `.env` / `.env.docker` không commit (đã có trong `.gitignore`). File `.env.docker` trong repo chỉ giữ giá trị dev mặc định.
 
-## API Docs
+## API (tóm tắt)
 
-Tất cả API endpoints được mount dưới prefix `/api/v1`.
+Prefix `/api/v1`, chi tiết đầy đủ ở Swagger `http://localhost:8000/docs`.
 
-### Auth
-
-| Method | Path | Description |
-|---|---|---|
-| POST | `/auth/register` | Register new user |
-| POST | `/auth/login` | Login (returns JWT access + refresh tokens) |
-| POST | `/auth/refresh` | Refresh access token |
-| POST | `/auth/logout` | Logout (revoke access + refresh tokens) |
-| PATCH | `/auth/me` | Update current user profile |
-
-### Rooms
-
-| Method | Path | Auth | Description |
+| Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| GET | `/rooms/` | — | List active rooms (room_id, topic, tags, etc.) |
-| POST | `/rooms/` | JWT | Create room |
-| GET | `/rooms/{id}` | — | Room detail |
-| POST | `/rooms/{id}/join` | JWT | Join room |
-| POST | `/rooms/{id}/leave` | JWT | Leave room |
-| POST | `/rooms/{id}/token` | JWT | Get LiveKit token |
-| POST | `/rooms/match` | JWT | Matchmaking (tìm phòng phù hợp) |
+| POST | `/auth/register` `/auth/login` `/auth/refresh` | — | Session cookie 7 ngày |
+| GET | `/auth/me` | Cookie | Thông tin user |
+| GET | `/rooms/?skip=&limit=` | — | List mới nhất trước |
+| POST | `/rooms/` | Cookie | Tạo phòng |
+| GET | `/rooms/{id}` | — | Chi tiết phòng |
+| POST | `/rooms/{id}/token` | Cookie | LiveKit token |
+| POST | `/rooms/{id}/leave` | Cookie | Rời phòng (xóa presence ngay) |
+| POST | `/rooms/match` | Cookie | Ghép phòng phù hợp |
+| POST | `/rooms/livekit/webhook` | LiveKit | Join/leave events (bỏ qua `ai_*`) |
+| GET/POST | `/messages/` | Cookie | Chat (`@ai` đầu tin nhắn → trigger agent) |
+| GET | `/users/{id}` `/users/me` | Cookie | Users |
+| — | `/documents/` `/notifications/` | Cookie | Upload tài liệu RAG, thông báo |
 
-### Sessions
+## Test
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/sessions/` | JWT | List user sessions (paginated) |
-| GET | `/sessions/rooms/{room_id}` | JWT | Sessions by room |
+```bash
+cd backend
+uv run pytest tests/unit tests/api -q        # nhanh, không cần infra ngoài redis
+uv run pytest tests/ -q                      # full (cần redis + DB test local)
+cd ../frontend
+npm run build                                # verify build
+npx vitest run                               # unit tests
+```
 
-### Messages
+Lưu ý: test dùng sqlite file `backend/test_eroom.db` (đã gitignore). Nếu gặp lỗi constraint lạ khi chạy lẻ, xóa file này rồi chạy lại — nó tự tạo mới.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/messages/` | JWT | List messages (paginated) |
-| GET | `/messages/rooms/{room_id}` | JWT | Messages by room |
-| POST | `/messages/` | JWT | Send message |
-| POST | `/messages/transcripts` | JWT | Save transcript |
+## Troubleshooting
 
-### Notes
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/notes/` | JWT | List session notes |
-| GET | `/notes/{id}` | JWT | Note detail |
-| DELETE | `/notes/{id}` | JWT | Delete note |
-
-### Series
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/series/` | — | List room series |
-| POST | `/series/` | JWT | Create series |
-| GET | `/series/{id}` | — | Series detail |
-| POST | `/series/{id}/register` | JWT | Register for topic rooms |
-
-### Leaderboard
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/leaderboard/` | — | Weekly leaderboard (filter by tag, period) |
-
-### Tags
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/tags/popular` | — | Popular tags |
-| GET | `/tags/search` | — | Search tags |
-| POST | `/tags/custom` | JWT | Create custom tag |
-| POST | `/tags/bulk-add` | JWT | Bulk add tags to user |
-
-### Notifications
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/notifications/` | JWT | User notifications |
-| PATCH | `/notifications/{id}/read` | JWT | Mark as read |
-
-### Subscriptions
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/subscriptions/me` | JWT | Current subscription |
-| POST | `/subscriptions/create-checkout` | JWT | Stripe checkout session |
-| POST | `/subscriptions/cancel` | JWT | Cancel subscription |
-| POST | `/subscriptions/webhook` | — | Stripe webhook |
-| GET | `/subscriptions/invoices` | JWT | Invoice history |
-
-### Infra
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/infra/status` | System status |
-| GET | `/infra/health` | Health check |
-| GET | `/infra/health/live` | Liveness probe |
-
-### WebSocket
-
-| Path | Description |
+| Hiện tượng | Nguyên nhân thường gặp |
 |---|---|
-| `/ws/rooms/{room_id}` | Chat WebSocket (expert replies, heartbeat, presence) |
-| `/ws/audio/{room_id}` | Audio WebSocket (PCM streaming, VAD, speech processing) |
-
-Swagger UI available at `http://localhost:8000/docs` when backend is running.
+| `@ai` chỉ hiện "thinking" rồi ra 1 cục | Tab mất kết nối LiveKit (không stream live, chỉ poll DB). Kiểm tra mic/cam có nối không; F12 xem console có `Invalid URL` |
+| Mic/cam báo lỗi thiết bị | Lỗi phía browser: chưa cấp quyền, không có thiết bị, hoặc thiết bị đang bị app khác giữ (Zoom/Zalo/tab khác) |
+| List rooms hiện người đã out | Đợi ~5–10s (members refresh 5s, list 10s); nếu kẹt lâu là webhook miss — bấm Reload |
+| Worker báo `Unknown column` | Worker cũ hơn migration — `docker restart ai-worker` (code bind-mount) |
+| Job AI timeout 300s | LLM CPU ~3.7 tok/s; câu RAG nặng có thể quá trần — câu trả lời ngắn gọn hơn |
 
 ## License
 
-MIT License — see [LICENSE](./LICENSE) for details.
+Chưa có file `LICENSE` trong repo.
