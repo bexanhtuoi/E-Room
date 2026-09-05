@@ -17,25 +17,24 @@ _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="stt_worker")
 _whisper_model_instance = None
 
 
+def normalize_pcm_int16(audio_data) -> np.ndarray:
+    # LiveKit tra ve memoryview, mic co the dua bytearray/bytes —
+    # chuan hoa het ve int16 ndarray truoc khi xu ly.
+    if isinstance(audio_data, np.ndarray):
+        if audio_data.dtype == np.int16:
+            return audio_data
+        return (np.clip(audio_data, -1.0, 1.0) * 32767).astype(np.int16)
+
+    return np.frombuffer(bytes(audio_data), dtype=np.int16)
+
+
 def convert_audio_to_float32(audio_data: np.ndarray | bytes) -> np.ndarray:
-    if isinstance(audio_data, bytes):
-        int16_arr = np.frombuffer(audio_data, dtype=np.int16)
-        return int16_arr.astype(np.float32) / 32768.0
-
-    if audio_data.dtype == np.int16:
-        return audio_data.astype(np.float32) / 32768.0
-
-    return audio_data.astype(np.float32)
+    int16_arr = normalize_pcm_int16(audio_data)
+    return int16_arr.astype(np.float32) / 32768.0
 
 
 def convert_audio_to_wav_bytes(audio_data: np.ndarray | bytes, sample_rate: int = 16000) -> bytes:
-    if isinstance(audio_data, bytes):
-        raw_int16 = audio_data
-    elif audio_data.dtype == np.int16:
-        raw_int16 = audio_data.tobytes()
-    else:
-        int16_data = (np.clip(audio_data, -1.0, 1.0) * 32767).astype(np.int16)
-        raw_int16 = int16_data.tobytes()
+    raw_int16 = normalize_pcm_int16(audio_data).tobytes()
 
     wav_buffer = io.BytesIO()
     with wave.open(wav_buffer, "wb") as wav_file:
@@ -45,6 +44,21 @@ def convert_audio_to_wav_bytes(audio_data: np.ndarray | bytes, sample_rate: int 
         wav_file.writeframes(raw_int16)
 
     return wav_buffer.getvalue()
+
+
+def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
+    words = text.lower().split()
+    if len(words) < min_repeats:
+        return False
+
+    # Ca cau chi la 1 cum tu lap di lap lai ("thank you" x N, "yes" x N)
+    for unit in range(1, len(words) // 2 + 1):
+        if len(words) % unit != 0:
+            continue
+        if words == words[:unit] * (len(words) // unit):
+            return True
+
+    return False
 
 
 # ─── PROVIDER 1: FASTER-WHISPER LOCAL ─────────────────────────────────────
@@ -80,7 +94,7 @@ def transcribe_faster_whisper(
             return None
 
         model = model_override or get_whisper_model()
-        initial_prompt = "English speaking room transcription. Non-native English speakers, casual conversations."
+        initial_prompt = "Transcribe the following English speech exactly as spoken, word for word."
 
         segments, info = model.transcribe(
             audio,
@@ -88,7 +102,13 @@ def transcribe_faster_whisper(
             temperature=0.0,
             initial_prompt=initial_prompt,
             word_timestamps=True,
-            vad_filter=False,
+            # Strict chong bia: loc silence bang VAD cua whisper,
+            # khong "che" tiep tu context cu, bo doan lap/garbage.
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500},
+            condition_on_previous_text=False,
+            compression_ratio_threshold=2.4,
+            no_speech_threshold=0.6,
         )
 
         full_text_list: List[str] = []
@@ -118,6 +138,13 @@ def transcribe_faster_whisper(
             return None
 
         full_text = " ".join(full_text_list)
+
+        # Ao giac kinh dien cua whisper: lap 1 tu/cum tu vo han
+        # ("thank you thank you...") — bo thang.
+        if is_repetitive_hallucination(full_text):
+            log.info("Dropping repetitive hallucination | text='%s'", full_text[:80])
+            return None
+
         avg_logprob = (total_logprob / segment_count) if segment_count > 0 else -1.0
         confidence = float(min(max((avg_logprob + 2.0) / 2.0, 0.0), 1.0))
 

@@ -14,6 +14,7 @@ celery_app.conf.update(
     task_routes={
         "app.ai.tasks.stream_ai_response": {"queue": settings.ai_queue_name},
         "app.ai.tasks.check_room_heartbeats": {"queue": settings.ai_queue_name},
+        "app.ai.tasks.ensure_room_workers": {"queue": settings.ai_queue_name},
         "app.ai.tasks.observe_room_audio": {"queue": settings.ai_observer_queue_name},
         "app.ai.tasks.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
     },
@@ -21,7 +22,11 @@ celery_app.conf.update(
         "check-room-heartbeats": {
             "task": "app.ai.tasks.check_room_heartbeats",
             "schedule": 15.0,
-        }
+        },
+        "ensure-room-workers": {
+            "task": "app.ai.tasks.ensure_room_workers",
+            "schedule": 60.0,
+        },
     },
     task_serializer="json",
     result_serializer="json",

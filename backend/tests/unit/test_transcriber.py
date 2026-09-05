@@ -10,10 +10,12 @@ from app.ai.audio_vad import (
     create_user_audio_state,
     finalize_speech_frames,
     process_audio_frame,
+    trim_trailing_silence,
 )
 from app.ai.stt import (
     convert_audio_to_float32,
     convert_audio_to_wav_bytes,
+    is_repetitive_hallucination,
     transcribe_audio,
     transcribe_cloud_whisper,
     transcribe_faster_whisper,
@@ -22,6 +24,11 @@ from app.ai.transcriber import (
     build_transcript_payload,
     handle_speech_completion,
 )
+
+
+def make_loud_frame(n: int = 1600) -> np.ndarray:
+    t = np.linspace(0, 0.1, n)
+    return (np.sin(2 * np.pi * 440 * t) * 16000).astype(np.int16)
 
 
 class TestAudioVADFunctions:
@@ -33,6 +40,66 @@ class TestAudioVADFunctions:
         sine = (np.sin(2 * np.pi * 440 * t) * 16000).astype(np.int16)
         rms = calculate_audio_rms(sine)
         assert rms > 0.1
+
+    def test_memoryview_frame_from_livekit(self):
+        # LiveKit tra event.frame.data dang memoryview — phai xu ly duoc,
+        # khong duoc crash nhu truoc (AttributeError: dtype).
+        state = create_user_audio_state("user1")
+        loud = memoryview(make_loud_frame().tobytes())
+
+        assert process_audio_frame(state, loud) is None
+        assert state["is_speaking"] is True
+
+        quiet = memoryview(np.zeros(1600, dtype=np.int16).tobytes())
+        done = process_audio_frame(
+            state,
+            quiet,
+            silence_seconds=0.0,
+            min_speech_seconds=0.05,
+        )
+        assert done is not None
+        assert len(done) > 0
+
+    def test_calculate_rms_memoryview_matches_array(self):
+        sine = make_loud_frame()
+        assert calculate_audio_rms(memoryview(sine.tobytes())) == pytest.approx(
+            calculate_audio_rms(sine)
+        )
+
+    def test_trim_trailing_silence_keeps_speech(self):
+        speech = make_loud_frame(16000)
+        silence = np.zeros(32000, dtype=np.int16)
+        clip = np.concatenate([speech, silence])
+
+        trimmed = trim_trailing_silence(clip)
+
+        assert len(trimmed) < len(clip)
+        assert len(trimmed) >= len(speech)
+        assert len(trimmed) <= len(speech) + 16000 * 0.25 + 320
+
+    def test_trim_all_silence_returns_empty(self):
+        silence = np.zeros(16000, dtype=np.int16)
+        assert len(trim_trailing_silence(silence)) == 0
+
+    def test_finalize_trims_silence_before_duration_check(self):
+        state = create_user_audio_state("user1")
+        state["frames"] = [make_loud_frame(16000), np.zeros(32000, dtype=np.int16)]
+
+        done = finalize_speech_frames(state, min_speech_seconds=0.5)
+
+        assert done is not None
+        assert len(done) < 48000
+
+    def test_converters_accept_memoryview(self):
+        sine = make_loud_frame()
+        view = memoryview(sine.tobytes())
+
+        floats = convert_audio_to_float32(view)
+        assert floats.dtype == np.float32
+        assert len(floats) == len(sine)
+
+        wav = convert_audio_to_wav_bytes(view)
+        assert wav[:4] == b"RIFF"
 
     def test_process_audio_frame_vad_lifecycle(self):
         state = create_user_audio_state("user123")
@@ -114,6 +181,24 @@ class TestSTTFunctions:
         assert result["duration"] == 1.5
         assert result["confidence"] > 0.8
         assert len(result["words"]) == 2
+
+    def test_repetitive_hallucination_guard(self):
+        assert is_repetitive_hallucination("thank you thank you thank you thank you") is True
+        assert is_repetitive_hallucination("yes yes yes yes yes") is True
+        assert is_repetitive_hallucination("hello world from Vietnam") is False
+        assert is_repetitive_hallucination("yes yes") is False
+
+    def test_transcribe_drops_repetitive_hallucination(self):
+        mock_segment = MagicMock()
+        mock_segment.text = " thank you thank you thank you thank you "
+        mock_segment.avg_logprob = -0.1
+        mock_segment.words = []
+
+        mock_model = MagicMock()
+        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="en", duration=2.0))
+
+        audio = np.zeros(32000, dtype=np.int16)
+        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model) is None
 
     def test_transcribe_cloud_whisper_success(self):
         audio = np.zeros(16000, dtype=np.int16)

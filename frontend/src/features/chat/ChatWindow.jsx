@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { HiChatBubbleLeftRight, HiPaperAirplane } from 'react-icons/hi2';
+import { HiChatBubbleLeftRight, HiMicrophone, HiPaperAirplane } from 'react-icons/hi2';
 import { useRoomContext } from '@livekit/components-react';
 import { RoomEvent } from 'livekit-client';
 
@@ -15,17 +15,14 @@ function ThinkingDots() {
 
 function Row({ item, mine, quote }) {
   if (item.kind === 'transcript') {
+    // Giong msg thuong, chi them icon mic sau ten de biet la voice
     return (
-      <div style={{ border: '1px solid #e8e8e8', padding: '10px 12px', background: '#fff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 800 }}>{mine ? 'You (voice)' : item.sender || 'Someone'}</span>
-          {item.confidence != null && (
-            <span style={{ fontSize: 10, fontWeight: 800, border: '1px solid #111', padding: '2px 6px' }}>
-              {item.confidence >= 0.85 ? 'CLEAR' : 'REVIEW'}
-            </span>
-          )}
+      <div style={{ border: '1px solid #e8e8e8', padding: '10px 12px', background: mine ? '#111' : '#fff', color: mine ? '#fff' : '#111', alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: mine ? '#bbb' : '#666', display: 'flex', alignItems: 'center', gap: 4 }}>
+          {mine ? 'You' : item.sender || `User ${item.userId ?? ''}`}
+          <HiMicrophone size={12} title="Voice message" />
         </div>
-        <div style={{ fontSize: 14, color: '#333', marginTop: 4 }}>{item.text}</div>
+        <div style={{ fontSize: 14, marginTop: 2, whiteSpace: 'pre-wrap' }}>{item.text}</div>
       </div>
     );
   }
@@ -88,7 +85,7 @@ export function ChatWindow({ chat, visible, onClose, currentUserId }) {
         <button onClick={onClose} aria-label="Close chat" style={{ background: '#fff', border: '1px solid #111', width: 30, height: 30, fontWeight: 800, cursor: 'pointer' }}>✕</button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+      <div className="er-chat-scroll" style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
         {loading && <p style={{ color: '#666', fontSize: 13 }}>Loading conversation…</p>}
         {!loading && items.length === 0 && (
           <div style={{ border: '1px dashed #bbb', padding: 18, textAlign: 'center', color: '#666', fontSize: 13 }}>

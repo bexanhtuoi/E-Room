@@ -69,6 +69,7 @@ services:
     env_file: ./backend/.env.docker
     volumes:
       - ./backend/app:/app/app
+      - whisper_data:/root/.cache/huggingface
     depends_on:
       redis:
         condition: service_healthy
@@ -179,4 +180,5 @@ volumes:
   minio_data:
   tidb_data:
   llama_data:
+  whisper_data:
   qdrant_data:

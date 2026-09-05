@@ -21,6 +21,18 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "requires_redis: Tests requiring a running Redis")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _create_test_tables():
+    # Unit test chay rieng (khong qua TestClient/lifespan) van co du bang —
+    # tranh flakiness "no such table" phu thuoc thu tu chay file.
+    from sqlmodel import SQLModel
+
+    import app.models  # noqa: F401
+    from app.database import engine
+
+    SQLModel.metadata.create_all(engine)
+
+
 @pytest.fixture(scope="session")
 def client() -> TestClient:
     with TestClient(app) as test_client:

@@ -74,6 +74,45 @@ class TestRoomHeartbeatE2E:
                 assert meta["type"] == "heartbeat"
 
 
+class TestEnsureRoomWorkers:
+    def test_revives_transcriber_for_live_room(self):
+        from app.ai.tasks import ensure_room_workers
+
+        room_name = f"e2e-revive-room-{uuid.uuid4().hex[:8]}"
+        with Session(engine) as db:
+            room = room_crud.create(
+                db,
+                obj_in={"name": room_name, "status": RoomStatus.ACTIVE},
+            )
+            room_id = room.id
+
+        with (
+            patch("app.ai.tasks.scard", return_value=2),
+            patch("app.ai.tasks.enqueue_room_transcriber") as mock_transcriber,
+            patch("app.ai.tasks.enqueue_room_observer") as mock_observer,
+        ):
+            ensured = ensure_room_workers()
+            assert ensured >= 1
+            mock_transcriber.assert_called()
+            mock_observer.assert_called()
+
+        assert any(
+            call.args[0] == room_id for call in mock_transcriber.call_args_list
+        )
+
+    def test_skips_empty_rooms(self):
+        from app.ai.tasks import ensure_room_workers
+
+        with (
+            patch("app.ai.tasks.scard", return_value=0),
+            patch("app.ai.tasks.enqueue_room_transcriber") as mock_transcriber,
+            patch("app.ai.tasks.enqueue_room_observer") as mock_observer,
+        ):
+            ensure_room_workers()
+            mock_transcriber.assert_not_called()
+            mock_observer.assert_not_called()
+
+
 class TestStaleEmptyRooms:
     def test_stale_empty_room_gets_ended(self):
         room_name = f"e2e-stale-room-{uuid.uuid4().hex[:8]}"

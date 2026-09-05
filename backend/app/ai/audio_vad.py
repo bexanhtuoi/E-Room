@@ -3,6 +3,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from app.ai.stt import normalize_pcm_int16
 from app.config import settings
 from app.log import get_logger
 
@@ -21,10 +22,7 @@ def create_user_audio_state(user_identity: str) -> Dict:
 
 
 def calculate_audio_rms(frame: np.ndarray | bytes) -> float:
-    if isinstance(frame, bytes):
-        frame_arr = np.frombuffer(frame, dtype=np.int16)
-    else:
-        frame_arr = frame
+    frame_arr = normalize_pcm_int16(frame)
 
     if len(frame_arr) == 0:
         return 0.0
@@ -35,6 +33,37 @@ def calculate_audio_rms(frame: np.ndarray | bytes) -> float:
         frame_float = frame_arr.astype(np.float32)
 
     return float(np.sqrt(np.mean(frame_float**2)))
+
+
+TRIM_FRAME_SAMPLES = 320
+TRIM_PAD_SECONDS = 0.25
+
+
+def trim_trailing_silence(
+    audio: np.ndarray,
+    sample_rate: int = 16000,
+    energy_threshold: Optional[float] = None,
+    pad_seconds: float = TRIM_PAD_SECONDS,
+) -> np.ndarray:
+    # Cat doan im lang dinh kem cuoi cau truoc khi dua sang STT.
+    # Whisper rat hay "che" them cau closing ("See you later. Bye.")
+    # vao khoang silence thua nay.
+    if len(audio) == 0:
+        return audio
+
+    threshold = energy_threshold if energy_threshold is not None else settings.stt_vad_energy_threshold
+
+    last_voice_end = 0
+    for start in range(0, len(audio), TRIM_FRAME_SAMPLES):
+        window = audio[start:start + TRIM_FRAME_SAMPLES]
+        if calculate_audio_rms(window) >= threshold:
+            last_voice_end = min(start + TRIM_FRAME_SAMPLES, len(audio))
+
+    if last_voice_end == 0:
+        return np.zeros(0, dtype=np.int16)
+
+    pad_samples = int(pad_seconds * sample_rate)
+    return audio[: min(len(audio), last_voice_end + pad_samples)]
 
 
 def reset_user_audio_state(state: Dict) -> None:
@@ -55,8 +84,10 @@ def finalize_speech_frames(
         reset_user_audio_state(state)
         return None
 
+    sample_rate = state.get("sample_rate", 16000)
     full_audio = np.concatenate(frames)
-    duration = len(full_audio) / state.get("sample_rate", 16000)
+    full_audio = trim_trailing_silence(full_audio, sample_rate=sample_rate)
+    duration = len(full_audio) / sample_rate
 
     reset_user_audio_state(state)
 
@@ -78,10 +109,7 @@ def process_audio_frame(
     silence_timeout = silence_seconds if silence_seconds is not None else settings.stt_vad_silence_seconds
     max_duration = max_speech_seconds if max_speech_seconds is not None else settings.stt_vad_max_speech_seconds
 
-    if isinstance(frame_data, bytes):
-        frame = np.frombuffer(frame_data, dtype=np.int16)
-    else:
-        frame = frame_data
+    frame = normalize_pcm_int16(frame_data)
 
     if len(frame) == 0:
         return None

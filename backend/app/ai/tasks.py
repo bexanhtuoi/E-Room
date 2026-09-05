@@ -204,6 +204,25 @@ def end_stale_empty_rooms(db: Session, now: float) -> int:
     return ended_count
 
 
+@celery_app.task(name="app.ai.tasks.ensure_room_workers")
+def ensure_room_workers() -> int:
+    # Tu phuc hoi sau restart/crash worker: phong live co nguoi ma thieu
+    # transcriber/observer thi enqueue lai (enqueue_* da chan trung).
+    ensured_count = 0
+
+    with Session(engine) as db:
+        rooms = room_crud.get_many(db, status=RoomStatus.ACTIVE)
+        for room in rooms:
+            if scard(f"room:{room.id}:participants") < 1:
+                continue
+            if room.enable_transcript:
+                enqueue_room_transcriber(room.id)
+            enqueue_room_observer(room.id)
+            ensured_count += 1
+
+    return ensured_count
+
+
 @celery_app.task(name="app.ai.tasks.check_room_heartbeats")
 def check_room_heartbeats() -> int:
     now = now_utc().timestamp()
