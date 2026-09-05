@@ -32,6 +32,7 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(default=None)
     english_level: Optional[EnglishLevel] = Field(default=None)
     role: Optional[RoleEnum] = Field(default=RoleEnum.user)
+    profile_completed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=now_utc, nullable=False)
     updated_at: datetime = Field(default_factory=now_utc, nullable=False)
 

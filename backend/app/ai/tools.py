@@ -39,7 +39,9 @@ async def retrieval_documents(query: str, k: int = 20, tag: str | None = None, r
         results = await asyncio.wait_for(
             retrieve_relevant_documents(query, k, tag, reranking=reranking, rerank_k=rerank_k), timeout=300.0
         )
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, Exception):
+        # Loi tool (Qdrant/embedding/reranker down) khong duoc giet ca stream —
+        # tra ve rong de agent tu tra loi bang kien thuc cua no.
         results = []
 
     log_call("retrieval_documents", {"query": query, "k": k, "tag": tag, "reranking": reranking, "rerank_k": rerank_k}, results)

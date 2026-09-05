@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +13,6 @@ os.environ["LIVEKIT_API_KEY"] = "testkey"
 os.environ["LIVEKIT_API_SECRET"] = "test-secret-32-characters-long!!"
 
 from app.main import app  # noqa: E402
-from app.security import hash_password  # noqa: E402
 
 PASSWORD = "Password123!"
 
@@ -44,6 +43,10 @@ def register(client: TestClient, email: str, full_name: str = "Test User") -> di
 def login(client: TestClient, email: str) -> None:
     response = client.post("/api/v1/auth/login", data={"username": email, "password": PASSWORD})
     assert response.status_code == 200, response.text
+    # Set cookie truc tiep cho TestClient session de cac request tiep theo gui cookie di
+    token_cookie = response.cookies.get("access_token")
+    if token_cookie:
+        client.cookies.set("access_token", token_cookie)
 
 
 @pytest.fixture
@@ -67,6 +70,7 @@ def ai_mocks():
     with (
         patch("app.api.routers.message.enqueue_ai_job") as message_enqueue,
         patch("app.api.routers.room.enqueue_room_observer") as observer_enqueue,
+        patch("app.api.routers.room.enqueue_room_transcriber") as transcriber_enqueue,
         patch("app.ai.tasks.enqueue_ai_job") as tasks_enqueue,
     ):
         message_enqueue.return_value = "mock-task-id"
@@ -74,6 +78,7 @@ def ai_mocks():
         yield {
             "message_enqueue": message_enqueue,
             "observer_enqueue": observer_enqueue,
+            "transcriber_enqueue": transcriber_enqueue,
             "tasks_enqueue": tasks_enqueue,
         }
 

@@ -1,108 +1,85 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { API_BASE_URL, clearTokens, getTokens, setTokens } from '../lib/api';
+import { API_BASE_URL } from '../lib/api';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 
 const AuthContext = createContext(null);
 
+async function fetchMe() {
+  const res = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function parseError(body, fallback) {
+  const detail = body?.detail;
+  if (Array.isArray(detail)) return detail.map((e) => e.msg).join('; ');
+  return detail || fallback;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const setSubscription = useSubscriptionStore((s) => s.setSubscription);
 
   useEffect(() => {
-    const { access } = getTokens();
-    if (access) {
-      Promise.all([
-        fetch(`${API_BASE_URL}/users/me`, {
-          headers: { Authorization: `Bearer ${access}` },
-        }).then((r) => (r.ok ? r.json() : null)),
-        fetch(`${API_BASE_URL}/subscriptions/me`, {
-          headers: { Authorization: `Bearer ${access}` },
-        }).then((r) => (r.ok ? r.json() : null)),
-      ])
-        .then(([userData, subData]) => {
-          if (userData) setUser(userData);
-          if (subData) setSubscription(subData);
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    fetchMe()
+      .then((me) => { if (me) setUser(me); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email, password) => {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      credentials: 'include',
+      body: new URLSearchParams({ username: email, password }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      const detail = Array.isArray(body.detail)
-        ? body.detail.map((e) => e.msg).join('; ')
-        : body.detail;
-      throw new Error(detail || 'Login failed');
+      throw new Error(parseError(body, 'Login failed'));
     }
-    const data = await response.json();
-    setTokens(data.access_token, data.refresh_token);
-
-    const [meResponse, subResponse] = await Promise.all([
-      fetch(`${API_BASE_URL}/users/me`, {
-        headers: { Authorization: `Bearer ${data.access_token}` },
-      }),
-      fetch(`${API_BASE_URL}/subscriptions/me`, {
-        headers: { Authorization: `Bearer ${data.access_token}` },
-      }),
-    ]);
-    const me = await meResponse.json();
-    if (subResponse.ok) {
-      const subData = await subResponse.json();
-      setSubscription(subData);
-    }
+    const me = await fetchMe();
+    if (!me) throw new Error('Login succeeded but session was not created. Please try again.');
     setUser(me);
     return me;
   }, []);
 
   const register = useCallback(async (email, password, firstName, lastName) => {
+    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || 'Learner';
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, first_name: firstName, last_name: lastName }),
+      credentials: 'include',
+      body: JSON.stringify({ email, full_name: fullName, password }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      const detail = Array.isArray(body.detail)
-        ? body.detail.map((e) => e.msg).join('; ')
-        : body.detail;
-      throw new Error(detail || 'Registration failed');
+      throw new Error(parseError(body, 'Registration failed'));
     }
     return response.json();
   }, []);
 
   const logout = useCallback(async () => {
-    const { refresh } = getTokens();
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refresh }),
-      });
+      await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch {}
-    clearTokens();
     setUser(null);
     useSubscriptionStore.getState().setSubscription({ tier: 'free' });
   }, []);
 
-  useEffect(() => {
-    const handler = () => { setUser(null); clearTokens(); };
-    window.addEventListener('auth:logout', handler);
-    return () => window.removeEventListener('auth:logout', handler);
+  const refresh = useCallback(async () => {
+    const me = await fetchMe().catch(() => null);
+    if (me) setUser(me);
+    return me;
   }, []);
 
+  function googleLogin() {
+    window.location.href = `${API_BASE_URL}/auth/google/login`;
+  }
+
   const value = useMemo(
-    () => ({ user, setUser, loading, login, register, logout, isAuthenticated: !!user }),
-    [user, setUser, loading, login, register, logout],
+    () => ({ user, setUser, loading, login, register, logout, refresh, googleLogin, isAuthenticated: !!user }),
+    [user, setUser, loading, login, register, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -19,13 +19,15 @@ export function StepTagPicker({ form, updateField }) {
 
   const { data: popularTags = [], isLoading } = useQuery({
     queryKey: ['popularTags'],
-    queryFn: () => fetchJson('/tags/popular'),
+    queryFn: () => fetchJson('/tags/popular').catch(() => []),
+    retry: false,
   });
 
   const { data: searchResults = [] } = useQuery({
     queryKey: ['tagSearch', search],
-    queryFn: () => fetchJson(`/tags/search?q=${search}&limit=8`),
+    queryFn: () => fetchJson(`/tags/search?q=${search}&limit=8`).catch(() => []),
     enabled: search.length > 1,
+    retry: false,
   });
 
   const tags = popularTags.length > 0 ? popularTags : FALLBACK_TAGS;

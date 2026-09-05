@@ -207,3 +207,84 @@
         .room-settings__toggle-knob{width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform 0.15s}
         .room-settings__toggle.active .room-settings__toggle-knob{transform:translateX(16px)}
         .room-settings__error{padding:8px 12px;margin:0 12px 8px;border-radius:8px;background:rgba(239,68,68,0.12);color:var(--color-danger);font-size:12px;font-weight:600;text-align:center}
+
+/* ---- E-Room vibe pass: square controls, monochrome accents ---- */
+.meet-root .ctrl-btn{border-radius:0 !important;}
+.meet-root .ctrl-hangup{border-radius:0 !important;background:#111 !important;border:1px solid #fff !important;}
+.meet-root .ctrl-btn--active{background:#fff !important;color:#111 !important;}
+.room-btn-pri,.room-btn-sec{border-radius:0 !important;}
+.room-btn-pri{background:#fff !important;color:#111 !important;font-weight:800;}
+.meet-root .rounded-pill{border-radius:0 !important;}
+
+
+/* ---- E-Room vibe pass: white frame, square, monochrome (stage stays dark for video) ---- */
+.meet-topbar{background:#fff !important;border-bottom:2px solid #111 !important;backdrop-filter:none !important;}
+.meet-topbar .meet-room-name{color:#111 !important;}
+.meet-topbar .meet-timer{color:#333 !important;}
+.meet-topbar .meet-badge-live{background:#111 !important;color:#fff !important;padding:3px 8px !important;font-size:11px !important;font-weight:800 !important;}
+.meet-topbar .meet-back{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.meet-topbar .meet-participant-count{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.meet-topbar .meet-chat-toggle{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.meet-topbar .meet-chat-toggle.active{background:#111 !important;color:#fff !important;}
+.room-page__panel,.meet-chat-panel{background:#fff !important;color:#111 !important;border-left:2px solid #111 !important;border-radius:0 !important;}
+.room-page__panel-header{border-bottom:2px solid #111 !important;}
+.room-page__panel-header-title{color:#111 !important;}
+.room-page__panel-row-name{color:#111 !important;}
+.room-page__error-wrap,.room-page__left-card{background:#fff !important;color:#111 !important;border:2px solid #111 !important;border-radius:0 !important;}
+.waiting-card{background:#0a0a0a !important;}
+.waiting-card .waiting-title{color:#fff !important;}
+.waiting-card .waiting-sub{color:#a1a1aa !important;}
+.waiting-card .waiting-icon{border-color:rgba(255,255,255,0.2) !important;color:#fff !important;}
+.waiting-title,.room-page__error-title,.room-page__left-title{color:#111 !important;}
+.meet-room-notice{border-radius:0 !important;}
+.self-preview{border-radius:0 !important;}
+.room-page__connecting-wrap{background:#fff !important;color:#111 !important;}
+
+
+/* ---- Mobile: chat/panels overlay, topbar compacts ---- */
+@media (max-width: 860px) {
+  .meet-main{position:relative;}
+  aside[aria-label='Room chat'],.meet-chat-panel,.room-page__panel{position:fixed !important;top:56px !important;right:0;bottom:0;width:min(340px,94vw) !important;max-width:94vw !important;z-index:120;box-shadow:-8px 0 24px rgba(0,0,0,0.35);}
+  .meet-topbar{flex-wrap:wrap;height:auto !important;min-height:56px;padding:8px 12px !important;row-gap:8px;}
+  .meet-room-name{font-size:15px !important;}
+  .self-preview{width:132px !important;bottom:120px !important;}
+}
+
+
+/* ---- Settings + panels: white square monochrome ---- */
+.room-page__panel-close-btn{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.room-settings__label{color:#111 !important;}
+.room-settings__input{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.room-settings__chip{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.room-settings__chip.active{background:#111 !important;color:#fff !important;}
+.room-settings__agent-card{background:#fff !important;color:#111 !important;border:1px solid #e8e8e8 !important;border-radius:0 !important;}
+.room-settings__agent-card.active{border:2px solid #111 !important;}
+.room-settings__agent-name{color:#111 !important;}
+.room-settings__toggle{background:#ddd !important;border-radius:0 !important;}
+.room-settings__toggle.active{background:#111 !important;}
+.room-settings__toggle-knob{background:#fff !important;border-radius:0 !important;}
+.room-settings__btn{border-radius:0 !important;}
+.room-settings__btn--save{background:#111 !important;color:#fff !important;box-shadow:none !important;}
+.room-settings__btn--cancel{background:#fff !important;color:#111 !important;border:1px solid #111 !important;}
+.room-settings__error{background:#fff !important;color:#111 !important;border:2px solid #111 !important;border-radius:0 !important;}
+.room-page__panel-btn-add{background:#111 !important;color:#fff !important;border-radius:0 !important;}
+.room-page__panel-btn-friend{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+.room-page__panel-you-badge{background:#111 !important;color:#fff !important;border-radius:0 !important;}
+.room-page__hand-raised-badge{background:#fff !important;color:#111 !important;border:1px solid #111 !important;border-radius:0 !important;}
+
+
+/* ---- Stage: dark tiles, square, no dead padding ---- */
+.room-page__livekit{height:100% !important;}
+.room-page__video-inner{background:#0a0a0a;}
+.meet-adaptive-grid{padding:12px !important;}
+.meet-focus-layout{padding:12px !important;}
+.meet-video-tile,.meet-focus-main,.meet-tile-name,.meet-focus-clear,.meet-room-notice,.meet-pin-btn,.meet-more-btn,.meet-controls__emoji-picker{border-radius:0 !important;}
+.self-preview,.self-preview-feed .lk-participant-tile{border-radius:0 !important;}
+
+
+/* ---- Mobile tabs become full screens; topbar keeps chat only ---- */
+@media (max-width: 640px) {
+  aside[aria-label='Room chat'],.meet-chat-panel,.room-page__panel{top:0 !important;height:100dvh !important;}
+  .meet-topbar-iconbtn{display:none !important;}
+}
+

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import login, make_user, switch_to
+from tests.conftest import make_user, switch_to
 
 
 class TestGetUsers:
@@ -70,7 +70,7 @@ class TestDeleteUser:
 
         room = client.post(
             "/api/v1/rooms/",
-            json={"name": f"cascade-room-{temp['id']}", "topic": "Cleanup"},
+            json={"name": f"cascade-room-{temp['id']}"},
         ).json()
         client.post(
             "/api/v1/messages/",

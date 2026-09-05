@@ -134,7 +134,7 @@ export function SessionDetailPage() {
       )}
 
       <div className="session-detail-page__cta">
-        <Link to="/learning">Find another room</Link>
+        <Link to="/rooms">Find another room</Link>
       </div>
     </Container>
   );

@@ -1,105 +1,68 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import Container from 'react-bootstrap/Container';
-import Button from 'react-bootstrap/Button';
-import { HiArrowRight, HiMagnifyingGlass, HiCheckCircle } from 'react-icons/hi2';
-import { blogPosts } from './blogContent';
-import '../../styles/MarketingPages.css';
+import { Section, Eyebrow, Card } from '../../components/common/UI';
+import { BLOG_POSTS } from '../../data/site';
 
 export function BlogPage() {
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const categories = ['All', ...new Set(blogPosts.map((p) => p.category))];
-
-  const filtered = blogPosts.filter((post) => {
-    const matchCategory = activeCategory === 'All' || post.category === activeCategory;
-    const q = searchQuery.toLowerCase();
-    const matchSearch = !q || post.title.toLowerCase().includes(q) || post.excerpt.toLowerCase().includes(q);
-    return matchCategory && matchSearch;
-  });
-
-  const [lead, ...rest] = filtered;
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('All');
+  const cats = ['All', ...new Set(BLOG_POSTS.map((p) => p.category))];
+  const list = BLOG_POSTS.filter((p) => (cat === 'All' || p.category === cat) && (!q || (p.title + p.excerpt).toLowerCase().includes(q.toLowerCase())));
+  const [lead, ...rest] = list;
 
   return (
-    <main className="marketing-page blog-index fade-in">
-      <Container className="marketing-page__container">
-        <section className="blog-index__header">
-          <h1>Practical writing for people learning English by speaking.</h1>
-          <p>Room routines, feedback habits, and host guides written for learners who want visible progress after every conversation.</p>
-        </section>
-
-        <div className="blog-controls">
-          <div className="blog-filters">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                className={`blog-filter-btn${activeCategory === cat ? ' blog-filter-btn--active' : ''}`}
-                onClick={() => setActiveCategory(cat)}
-              >
-                {cat}
-              </button>
+    <div>
+      <Section>
+        <div style={{ border: '2px solid #111', background: '#111', color: '#fff', padding: 'clamp(24px,4vw,40px)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.14em' }}>THE E-ROOM JOURNAL</div>
+            <h1 style={{ fontSize: 'clamp(28px,4vw,44px)', lineHeight: 1.05, margin: '10px 0 8px' }}>Speaking tactics,<br />weekly.</h1>
+            <p style={{ color: '#bbb', margin: 0, maxWidth: 520 }}>Room routines, hosting guides and conversation tactics from hosts and regulars.</p>
+          </div>
+          <div style={{ display: 'flex', gap: 0, border: '1px solid #fff' }}>
+            {[['8', 'guides'], ['4', 'topics'], ['6 min', 'avg read']].map(([v, l], i) => (
+              <div key={l} style={{ padding: '12px 18px', borderLeft: i ? '1px solid #fff' : 'none', textAlign: 'center' }}>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{v}</div><div style={{ fontSize: 11, color: '#bbb' }}>{l}</div>
+              </div>
             ))}
           </div>
-          <div className="blog-search">
-            <HiMagnifyingGlass size={14} />
-            <input
-              type="text"
-              placeholder="Search articles..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
         </div>
-
-        {filtered.length === 0 ? (
-          <div className="blog-empty">
-            <p>No articles match your search. Try different keywords.</p>
-          </div>
-        ) : (
-          <section className="blog-layout" aria-label="Latest blog posts">
-            {lead && (
-              <article className="blog-lead">
-                <div className="blog-lead__body">
-                  <span className="blog-lead__category">{lead.category}</span>
-                  <h2><Link to={`/blog/${lead.slug}`}>{lead.title}</Link></h2>
-                  <p>{lead.excerpt}</p>
-                  <div className="blog-meta">{lead.author} · {lead.date} · {lead.readTime}</div>
-                </div>
-                <div className="blog-lead__hero">
-                  <span className="blog-lead__hero-label">{lead.hero}</span>
-                </div>
-              </article>
-            )}
-
-            <div className="blog-side-list">
-              {rest.map((post) => (
-                <article className="blog-row" key={post.slug}>
-                  <span>{post.category}</span>
-                  <h2><Link to={`/blog/${post.slug}`}>{post.title}</Link></h2>
-                  <p>{post.excerpt}</p>
-                  <div className="blog-row__footer">
-                    <span className="blog-meta">{post.author} · {post.date} · {post.readTime}</span>
-                    <Link to={`/blog/${post.slug}`} className="blog-read-link">Read article <HiArrowRight size={14} /></Link>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
+        <div style={{ display: 'flex', gap: 8, marginTop: 24, flexWrap: 'wrap' }}>
+          {cats.map((c) => (
+            <button key={c} className={`er-btn${c === cat ? '' : ' er-btn--ghost'}`} style={{ padding: '10px 14px' }} onClick={() => setCat(c)}>{c}</button>
+          ))}
+          <input className="er-input" style={{ maxWidth: 260 }} placeholder="Search articles…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        {lead && (
+          <Card key={lead.slug} style={{ marginTop: 24, padding: 28 }}>
+            <span className="er-tag">{lead.category}</span>
+            <h3 style={{ fontSize: 28 }}><Link to={`/blog/${lead.slug}`} style={{ color: '#111' }}>{lead.title}</Link></h3>
+            <p>{lead.excerpt}</p>
+            <p style={{ marginTop: 10, fontSize: 13, color: '#666' }}>{lead.author} • {lead.date} • {lead.readTime}</p>
+          </Card>
         )}
-
-        <section className="blog-newsletter">
-          <div className="blog-newsletter__body">
-            <HiCheckCircle size={20} />
-            <h2>Get weekly speaking tips delivered to your inbox</h2>
-            <p>Short, practical advice from experienced English hosts — no spam, just signal.</p>
-            <form className="blog-newsletter__form" onSubmit={(e) => e.preventDefault()}>
-              <input type="email" placeholder="your@email.com" required />
-              <Button type="submit" variant="primary" size="sm" className="px-3 fw-semibold">Subscribe</Button>
-            </form>
-          </div>
-        </section>
-      </Container>
-    </main>
+        <div className="er-grid er-grid--3" style={{ marginTop: 16 }}>
+          {rest.map((p) => (
+            <Card key={p.slug}>
+              <span className="er-tag">{p.category}</span>
+              <h3><Link to={`/blog/${p.slug}`} style={{ color: '#111' }}>{p.title}</Link></h3>
+              <p>{p.excerpt}</p>
+              <p style={{ marginTop: 10, fontSize: 13, color: '#666' }}>{p.author} • {p.readTime}</p>
+            </Card>
+          ))}
+        </div>
+        {list.length === 0 && <div className="er-alert" style={{ marginTop: 24 }}>No articles found. Try another keyword.</div>}
+      </Section>
+      <Section soft>
+        <Card ink>
+          <h3 style={{ fontSize: 28 }}>Get one speaking tip every Monday.</h3>
+          <p>Short emails, no spam. Unsubscribe anytime.</p>
+          <form style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }} onSubmit={(e) => e.preventDefault()}>
+            <input className="er-input" style={{ maxWidth: 320, background: '#fff' }} placeholder="you@email.com" type="email" required />
+            <button className="er-btn" style={{ background: '#fff', color: '#111', borderColor: '#fff' }} type="submit">Subscribe</button>
+          </form>
+        </Card>
+      </Section>
+    </div>
   );
 }

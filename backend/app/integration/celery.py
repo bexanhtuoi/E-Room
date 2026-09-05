@@ -15,6 +15,7 @@ celery_app.conf.update(
         "app.ai.tasks.stream_ai_response": {"queue": settings.ai_queue_name},
         "app.ai.tasks.check_room_heartbeats": {"queue": settings.ai_queue_name},
         "app.ai.tasks.observe_room_audio": {"queue": settings.ai_observer_queue_name},
+        "app.ai.tasks.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
     },
     beat_schedule={
         "check-room-heartbeats": {

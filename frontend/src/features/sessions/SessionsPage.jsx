@@ -85,7 +85,7 @@ export function SessionsPage() {
         <div className="sessions-page__empty">
           <HiClock size={24} />
           <p>No sessions yet</p>
-          <Button as={Link} to="/learning" variant="primary" className="px-3">Open Meeting</Button>
+          <Button as={Link} to="/rooms" variant="primary" className="px-3">Open Meeting</Button>
         </div>
       ) : (
         <div className="sessions-page__list">

@@ -489,3 +489,9 @@
     transition: none;
   }
 }
+
+/* ---- E-Room vibe pass: square monochrome ---- */
+.profile-sidebar__btn,.profile-section .btn,.profile-plan,.profile-session,.profile-avatar{border-radius:0 !important;}
+.profile-sidebar__btn.is-active{background:#111 !important;color:#fff !important;}
+.profile-plan.is-popular{border:2px solid #111 !important;}
+

@@ -13,6 +13,8 @@ from app.schemas.message import MessageCreateSchema, MessageResponse
 from app.schemas.notification import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
 from app.schemas.room import (
     RoomCreateSchema,
+    RoomMatchRequest,
+    RoomMatchResponse,
     RoomResponse,
     RoomTokenResponse,
     RoomUpdateSchema,
@@ -36,6 +38,8 @@ __all__ = [
     "NotificationUpdateSchema",
     "RagMetadata",
     "RoomCreateSchema",
+    "RoomMatchRequest",
+    "RoomMatchResponse",
     "RoomResponse",
     "RoomTokenResponse",
     "RoomUpdateSchema",

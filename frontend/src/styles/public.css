@@ -1,0 +1,85 @@
+/* E-Room public system — white square full-screen sections */
+@import './tokens.css';
+
+.er { background: var(--er-bg); color: var(--er-ink); font-family: var(--er-font); min-height: 100dvh; }
+.er * { border-radius: 0 !important; }
+.er img, .er svg { display: block; max-width: 100%; }
+
+.er-container { width: 100%; max-width: var(--er-max); margin: 0 auto; padding: 0 24px; }
+.er-section { min-height: 100svh; display: flex; align-items: center; padding: 96px 0; border-top: 1px solid var(--er-line); background: var(--er-bg); }
+.er-section--soft { background: var(--er-bg-soft); }
+.er-section--line { background: var(--er-bg-line); }
+.er-section:first-of-type { border-top: 0; }
+
+.er-eyebrow { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--er-ink); border: 1px solid var(--er-line-strong); padding: 6px 10px; background: #fff; margin-bottom: 18px; }
+.er-title { font-size: clamp(40px, 6vw, 76px); line-height: 0.98; font-weight: 800; letter-spacing: -0.03em; color: #000; margin: 0 0 18px; }
+.er-lead { font-size: clamp(16px, 2vw, 20px); line-height: 1.6; color: var(--er-ink-2); max-width: 760px; margin: 0 auto; }
+.er-h2 { font-size: clamp(30px, 4vw, 52px); line-height: 1.02; letter-spacing: -0.02em; font-weight: 800; color: #000; margin: 0 0 14px; }
+.er-sub { font-size: 17px; color: var(--er-ink-3); max-width: 720px; margin: 0; }
+.er-center { text-align: center; }
+.er-center .er-sub, .er-center .er-lead { margin-left: auto; margin-right: auto; }
+
+.er-btn { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; padding: 14px 22px; border: 1px solid #111; text-decoration: none; cursor: pointer; background: #111; color: #fff; transition: transform 120ms ease, background 120ms ease, color 120ms ease; }
+.er-btn:hover { background: #000; color: #fff; transform: translateY(-1px); }
+.er-btn--ghost { background: #fff; color: #111; }
+.er-btn--ghost:hover { background: #111; color: #fff; }
+.er-btn--line { background: #fff; color: #111; border-color: #111; }
+.er-btn[disabled] { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.er-grid { display: grid; gap: 16px; }
+.er-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.er-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.er-grid--4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .er-grid--4, .er-grid--3 { grid-template-columns: repeat(2, 1fr); } .er-section { padding: 72px 0; } }
+@media (max-width: 600px) { .er-grid--2, .er-grid--3, .er-grid--4 { grid-template-columns: 1fr; } .er-container { padding: 0 18px; } }
+
+@media (max-width: 860px) { .roommock-grid { grid-template-columns: 1fr !important; } .pricing-head { grid-template-columns: 1fr !important; } .er-cta-grid { grid-template-columns: 1fr !important; } .er-review-slide { grid-template-columns: 1fr !important; gap: 16px !important; } .er-room-row { grid-template-columns: 48px 1fr auto !important; gap: 12px !important; } }
+
+/* Topic ticker in CTA */
+.er-ticker { max-height: 264px; overflow: hidden; position: relative; animation: er-ticker-scroll 22s linear infinite; }
+@keyframes er-ticker-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+/* Hide scrollbars on wheels */
+.er-wheel { scrollbar-width: none; -ms-overflow-style: none; }
+.er-wheel::-webkit-scrollbar { display: none; }
+
+/* Header responsive: desktop hiện nav ngang, ẩn nút toggle; mobile ngược lại */
+.er-nav-toggle { display: none; }
+.er-nav-mobile { display: none; }
+@media (max-width: 860px) {
+  .er-nav-desktop { display: none !important; }
+  .er-nav-toggle { display: inline-flex !important; }
+  .er-nav-mobile { display: block; }
+  .er-nav-cta { display: none !important; }
+}
+
+.er-card { background: #fff; border: 1px solid var(--er-line); padding: 22px; }
+.er-card--ink { background: #111; color: #fff; border-color: #111; }
+.er-card--ink .er-sub, .er-card--ink p { color: #d4d4d4; }
+.er-card h3 { margin: 14px 0 8px; font-size: 19px; font-weight: 800; color: #000; }
+.er-card--ink h3 { color: #fff; }
+.er-card p { margin: 0; color: var(--er-ink-2); font-size: 15px; line-height: 1.6; }
+.er-tag { display: inline-flex; align-items: center; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--er-line); padding: 5px 8px; background: #fff; color: #111; }
+.er-num { font-size: 13px; font-weight: 800; letter-spacing: 0.1em; color: #111; border: 1px solid #111; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; background: #fff; }
+
+.er-faq { border: 1px solid var(--er-line); background: #fff; }
+.er-faq + .er-faq { border-top: 0; }
+.er-faq summary { list-style: none; cursor: pointer; padding: 18px 20px; font-weight: 800; font-size: 16px; color: #000; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.er-faq summary::-webkit-details-marker { display: none; }
+.er-faq summary::after { content: '+'; font-size: 22px; line-height: 1; }
+.er-faq[open] summary::after { content: '–'; }
+.er-faq p { padding: 0 20px 20px; margin: 0; color: var(--er-ink-2); }
+
+.er-input, .er-select, .er-textarea { width: 100%; border: 1px solid #111; background: #fff; color: #111; padding: 13px 14px; font-size: 15px; font-family: inherit; }
+.er-input:focus, .er-select:focus, .er-textarea:focus { outline: 2px solid #111; outline-offset: 0; }
+.er-label { display: block; font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px; color: #111; }
+.er-alert { border: 1px solid #111; padding: 12px 14px; font-size: 14px; font-weight: 600; background: #fff; }
+.er-alert--ok { background: #111; color: #fff; }
+.er-alert--err { background: #fff; color: #111; border-width: 2px; }
+@keyframes er-spin { to { transform: rotate(360deg); } }
+.er-thinking-dots span { animation: er-blink 1.2s infinite; display: inline-block; }
+.er-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.er-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes er-blink { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }

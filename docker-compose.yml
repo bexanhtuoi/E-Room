@@ -61,6 +61,20 @@ services:
       livekit:
         condition: service_started
 
+  ai-transcriber:
+    build: ./backend
+    container_name: ai-transcriber
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --concurrency=1 --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
   tidb:
     image: pingcap/tidb:v8.5.0
     container_name: tidb

@@ -55,7 +55,7 @@ export function MatchFoundCard({ room, participants = [], onJoin, onDecline }) {
 
         {/* Room info */}
         <div className="match-found-room-info">
-          <div className="fw-bold match-found-room-topic">{room.topic || room.name}</div>
+          <div className="fw-bold match-found-room-topic">{room.name}</div>
           <div className="text-muted match-found-room-desc">{room.description || 'Start your conversation'}</div>
         </div>
 

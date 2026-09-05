@@ -151,8 +151,8 @@ button {
 img, svg { display: block; max-width: 100%; }
 
 ::selection {
-  background: var(--color-accent);
-  color: #fff;
+  background: #facc15;
+  color: #111111;
 }
 
 /* ---- Dark Theme Background Texture ---- */

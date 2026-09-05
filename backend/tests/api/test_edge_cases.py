@@ -35,7 +35,7 @@ class TestUnauthorizedAccess:
 class TestUnknownResources:
     def test_unknown_room_returns_404(self, client: TestClient, alice: dict):
         assert client.get("/api/v1/rooms/999999").status_code == 404
-        assert client.patch("/api/v1/rooms/999999", json={"topic": "x"}).status_code == 404
+        assert client.patch("/api/v1/rooms/999999", json={"name": "x"}).status_code == 404
 
     def test_unknown_user_returns_404(self, client: TestClient, alice: dict):
         assert client.get("/api/v1/users/999999").status_code == 404

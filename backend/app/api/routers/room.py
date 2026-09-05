@@ -3,19 +3,23 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session
 
+from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity
 from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
 from app.config import settings
 from app.database import get_session
 from app.integration.livekit import create_token, verify_webhook
-from app.integration.redis import delete as redis_delete, sadd, scard, smembers, srem
-from app.ai.tasks import enqueue_room_observer, mark_room_activity
+from app.integration.redis import delete as redis_delete
+from app.integration.redis import sadd, scard, smembers, srem
 from app.models import RoomStatus
 from app.schemas import (
     RoomCreateSchema,
+    RoomMatchRequest,
+    RoomMatchResponse,
     RoomResponse,
     RoomTokenResponse,
     RoomUpdateSchema,
 )
+from app.schemas.room import topics_to_json
 from app.services import message_crud, room_crud
 
 router = APIRouter()
@@ -27,7 +31,7 @@ def get_rooms(
     pagination: tuple[int, int] = Depends(get_pagination_params),
 ) -> List[RoomResponse]:
     skip, limit = pagination
-    rooms = room_crud.get_many(db, skip=skip, limit=limit)
+    rooms = room_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True)
     return rooms
 
 
@@ -57,9 +61,42 @@ def create_room(
 
     obj_in_data = room_in.model_dump()
     obj_in_data["host_id"] = request.state.current_user.id
+    obj_in_data["topics"] = topics_to_json(obj_in_data.get("topics"))
     new_room = room_crud.create(db, obj_in=obj_in_data)
 
     return new_room
+
+
+@router.post("/match", response_model=RoomMatchResponse)
+def match_room(
+    match_in: RoomMatchRequest,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> RoomMatchResponse:
+    candidates = [room for room in room_crud.get_many(db, limit=200) if room.status != RoomStatus.ENDED]
+
+    topic_query = (match_in.topic or "").strip().lower()
+    if topic_query:
+        scored = []
+        for room in candidates:
+            haystack = " ".join(
+                [
+                    room.name or "",
+                    room.description or "",
+                    room.topics or "",
+                ]
+            ).lower()
+            if topic_query in haystack:
+                scored.append(room)
+        candidates = scored
+
+    if not candidates:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No open rooms right now. Try creating one!")
+
+    priority = {RoomStatus.ACTIVE: 0, RoomStatus.IDLE: 1}
+    best = sorted(candidates, key=lambda room: (priority.get(room.status, 3), room.id or 0))[0]
+    return RoomMatchResponse(status="matched", room=best)
 
 
 @router.patch("/{room_id}", response_model=RoomResponse)
@@ -76,7 +113,10 @@ def update_room(
 
     authorize_owner(db_room.host_id, request)
 
-    updated_room = room_crud.update(db, db_obj=db_room, obj_in=room_in)
+    obj_in_data = room_in.model_dump(exclude_unset=True)
+    if "topics" in obj_in_data:
+        obj_in_data["topics"] = topics_to_json(obj_in_data.get("topics"))
+    updated_room = room_crud.update(db, db_obj=db_room, obj_in=obj_in_data)
     return updated_room
 
 
@@ -182,19 +222,40 @@ async def handle_livekit_webhook(
             if db_room and db_room.status != RoomStatus.ACTIVE:
                 room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
             enqueue_room_observer(room_id_int)
+            enqueue_room_transcriber(room_id_int)
         except ValueError:
             pass
 
     elif event_type == "participant_left" and participant_identity:
-        srem(redis_key, str(participant_identity))
-        remaining = scard(redis_key)
-        if remaining == 0:
-            try:
-                room_id_int = int(room_name)
-                db_room = room_crud.get_one(db, id=room_id_int)
-                if db_room and db_room.status != RoomStatus.ENDED:
-                    room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ENDED})
-            except ValueError:
-                pass
+        drop_participant_from_room(db, room_name, participant_identity)
 
     return {"status": "success", "event": event_type}
+
+
+def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
+    redis_key = f"room:{room_name}:participants"
+    srem(redis_key, str(participant_identity))
+    if scard(redis_key) > 0:
+        return
+    try:
+        room_id_int = int(room_name)
+    except ValueError:
+        return
+    db_room = room_crud.get_one(db, id=room_id_int)
+    # Phong het nguoi → IDLE (van hien trong list de vao lai),
+    # chi ENDED khi bo hoang lau (heartbeat xu ly).
+    if db_room and db_room.status == RoomStatus.ACTIVE:
+        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.IDLE})
+
+
+@router.post("/{room_id}/leave")
+def leave_room(
+    room_id: int,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> dict:
+    # Client goi truc tiep khi bam Leave/back — khong doi webhook LiveKit
+    # (webhook co the miss khi tab dong dot ngot hoac server restart).
+    drop_participant_from_room(db, str(room_id), request.state.current_user.id)
+    return {"status": "left", "room_id": room_id}

@@ -83,7 +83,7 @@ export function NotesPage() {
           <HiDocumentText size={24} />
           <h3>{search ? 'No matching notes' : 'No notes yet'}</h3>
           <p>{search ? 'Try a different search term.' : 'After a Pro+ session, your notes will appear here automatically.'}</p>
-          {!search && <Button as={Link} to="/learning" variant="outline-primary" className="px-3">Start a session</Button>}
+          {!search && <Button as={Link} to="/rooms" variant="outline-primary" className="px-3">Start a session</Button>}
         </div>
       ) : (
         <div className="notes-page__list">

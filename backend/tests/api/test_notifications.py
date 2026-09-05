@@ -22,7 +22,7 @@ class TestNotificationCrud:
         assert notification["notification_type"] == "system"
 
     def test_list_returns_only_own_notifications(self, client: TestClient, alice: dict):
-        mine = create_notification(client, "Alice Only")
+        create_notification(client, "Alice Only")
         bob = make_user(client)
         switch_to(client, bob)
         create_notification(client, "Bob Private")

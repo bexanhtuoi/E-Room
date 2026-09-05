@@ -7,7 +7,7 @@ import { HomePage } from './pages/HomePage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { AppShell } from './AppShell';
 
-const LearningPage = lazy(() => import('./pages/LearningPage').then(m => ({ default: m.LearningPage })));
+const RoomsPage = lazy(() => import('../features/rooms/RoomsPage').then(m => ({ default: m.RoomsPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const PaymentPage = lazy(() => import('./pages/PaymentPage').then(m => ({ default: m.PaymentPage })));
 const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })));
@@ -57,8 +57,9 @@ export function App() {
             <Route path="/onboarding" element={<AuthGuard><OnboardingWizard /></AuthGuard>} />
 
             {/* Protected */}
-            <Route path="/learning" element={<Protected><LearningPage /></Protected>} />
-            <Route path="/meeting" element={<Protected><LearningPage /></Protected>} />
+            <Route path="/rooms" element={<Protected><RoomsPage /></Protected>} />
+            <Route path="/learning" element={<Navigate to="/rooms" replace />} />
+            <Route path="/meeting" element={<Navigate to="/rooms" replace />} />
             <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
             <Route path="/pricing" element={<AppShell><PricingPage /></AppShell>} />
             <Route path="/payment" element={<Protected><PaymentPage /></Protected>} />

@@ -1,11 +1,14 @@
-import { useEffect, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useState, useCallback, useRef, useReducer } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { LiveKitRoom, GridLayout, ParticipantTile, useLocalParticipant, useRemoteParticipants, useRoomContext, useTracks, AudioTrack } from '@livekit/components-react';
+import { LiveKitRoom, ParticipantTile, useLocalParticipant, useRemoteParticipants, useRoomContext, useTracks, AudioTrack } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Track } from 'livekit-client';
-import { fetchJson, ApiClient, API_BASE_URL, getTokens } from '../../lib/api';
-import { createAudioCapture } from '../../lib/audioCapture';
-import { ChatWindow } from '../chat/ChatWindow';
+import { fetchJson, ApiClient } from '../../lib/api';
+import { ChatWindow, RoomDataBridge } from '../chat/ChatWindow';
+import { useRoomChat } from '../chat/useRoomChat';
+import { MAX_TOPICS, TopicPicker } from './TopicPicker';
+import { toBrowserLivekitUrl } from './livekitUrl';
+import { Face } from '../../components/common/Faces';
 import { useAuth } from '../../app/AuthContext';
 import '../../styles/RoomPage.css';
 import {
@@ -52,59 +55,154 @@ function hashColor(name) {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-function ControlBtn({ icon: Icon, active, onClick, label, danger, className = '' }) {
+function useIsMobile(breakpoint = 640) {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= breakpoint);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const fn = (e) => setMobile(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', fn);
+    setMobile(mq.matches);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', fn); };
+  }, [breakpoint]);
+  return mobile;
+}
+
+function useOptimisticToggle(live) {
+  const [opt, setOpt] = useState(null);
+  useEffect(() => {
+    if (opt === null) return;
+    if (opt === live) {
+      setOpt(null);
+      return;
+    }
+    const timer = setTimeout(() => setOpt(null), 2500);
+    return () => clearTimeout(timer);
+  }, [opt, live]);
+  return [opt ?? live, setOpt];
+}
+
+function ControlBtn({ icon: Icon, offIcon: OffIcon, on, onClick, label, danger, small }) {
+  const ShowIcon = !on && OffIcon ? OffIcon : Icon;
+  const labelText = on ? label.on : label.off;
   return (
     <button
-      className={`ctrl-btn ${danger ? 'ctrl-btn--danger' : ''} ${active ? 'ctrl-btn--active' : ''} ${className}`}
-      onClick={onClick} aria-label={label} title={label}
+      onClick={onClick}
+      aria-label={labelText}
+      aria-pressed={on}
+      title={labelText}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+        minWidth: small ? 56 : 68, minHeight: 56, padding: '8px 10px', cursor: 'pointer',
+        background: danger ? '#fff' : on ? '#0a0a0a' : 'transparent',
+        color: danger ? '#111' : on ? '#fff' : '#888',
+        border: danger ? '2px solid #fff' : on ? '2px solid #fff' : '2px dashed #555',
+      }}
     >
-      <Icon size={20} />
+      <ShowIcon size={20} />
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em' }}>{labelText}</span>
     </button>
   );
 }
 
-function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRaised,
-  showEmojiPicker, setShowEmojiPicker, sendEmoji, screenShareOn, setScreenShareOn, onMicToggle }) {
+function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, setHandRaised,
+  showEmojiPicker, setShowEmojiPicker, sendEmoji, setScreenShareOn, onOpenParticipants }) {
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
+  const isMobile = useIsMobile();
+  const [showMore, setShowMore] = useState(false);
+
+  const [deviceError, setDeviceError] = useState('');
+  // Mic/cam nam hoan toan o trinh duyet (server chi signaling) nen loi nay
+  // luon la phia user: chua cap quyen, khong co thiet bi, hoac thiet bi dang ban.
+  const onDeviceError = useCallback((e) => {
+    const name = e?.name || '';
+    console.warn('media device error:', name, e?.message);
+    setDeviceError(
+      name === 'NotAllowedError' || name === 'SecurityError'
+        ? 'Browser blocked the mic/camera — click the lock icon in the address bar to allow access, then try again.'
+        : name === 'NotFoundError' || name === 'OverconstrainedError'
+          ? 'No mic/camera found on this device — plug one in (or enable it in system settings), then try again.'
+          : name === 'NotReadableError' || name === 'AbortError'
+            ? 'Your mic/camera looks busy — close other apps or tabs using it (Zoom, Zalo, Meet…), then try again.'
+            : 'Could not access mic/camera. Check that a device is connected and not used elsewhere, then try again.',
+    );
+  }, []);
+
+  // Goi truc tiep localParticipant (khong qua useTrackToggle) de tranh
+  // truong hop toggle khong doi state live → optimistic tu revert.
+  // State hien thi doc thang tu participant + force re-render qua events.
+  const [, forceSync] = useReducer((x) => x + 1, 0);
+  const [micBusy, setMicBusy] = useState(false);
+  const [camBusy, setCamBusy] = useState(false);
+  const [screenBusy, setScreenBusy] = useState(false);
 
   useEffect(() => {
-    if (localParticipant) {
-      setMicOn(localParticipant.isMicrophoneEnabled ?? true);
-      setCamOn(localParticipant.isCameraEnabled ?? true);
-      setScreenShareOn(localParticipant.isScreenShareEnabled ?? false);
-    }
+    if (!localParticipant) return;
+    const bump = () => forceSync();
+    const evts = ['trackMuted', 'trackUnmuted', 'localTrackPublished', 'localTrackUnpublished', 'trackSubscribed', 'trackUnsubscribed', 'trackEnabled', 'trackDisabled'];
+    evts.forEach((e) => localParticipant.on(e, bump));
+    return () => { evts.forEach((e) => localParticipant.off(e, bump)); };
   }, [localParticipant]);
+
+  const liveMicOn = localParticipant ? !!localParticipant.isMicrophoneEnabled : true;
+  const liveCamOn = localParticipant ? !!localParticipant.isCameraEnabled : true;
+  const liveScreenOn = localParticipant ? !!localParticipant.isScreenShareEnabled : false;
+
+  const [micOn, setMicOpt] = useOptimisticToggle(liveMicOn);
+  const [camOn, setCamOpt] = useOptimisticToggle(liveCamOn);
+  const [screenOn, setScreenOpt] = useOptimisticToggle(liveScreenOn);
+
+  useEffect(() => {
+    setScreenShareOn(liveScreenOn);
+  }, [liveScreenOn, setScreenShareOn]);
 
   const toggleMic = useCallback(async () => {
-    if (!localParticipant) { setMicOn(p => { onMicToggle?.(!p); return !p; }); return; }
+    if (!localParticipant || micBusy) return;
+    setDeviceError('');
+    const next = !liveMicOn;
+    setMicOpt(next);
+    setMicBusy(true);
     try {
-      const newState = !localParticipant.isMicrophoneEnabled;
-      await localParticipant.setMicrophoneEnabled(newState);
-      setMicOn(newState);
-      onMicToggle?.(newState);
-    } catch (e) { console.warn('toggleMic:', e); }
-  }, [localParticipant, onMicToggle]);
+      await localParticipant.setMicrophoneEnabled(next);
+    } catch (e) {
+      console.warn('toggleMic:', e);
+      onDeviceError(e);
+    } finally {
+      setMicBusy(false);
+    }
+  }, [localParticipant, micBusy, liveMicOn, setMicOpt, onDeviceError]);
 
   const toggleCam = useCallback(async () => {
-    if (!localParticipant) { setCamOn(p => !p); return; }
+    if (!localParticipant || camBusy) return;
+    setDeviceError('');
+    const next = !liveCamOn;
+    setCamOpt(next);
+    setCamBusy(true);
     try {
-      const newState = !localParticipant.isCameraEnabled;
-      await localParticipant.setCameraEnabled(newState);
-      setCamOn(newState);
-    } catch (e) { console.warn('toggleCam:', e); }
-  }, [localParticipant]);
+      await localParticipant.setCameraEnabled(next);
+    } catch (e) {
+      console.warn('toggleCam:', e);
+      onDeviceError(e);
+    } finally {
+      setCamBusy(false);
+    }
+  }, [localParticipant, camBusy, liveCamOn, setCamOpt, onDeviceError]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!localParticipant) { setScreenShareOn(p => !p); return; }
+    if (!localParticipant || screenBusy) return;
+    setDeviceError('');
+    const next = !liveScreenOn;
+    setScreenOpt(next);
+    setScreenBusy(true);
     try {
-      const newState = !localParticipant.isScreenShareEnabled;
-      await localParticipant.setScreenShareEnabled(newState);
-      setScreenShareOn(newState);
-    } catch (e) { console.warn('toggleScreenShare:', e); }
-  }, [localParticipant, setScreenShareOn]);
+      await localParticipant.setScreenShareEnabled(next);
+    } catch (e) {
+      console.warn('toggleScreenShare:', e);
+      onDeviceError(e);
+    } finally {
+      setScreenBusy(false);
+    }
+  }, [localParticipant, screenBusy, liveScreenOn, setScreenOpt, onDeviceError]);
 
   const toggleHandRaise = useCallback(() => {
     setHandRaised(prev => {
@@ -136,48 +234,140 @@ function MeetControls({ onLeave, togglePanel, activePanel, handRaised, setHandRa
     return () => room.off('dataReceived', handler);
   }, [room, localParticipant]);
 
-  return (
-    <footer className="meet-controls">
-      <div className="meet-controls-center">
-        <ControlBtn icon={HiComputerDesktop} active={screenShareOn}
-          onClick={toggleScreenShare}
-          label={screenShareOn ? 'Stop sharing' : 'Share screen'}
-        />
-        <ControlBtn icon={micOn ? HiMicrophone : HiMicOff} active={micOn}
+  function PendingBtn({ pending, children }) {
+    return (
+      <span style={{ position: 'relative', display: 'inline-flex', opacity: pending ? 0.55 : 1 }}>
+        {children}
+        {pending && (
+          <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', background: 'rgba(0,0,0,0.45)' }}>…</span>
+        )}
+      </span>
+    );
+  }
+
+  const mediaBtns = (
+    <>
+      <PendingBtn pending={micBusy}>
+        <ControlBtn icon={HiMicrophone} offIcon={HiMicOff} on={micOn}
           onClick={toggleMic}
-          label={micOn ? 'Mute microphone' : 'Unmute microphone'}
+          label={{ on: 'Mic on', off: 'Muted' }}
         />
-        <ControlBtn icon={camOn ? HiVideoCamera : HiVideoCameraSlash} active={camOn}
+      </PendingBtn>
+      <PendingBtn pending={camBusy}>
+        <ControlBtn icon={HiVideoCamera} offIcon={HiVideoCameraSlash} on={camOn}
           onClick={toggleCam}
-          label={camOn ? 'Turn off camera' : 'Turn on camera'}
+          label={{ on: 'Cam on', off: 'Cam off' }}
         />
-        <ControlBtn icon={HiHandRaised} active={handRaised}
-          onClick={toggleHandRaise}
-          label={handRaised ? 'Lower hand' : 'Raise hand'}
+      </PendingBtn>
+      <PendingBtn pending={screenBusy}>
+        <ControlBtn icon={HiComputerDesktop} on={screenOn}
+          onClick={toggleScreenShare}
+          label={{ on: 'Sharing', off: 'Share' }}
         />
-        <div className="meet-controls__emoji-wrap">
-          <ControlBtn icon={HiFaceSmile} active={showEmojiPicker}
-            onClick={() => setShowEmojiPicker(prev => !prev)}
-            label="Send reaction"
-          />
-          {showEmojiPicker && (
-            <div className="meet-controls__emoji-picker">
-              {EMOJIS.map(emoji => (
-                <button key={emoji} onClick={() => sendEmoji(emoji)} className="meet-controls__emoji-btn">{emoji}</button>
-              ))}
+      </PendingBtn>
+    </>
+  );
+
+  const funBtns = (
+    <>
+      <ControlBtn icon={HiHandRaised} on={handRaised}
+        onClick={toggleHandRaise}
+        label={{ on: 'Hand up', off: 'Raise hand' }}
+      />
+      <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <ControlBtn icon={HiFaceSmile} on={showEmojiPicker}
+          onClick={() => setShowEmojiPicker(prev => !prev)}
+          label={{ on: 'React', off: 'React' }}
+        />
+        {showEmojiPicker && (
+          <span style={{ position: 'absolute', bottom: 64, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 4, background: '#fff', border: '2px solid #111', padding: 8, zIndex: 50 }}>
+            {EMOJIS.map(emoji => (
+              <button key={emoji} onClick={() => sendEmoji(emoji)} style={{ fontSize: 20, background: 'none', border: 'none', cursor: 'pointer' }}>{emoji}</button>
+            ))}
+          </span>
+        )}
+      </span>
+    </>
+  );
+
+  const panelBtns = (
+    <>
+      <ControlBtn icon={HiChatBubbleLeftRight} on={activePanel === 'chat'}
+        onClick={() => { setShowMore(false); togglePanel('chat'); }}
+        label={{ on: 'Chat open', off: 'Chat' }}
+      />
+      <ControlBtn icon={HiUserGroup} on={activePanel === 'participants'}
+        onClick={() => { setShowMore(false); onOpenParticipants?.(); }}
+        label={{ on: 'People', off: 'People' }}
+      />
+      <ControlBtn icon={HiCog6Tooth} on={activePanel === 'settings'}
+        onClick={() => { setShowMore(false); togglePanel('settings'); }}
+        label={{ on: 'Setup', off: 'Setup' }}
+      />
+    </>
+  );
+
+  async function handleLeaveNow() {
+    // Bao server xoa minh khoi phong NGAY (khong doi webhook LiveKit —
+    // webhook miss khi tab dong dot ngot), roi moi ngat ket noi.
+    try {
+      await fetchJson(`/rooms/${roomId}/leave`, { method: 'POST' });
+    } catch {}
+    try {
+      room?.disconnect();
+    } catch {}
+    onLeave();
+  }
+
+  function LeaveBtn() {
+    return (
+      <button onClick={handleLeaveNow} title="Leave call" aria-label="Leave call"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 68, minHeight: 56, padding: '8px 10px', cursor: 'pointer', background: '#fff', color: '#111', border: '2px solid #fff' }}>
+        <HiPhoneXMark size={20} />
+        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em' }}>Leave</span>
+      </button>
+    );
+  }
+
+  return (
+    <footer style={{ background: '#0a0a0a', borderTop: '2px solid #000', padding: '10px 12px' }}>
+      {deviceError && (
+        <div style={{ maxWidth: 640, margin: '0 auto 8px', background: '#fff', color: '#111', border: '2px solid #111', padding: '8px 12px', fontSize: 12, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>{deviceError}</span>
+          <button onClick={() => setDeviceError('')} aria-label="Dismiss" style={{ background: 'none', border: '1px solid #111', fontWeight: 800, cursor: 'pointer', padding: '2px 8px' }}>✕</button>
+        </div>
+      )}
+      {isMobile ? (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+            {mediaBtns}
+            <button onClick={() => setShowMore(v => !v)} aria-label="More controls" aria-expanded={showMore}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 68, minHeight: 56, padding: '8px 10px', cursor: 'pointer', background: showMore ? '#fff' : 'transparent', color: showMore ? '#111' : '#fff', border: '2px solid #fff' }}>
+              <HiEllipsisVertical size={20} />
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em' }}>More</span>
+            </button>
+            <LeaveBtn />
+          </div>
+          {showMore && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, paddingTop: 10, borderTop: '1px solid #333' }}>
+              {funBtns}
+              {panelBtns}
             </div>
           )}
+        </>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap', maxWidth: 1200, margin: '0 auto' }}>
+          {mediaBtns}
+          {funBtns}
+          <LeaveBtn />
         </div>
-        <button className="ctrl-hangup" onClick={onLeave} title="Leave call">
-          <HiPhoneXMark size={24} color="#fff" />
-        </button>
-        <ControlBtn icon={HiChatBubbleLeftRight} active={activePanel === 'chat'}
-          onClick={() => togglePanel('chat')}
-          label={activePanel === 'chat' ? 'Hide chat' : 'Show chat'}
-        />
-      </div>
+      )}
     </footer>
   );
+}
+
+function isAiParticipant(identity) {
+  return String(identity || '').startsWith('ai_');
 }
 
 function ParticipantTracker({ onUpdate }) {
@@ -196,6 +386,9 @@ function ParticipantTracker({ onUpdate }) {
       });
     }
     (remoteParticipants || []).forEach(p => {
+      // AI (ai_assistant/ai_transcriber/ai_observer) khong chiem seat,
+      // khong hien nhu 1 user trong room.
+      if (isAiParticipant(p.identity)) return;
       all.push({
         identity: p.identity || 'unknown',
         name: formatParticipantName(p.name, p.identity, false),
@@ -276,7 +469,12 @@ function VideoArea({ isSharing, isHandRaised }) {
     { source: Track.Source.Camera, withPlaceholder: true },
     { source: Track.Source.ScreenShare, withPlaceholder: false },
   ]);
-  const roomTracks = tracks.filter(track => !track?.participant?.isLocal || track?.source === Track.Source.ScreenShare);
+  // Loc AI (ai_*) khoi video grid — khong chiem seat, khong hien nhu user.
+  const roomTracks = tracks.filter((track) => {
+    if (track?.source === Track.Source.ScreenShare) return true;
+    if (track?.participant?.isLocal) return false;
+    return !isAiParticipant(track?.participant?.identity);
+  });
   const screenTracks = roomTracks.filter(track => track?.source === Track.Source.ScreenShare);
   const cameraTracks = roomTracks.filter(track => track?.source !== Track.Source.ScreenShare);
   const orderedTracks = [...screenTracks, ...cameraTracks];
@@ -324,12 +522,66 @@ function VideoArea({ isSharing, isHandRaised }) {
   );
 }
 
-function ConnectingGate() {
+const CONNECT_STEPS = ['Finding your room…', 'Checking mic & camera…', 'Reserving your seat…', 'Going live…'];
+
+function EqualizerBars() {
+  const bars = [0, 1, 2, 3, 4, 5, 6];
   return (
-    <div className="room-page__connecting-wrap">
-      <div className="room-page__connecting-spinner" />
-      <p className="room-page__connecting-text">Connecting to room...</p>
-      
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 6, height: 56 }} aria-hidden="true">
+      {bars.map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 10,
+            height: '100%',
+            background: '#111',
+            transformOrigin: 'bottom',
+            animation: `er-eq 1s ease-in-out ${i * 0.12}s infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ConnectingGate({ roomName }) {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setStep((s) => (s + 1) % CONNECT_STEPS.length), 1400);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div style={{ minHeight: '100dvh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', border: '2px solid #111', padding: 'clamp(32px, 5vw, 56px)', textAlign: 'center', maxWidth: 440, width: '100%', boxShadow: '8px 8px 0 #111' }}>
+        <div style={{ display: 'inline-flex', gap: 4, marginBottom: 20 }} aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <span
+              key={i}
+              style={{
+                width: 14,
+                height: 14,
+                background: '#111',
+                animation: `er-seat 1.2s ease-in-out ${i * 0.15}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+        <EqualizerBars />
+        <p style={{ margin: '20px 0 4px', fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', color: '#666' }}>JOINING ROOM</p>
+        <h2 style={{ margin: 0, fontSize: 24, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {roomName || '…'}
+        </h2>
+        <p key={step} style={{ margin: '14px 0 0', fontSize: 14, fontWeight: 600, color: '#111', animation: 'er-fadein 0.4s ease' }}>
+          {CONNECT_STEPS[step]}
+        </p>
+      </div>
+      <style>{`
+        @keyframes er-eq { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+        @keyframes er-seat { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+        @keyframes er-fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+      `}</style>
     </div>
   );
 }
@@ -345,7 +597,7 @@ function ParticipantsPanel({ participants, onClose }) {
     <aside className="room-page__panel">
       <header className="room-page__panel-header">
         <div className="room-page__panel-header-left">
-          <span className="room-page__panel-header-icon"><HiUserGroup size={16} /></span>
+          <span className="room-page__panel-header-icon" style={{ color: '#111' }}><HiUserGroup size={16} /></span>
           <h3 className="room-page__panel-header-title">Participants</h3>
           <span className="room-page__panel-header-count">{participants?.length ?? 0}</span>
         </div>
@@ -358,10 +610,10 @@ function ParticipantsPanel({ participants, onClose }) {
           const alreadyFriend = isFriend(p.identity);
           return (
             <div key={p.identity || i} className="room-page__panel-row">
-              <div className="room-page__panel-avatar" style={{ background: hashColor(p.name) }}>
-                {getInitials(p.name)}
-                <div className="room-page__panel-dot" style={{ background: p.camOn ? 'var(--color-success)' : 'var(--color-text-muted)' }} />
-              </div>
+              <span style={{ display: 'inline-flex', position: 'relative', flexShrink: 0 }}>
+                <Face name={p.name} size={38} />
+                <span style={{ position: 'absolute', bottom: -2, right: -2, width: 12, height: 12, background: p.camOn ? '#15803d' : '#999', border: '2px solid #fff' }} />
+              </span>
               <div className="room-page__panel-row-name-wrap">
                 <div className="room-page__panel-row-name">
                   {p.name}
@@ -405,42 +657,37 @@ function ParticipantsPanel({ participants, onClose }) {
   );
 }
 
-const ENGLISH_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const AGENT_LEVELS = [
-  { value: 'basic', label: 'Basic', desc: 'Basic pronunciation feedback' },
-  { value: 'advanced', label: 'Advanced', desc: 'Grammar + word choice tips' },
-  { value: 'full', label: 'Full', desc: 'Full AI conversation coach' },
-];
-const DURATIONS = [
-  { value: 300, label: '5 min' },
-  { value: 600, label: '10 min' },
-  { value: 900, label: '15 min' },
-  { value: 1200, label: '20 min' },
-  { value: 1800, label: '30 min' },
-  { value: 2700, label: '45 min' },
-  { value: 3600, label: '60 min' },
+const FEATURE_DEFS = [
+  { key: 'enable_heartbeat', label: 'Heartbeat', desc: 'AI restarts quiet rooms with warm-up questions' },
+  { key: 'enable_transcript', label: 'Transcript', desc: 'Live speech-to-text for every voice' },
+  { key: 'enable_agent', label: 'Agent live', desc: 'AI answers @ai mentions in chat + voice' },
 ];
 
-function ToggleSwitch({ label, value, onChange }) {
+function FeatureSwitch({ on, onClick, label, desc }) {
   return (
-    <div className="room-settings__toggle-row" onClick={() => onChange(!value)}>
-      <span className="room-settings__toggle-label">{label}</span>
-      <div className={`room-settings__toggle ${value ? 'active' : ''}`}>
-        <div className="room-settings__toggle-knob" />
-      </div>
-    </div>
+    <button onClick={onClick} aria-pressed={on}
+      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, width: '100%', background: '#fff', border: on ? '2px solid #111' : '1px solid #e8e8e8', padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+      <span>
+        <span style={{ display: 'block', fontWeight: 800, fontSize: 14 }}>{label}</span>
+        <span style={{ display: 'block', fontSize: 12, color: '#666', marginTop: 2 }}>{desc}</span>
+      </span>
+      <span style={{ width: 46, height: 26, background: on ? '#111' : '#ddd', display: 'inline-flex', alignItems: 'center', padding: 3, justifyContent: on ? 'flex-end' : 'flex-start', flexShrink: 0 }}>
+        <span style={{ width: 20, height: 20, background: '#fff', border: on ? 'none' : '1px solid #bbb' }} />
+      </span>
+    </button>
   );
 }
 
 function RoomSettings({ roomId, current, onClose, onSave, api }) {
-  const [topic, setTopic] = useState(current.topic || '');
-  const [englishLevel, setEnglishLevel] = useState(current.english_level || '');
-  const [agentLevel, setAgentLevel] = useState(current.agent_level || 'basic');
-  const [maxParticipants, setMaxParticipants] = useState(current.max_participants || 5);
-  const [duration, setDuration] = useState(current.session_duration_seconds || 900);
-  const [enableHeartbeat, setEnableHeartbeat] = useState(current.enable_heartbeat !== false);
-  const [enableCorrection, setEnableCorrection] = useState(current.enable_pronunciation_correction !== false);
-  const [enableVoice, setEnableVoice] = useState(current.enable_voice_recognition !== false);
+  const [name, setName] = useState(current.name || '');
+  const [description, setDescription] = useState(current.description || '');
+  const [topics, setTopics] = useState(Array.isArray(current.topics) ? current.topics : []);
+  const [seats, setSeats] = useState(current.max_participants || 4);
+  const [flags, setFlags] = useState({
+    enable_heartbeat: current.enable_heartbeat !== false,
+    enable_transcript: current.enable_transcript !== false,
+    enable_agent: current.enable_agent !== false,
+  });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -449,14 +696,11 @@ function RoomSettings({ roomId, current, onClose, onSave, api }) {
     setSaveError('');
     try {
       await api.patch(`/rooms/${roomId}`, {
-        topic: topic || undefined,
-        english_level: englishLevel || undefined,
-        agent_level: agentLevel,
-        max_participants: maxParticipants,
-        session_duration_seconds: duration,
-        enable_heartbeat: enableHeartbeat,
-        enable_pronunciation_correction: enableCorrection,
-        enable_voice_recognition: enableVoice,
+        name: name.trim() || undefined,
+        description: description.trim() || undefined,
+        topics,
+        max_participants: seats,
+        ...flags,
       });
       if (onSave) await onSave();
       onClose();
@@ -465,76 +709,58 @@ function RoomSettings({ roomId, current, onClose, onSave, api }) {
     } finally {
       setSaving(false);
     }
-  }, [roomId, topic, englishLevel, agentLevel, maxParticipants, duration, enableHeartbeat, enableCorrection, enableVoice, api, onSave, onClose]);
+  }, [roomId, name, description, topics, seats, flags, api, onSave, onClose]);
 
   return (
-    <aside className="room-page__panel">
-      <header className="room-page__panel-header">
-        <div className="room-page__panel-header-left">
-          <span className="room-page__panel-header-icon"><HiCog6Tooth size={16} /></span>
-          <h3 className="room-page__panel-header-title">Room Settings</h3>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#fff' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '2px solid #111', flexShrink: 0 }}>
+        <strong style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}><HiCog6Tooth size={16} /> Room setup</strong>
+        <button onClick={onClose} aria-label="Close settings" style={{ background: '#fff', border: '1px solid #111', width: 30, height: 30, fontWeight: 800, cursor: 'pointer' }}>✕</button>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'grid', gap: 16, alignContent: 'start', minHeight: 0 }}>
+        <div>
+          <label className="er-label">Room name</label>
+          <input className="er-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="AI Agents & Automation" />
         </div>
-        <button onClick={onClose} aria-label="Close" className="room-page__panel-close-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      </header>
-      <div className="room-page__panel-body room-settings__body">
-        <div className="room-settings__group">
-          <label className="room-settings__label">Topic</label>
-          <input className="room-settings__input" value={topic} onChange={e => setTopic(e.target.value)} placeholder="Discussion topic" />
+        <div>
+          <label className="er-label">Description</label>
+          <textarea className="er-textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this room about?" />
         </div>
-        <div className="room-settings__group">
-          <label className="room-settings__label">English Level</label>
-          <div className="room-settings__chips">
-            <button className={`room-settings__chip ${!englishLevel ? 'active' : ''}`} onClick={() => setEnglishLevel('')}>Any</button>
-            {ENGLISH_LEVELS.map(lv => (
-              <button key={lv} className={`room-settings__chip ${englishLevel === lv ? 'active' : ''}`} onClick={() => setEnglishLevel(lv)}>{lv}</button>
-            ))}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <label className="er-label" style={{ margin: 0 }}>Topics</label>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#999' }}>{topics.length}/{MAX_TOPICS}</span>
           </div>
+          <TopicPicker topics={topics} onChange={setTopics} />
         </div>
-        <div className="room-settings__group">
-          <label className="room-settings__label">AI Agent Level</label>
-          <div className="room-settings__agent-options">
-            {AGENT_LEVELS.map(al => (
-              <button key={al.value} className={`room-settings__agent-card ${agentLevel === al.value ? 'active' : ''}`} onClick={() => setAgentLevel(al.value)}>
-                <div className="room-settings__agent-name">{al.label}</div>
-                <div className="room-settings__agent-desc">{al.desc}</div>
+        <div>
+          <label className="er-label">Seats</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[2, 3, 4].map((n) => (
+              <button key={n} type="button" onClick={() => setSeats(n)}
+                style={{ flex: 1, padding: '12px 0', fontWeight: 800, cursor: 'pointer', background: seats === n ? '#111' : '#fff', color: seats === n ? '#fff' : '#111', border: '1px solid #111' }}>
+                {n}
               </button>
             ))}
           </div>
         </div>
-        <div className="room-settings__group">
-          <label className="room-settings__label">Max Participants: {maxParticipants}</label>
-          <div className="room-settings__chips">
-            {[2, 3, 4, 5].map(n => (
-              <button key={n} className={`room-settings__chip ${maxParticipants === n ? 'active' : ''}`} onClick={() => setMaxParticipants(n)}>{n}</button>
+        <div>
+          <label className="er-label">Features</label>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {FEATURE_DEFS.map((f) => (
+              <FeatureSwitch key={f.key} label={f.label} desc={f.desc} on={!!flags[f.key]} onClick={() => setFlags((p) => ({ ...p, [f.key]: !p[f.key] }))} />
             ))}
           </div>
         </div>
-        <div className="room-settings__group">
-          <label className="room-settings__label">Session Duration</label>
-          <div className="room-settings__chips">
-            {DURATIONS.map(d => (
-              <button key={d.value} className={`room-settings__chip ${duration === d.value ? 'active' : ''}`} onClick={() => setDuration(d.value)}>{d.label}</button>
-            ))}
-          </div>
-        </div>
-        <div className="room-settings__divider" />
-        <div className="room-settings__group">
-          <label className="room-settings__label">Features</label>
-          <ToggleSwitch label="Heartbeat questions" value={enableHeartbeat} onChange={setEnableHeartbeat} />
-          <ToggleSwitch label="Pronunciation correction" value={enableCorrection} onChange={setEnableCorrection} />
-          <ToggleSwitch label="Voice recognition" value={enableVoice} onChange={setEnableVoice} />
-        </div>
+        {saveError && <div className="er-alert er-alert--err">{saveError}</div>}
       </div>
-      {saveError && <div className="room-settings__error">{saveError}</div>}
-      <div className="room-page__panel-footer room-settings__footer">
-        <button className="room-settings__btn room-settings__btn--cancel" onClick={onClose}>Cancel</button>
-        <button className="room-settings__btn room-settings__btn--save" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Settings'}
+      <div style={{ display: 'flex', gap: 10, padding: 14, borderTop: '2px solid #111', flexShrink: 0 }}>
+        <button className="er-btn er-btn--ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cancel</button>
+        <button className="er-btn" style={{ flex: 2, justifyContent: 'center' }} onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save setup'}
         </button>
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -559,14 +785,10 @@ export function RoomPage() {
   const [participantsList, setParticipantsList] = useState([]);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
   const [handRaiseNotifs, setHandRaiseNotifs] = useState([]);
-  const wsRef = useRef(null);
-  const [wsSocket, setWsSocket] = useState(null);
-  const audioWsRef = useRef(null);
-  const audioCaptureRef = useRef(null);
-  const micEnabledRef = useRef(true);
-  const [wsParticipants, setWsParticipants] = useState(0);
   const [retrySignal, setRetrySignal] = useState(0);
-  const joinedRef = useRef(false);
+  const [connError, setConnError] = useState('');
+  const chat = useRoomChat(roomId);
+  const { user } = useAuth();
 
   const handleDisconnected = useCallback(() => {
     if (!hasLeftRef.current) {
@@ -586,23 +808,19 @@ export function RoomPage() {
     try {
       const data = await fetchJson(`/rooms/${roomId}`);
       setRoomData(data);
-      setRoomName(data?.topic || data?.name || data?.room_name || 'Room');
+      setRoomName(data?.name || data?.room_name || 'Room');
     } catch {}
   }, [roomId]);
 
   const handleLeave = useCallback(() => {
     hasLeftRef.current = true;
-    api.post(`/rooms/${roomId}/leave`, {}).catch(() => {});
     setPhase('left');
-  }, [roomId]);
-  const goBack = useCallback(() => { navigate('/learning'); }, [navigate]);
-
-  useEffect(() => {
-    return () => {
-      if (hasLeftRef.current) return;
-      api.post(`/rooms/${roomId}/leave`, {}).catch(() => {});
-    };
-  }, [roomId]);
+  }, []);
+  const goBack = useCallback(() => {
+    // Mui ten back cung la roi phong — bao server truoc khi chuyen trang
+    fetchJson(`/rooms/${roomId}/leave`, { method: 'POST' }).catch(() => {});
+    navigate('/rooms');
+  }, [navigate, roomId]);
 
   useEffect(() => {
     if (phase !== 'connected') return;
@@ -638,29 +856,24 @@ export function RoomPage() {
     return () => clearTimeout(timeout);
   }, [handRaiseNotifs]);
 
+  // Lay ten phong som de man hinh loading hien ten that
+  useEffect(() => {
+    refreshRoomData();
+  }, [refreshRoomData]);
+
   useEffect(() => {
     let cancelled = false;
     async function joinAndGetToken() {
       try {
         const roomData = await fetchJson(`/rooms/${roomId}`);
         if (cancelled) return;
-        setRoomName(roomData?.topic || roomData?.name || roomData?.room_name || 'Room');
+        setRoomName(roomData?.name || roomData?.room_name || 'Room');
         setRoomData(roomData);
-        if (!joinedRef.current) {
-          await api.post(`/rooms/${roomId}/join`, {});
-          joinedRef.current = true;
-        }
-        if (cancelled) return;
+        // Backend theo doi participants qua LiveKit webhook — lay token la du de join.
         const tokenResult = await api.post(`/rooms/${roomId}/token`);
         if (cancelled) return;
 
-        const backendUrl = tokenResult.livekit_url || '';
-        const host = `${window.location.hostname}:7880`;
-        const lkUrl = backendUrl
-          .replace(/localhost/, window.location.hostname)
-          .replace(/ws:\/\/livekit:/, `ws://${host}`)
-          .replace(/ws:\/\/lk:/, `ws://${host}`)
-        const finalUrl = lkUrl || `ws://${host}`;
+        const finalUrl = toBrowserLivekitUrl(tokenResult.livekit_url);
         setToken(tokenResult.livekit_token);
         setLivekitUrl(finalUrl);
         setPhase('connected');
@@ -675,61 +888,6 @@ export function RoomPage() {
   useEffect(() => {
     if (phase === 'left' && elapsed > 0) setSavedElapsed(elapsed);
   }, [phase, elapsed]);
-
-  useEffect(() => {
-    if (phase !== 'connected') return;
-    const authToken = getTokens()?.access || '';
-    const loc = window.location;
-    const wsBase = import.meta.env.VITE_WS_BASE_URL || `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}`;
-
-    const wsUrl = `${wsBase}/ws/rooms/${roomId}?token=${authToken}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-    setWsSocket(ws);
-
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === 'system') {
-          if (data.event === 'user_joined' || data.event === 'user_left') {
-            setWsParticipants(data.participant_count || 0);
-          }
-        } else if (data.type === 'presence') {
-          setWsParticipants(data.connections || 0);
-        }
-      } catch {}
-    };
-
-    return () => {
-      ws.close();
-      wsRef.current = null;
-      setWsSocket(null);
-    };
-  }, [phase, roomId]);
-
-  useEffect(() => {
-    if (phase !== 'connected') {
-      if (audioCaptureRef.current) {
-        audioCaptureRef.current.stop();
-        audioCaptureRef.current = null;
-      }
-      return;
-    }
-    const authToken = getTokens()?.access || '';
-    if (!authToken) return;
-    const capture = createAudioCapture(roomId, authToken, audioWsRef, undefined, { enabled: micEnabledRef.current });
-    audioCaptureRef.current = capture;
-    capture.start();
-    return () => {
-      capture.stop();
-      audioCaptureRef.current = null;
-    };
-  }, [phase, roomId]);
-
-  const handleMicToggle = useCallback((enabled) => {
-    micEnabledRef.current = enabled;
-    audioCaptureRef.current?.setEnabled(enabled);
-  }, []);
 
   const handleParticipantUpdate = useCallback((list) => {
     setParticipantsList(prev => {
@@ -755,138 +913,149 @@ export function RoomPage() {
   if (phase === 'loading') {
     return (
       <div className="room-page__loading-wrap">
-        <ConnectingGate />
+        <ConnectingGate roomName={roomName} />
       </div>
     );
   }
 
   if (phase === 'error') {
     return (
-      <div className="room-page__error-wrap">
-        <HiShieldExclamation size={48} color={COLOR.danger} />
-        <h2 className="room-page__error-title">Failed to join room</h2>
-        <p className="room-page__error-message">{error}</p>
-        <div className="room-page__error-actions">
-          <button className="room-btn-sec" onClick={handleRetry}>Retry</button>
-          <button className="room-btn-pri" onClick={goBack}>Back to Learning</button>
+      <div style={{ minHeight: '100dvh', background: '#f7f7f7', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ background: '#fff', border: '2px solid #111', maxWidth: 440, width: '100%', padding: 'clamp(28px,4vw,44px)', textAlign: 'center' }}>
+          <div style={{ display: 'inline-flex', width: 56, height: 56, border: '2px solid #111', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 800 }}>!</div>
+          <h2 style={{ fontSize: 26, margin: '18px 0 8px', color: '#000' }}>Failed to join room</h2>
+          <p style={{ color: '#666', fontSize: 14, margin: '0 0 24px' }}>{error}</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="er-btn er-btn--ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={handleRetry}>Retry</button>
+            <button className="er-btn" style={{ flex: 1, justifyContent: 'center' }} onClick={goBack}>Back to Rooms</button>
+          </div>
         </div>
-        
       </div>
     );
   }
 
   if (phase === 'left') {
     return (
-      <div className="room-page__left-wrap">
-        <div className="room-page__left-card">
-          <div className="room-page__left-icon-wrap">
-            <HiCheckCircle size={36} color={COLOR.success} />
+      <div style={{ minHeight: '100dvh', background: '#f7f7f7', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ background: '#fff', border: '2px solid #111', maxWidth: 440, width: '100%', padding: 'clamp(28px,4vw,44px)', textAlign: 'center' }}>
+          <div style={{ display: 'inline-flex', width: 56, height: 56, background: '#111', color: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+            <HiCheckCircle size={30} />
           </div>
-          <h2 className="room-page__left-title">You left the room</h2>
-          <p className="room-page__left-message">
-            Thanks for participating in <strong>{roomName || 'the session'}</strong>!
-          </p>
-          <div className="room-page__left-stats">
-            <div className="room-page__left-stat">
-              <div className="room-page__left-stat-value">{formatTime(savedElapsed || elapsed)}</div>
-              <div className="room-page__left-stat-label">Duration</div>
+          <h2 style={{ fontSize: 28, margin: '18px 0 8px', color: '#000' }}>You left the room</h2>
+          <p style={{ color: '#666', fontSize: 14, margin: '0 0 20px' }}>Thanks for joining <strong style={{ color: '#111' }}>{roomName || 'the session'}</strong>!</p>
+          <div style={{ display: 'flex', border: '1px solid #111', marginBottom: 24 }}>
+            <div style={{ flex: 1, padding: '14px 0' }}>
+              <div style={{ fontWeight: 800, fontSize: 22, color: '#111' }}>{formatTime(savedElapsed || elapsed)}</div>
+              <div style={{ fontSize: 12, color: '#666' }}>Duration</div>
             </div>
-            <div className="room-page__left-stat">
-              <div className="room-page__left-stat-value">{participantsList.length || 1}</div>
-              <div className="room-page__left-stat-label">Participants</div>
+            <div style={{ flex: 1, padding: '14px 0', borderLeft: '1px solid #e8e8e8' }}>
+              <div style={{ fontWeight: 800, fontSize: 22, color: '#111' }}>{participantsList.length || 1}</div>
+              <div style={{ fontSize: 12, color: '#666' }}>Participants</div>
             </div>
           </div>
-          <button onClick={goBack} className="room-page__left-return-btn">Back to Learning <HiArrowRight size={16} /></button>
+          <button className="er-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={goBack}>Back to Rooms →</button>
         </div>
-        
       </div>
     );
   }
 
-  const showSidebar = activePanel === 'chat' || activePanel === 'participants' || activePanel === 'settings';
   const participantCount = participantsList.length || 1;
+  const panelOpen = activePanel === 'participants' || activePanel === 'settings';
+
+  function TopIconBtn({ active, onClick, title, children }) {
+    return (
+      <button className="meet-topbar-iconbtn" onClick={onClick} title={title} aria-label={title}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 800, background: active ? '#111' : '#fff', color: active ? '#fff' : '#111', border: '1px solid #111' }}>
+        {children}
+      </button>
+    );
+  }
 
   return (
-    <div className="meet-root">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#fff', color: '#111' }}>
 
-      <header className="meet-topbar">
-        <div className="meet-topbar-left">
-          <button className="meet-back" onClick={goBack} title="Back"><HiArrowLeft size={20} /></button>
-          <div className="meet-room-info">
-            <h1 className="meet-room-name">{roomName || 'Room'}</h1>
-            <div className="meet-room-meta">
-              <span className="meet-badge-live">● LIVE</span>
-              <span className="meet-timer"><HiClock size={13} />{formatTime(elapsed)}</span>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', background: '#fff', borderBottom: '2px solid #111', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <button onClick={goBack} title="Back to rooms" aria-label="Back to rooms"
+            style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #111', cursor: 'pointer', flexShrink: 0 }}>
+            <HiArrowLeft size={18} />
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 17, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{roomName || 'Room'}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, background: '#111', color: '#fff', padding: '2px 7px' }}>● LIVE</span>
+              <span style={{ fontSize: 12, color: '#555', display: 'inline-flex', alignItems: 'center', gap: 4 }}><HiClock size={12} />{formatTime(elapsed)}</span>
+              {handRaised && <span style={{ fontSize: 11, fontWeight: 800, border: '1px solid #111', padding: '2px 7px' }}>✋ Raised</span>}
             </div>
           </div>
         </div>
-        <div className="meet-topbar-right">
-          {handRaised && (
-            <span className="room-page__hand-raised-badge">✋ Raised</span>
-          )}
-          <button className={`meet-participant-count ${activePanel==='participants'?'active':''}`} onClick={openParticipants} title="View participants"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: activePanel==='participants'?'rgba(255,255,255,0.14)':'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', fontSize: 12, color: '#ffffff', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-            <span>{participantCount}</span>
-          </button>
-          <button className={`meet-chat-toggle ${activePanel==='settings'?'active':''}`} onClick={()=>togglePanel('settings')} title="Room settings" style={{ marginRight: 4 }}>
-            <HiCog6Tooth size={18} />
-          </button>
-          <button className={`meet-chat-toggle ${activePanel==='chat'?'active':''}`} onClick={()=>togglePanel('chat')} title={activePanel==='chat'?'Hide chat':'Show chat'}>
-            <HiChatBubbleLeftRight size={18} />
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <TopIconBtn active={activePanel === 'participants'} onClick={openParticipants} title="View participants">
+            <HiUserGroup size={15} /><span>{participantCount}</span>
+          </TopIconBtn>
+          <TopIconBtn active={activePanel === 'settings'} onClick={() => togglePanel('settings')} title="Room settings">
+            <HiCog6Tooth size={16} />
+          </TopIconBtn>
+          <TopIconBtn active={activePanel === 'chat'} onClick={() => togglePanel('chat')} title={activePanel === 'chat' ? 'Hide chat' : 'Show chat'}>
+            <HiChatBubbleLeftRight size={16} />
+          </TopIconBtn>
         </div>
       </header>
 
-      <div className="meet-main">
-        <div className={`meet-video ${showSidebar ? 'with-chat' : 'full'}`}>
-          <LiveKitRoom token={token} serverUrl={livekitUrl} video={true} audio={true} onDisconnected={handleDisconnected}
-            className="room-page__livekit" data-lk-theme="default">
+      {connError && (
+        <div style={{ background: '#fff', color: '#111', borderBottom: '2px solid #111', padding: '8px 16px', fontSize: 12, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>Live connection issue: {connError}</span>
+          <button onClick={() => setConnError('')} aria-label="Dismiss" style={{ background: 'none', border: '1px solid #111', color: '#111', fontWeight: 800, cursor: 'pointer', padding: '2px 8px' }}>✕</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
+          <LiveKitRoom token={token} serverUrl={livekitUrl} video={true} audio={true} onDisconnected={handleDisconnected} onError={(e) => setConnError(e?.message || 'Could not connect to the live room')}
+            className="room-page__livekit" data-lk-theme="default" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: '100%' }}>
             <RemoteAudioRenderer />
-            <MeetControls onLeave={handleLeave} togglePanel={togglePanel} activePanel={activePanel}
+            <RoomDataBridge onData={chat.handleLiveData} />
+            <ParticipantTracker onUpdate={handleParticipantUpdate} />
+            <EmojiFly emojis={floatingEmojis} />
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+              <VideoArea isSharing={screenShareOn} isHandRaised={handRaised} />
+              <SelfPreview />
+            </div>
+            <MeetControls roomId={roomId} onLeave={handleLeave} togglePanel={togglePanel} activePanel={activePanel}
               handRaised={handRaised} setHandRaised={setHandRaised}
               showEmojiPicker={showEmojiPicker} setShowEmojiPicker={setShowEmojiPicker}
               sendEmoji={sendEmoji} screenShareOn={screenShareOn} setScreenShareOn={setScreenShareOn}
-              onMicToggle={handleMicToggle} />
-            <ParticipantTracker onUpdate={handleParticipantUpdate} />
-            <EmojiFly emojis={floatingEmojis} />
-            <VideoArea isSharing={screenShareOn} isHandRaised={handRaised} />
-            <SelfPreview />
+              onOpenParticipants={openParticipants} />
           </LiveKitRoom>
         </div>
 
         <ChatWindow
-          roomId={roomId}
+          chat={chat}
           visible={activePanel === 'chat'}
-          onToggle={() => setActivePanel(null)}
-          wsSocket={wsSocket}
+          onClose={() => setActivePanel(null)}
+          currentUserId={user?.id}
         />
-        {activePanel === 'participants' && (
-          <aside className="meet-chat-panel"><ParticipantsPanel participants={participantsList} onClose={() => setActivePanel(null)} /></aside>
-        )}
-        {activePanel === 'settings' && roomData && (
-          <aside className="meet-chat-panel">
-            <RoomSettings roomId={roomId} current={roomData} onClose={() => setActivePanel(null)} onSave={refreshRoomData} api={api} />
+        {panelOpen && (
+          <aside style={{ width: 340, maxWidth: '92vw', background: '#fff', borderLeft: '2px solid #111', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {activePanel === 'participants' && <ParticipantsPanel participants={participantsList} onClose={() => setActivePanel(null)} />}
+            {activePanel === 'settings' && roomData && <RoomSettings roomId={roomId} current={roomData} onClose={() => setActivePanel(null)} onSave={refreshRoomData} api={api} />}
           </aside>
         )}
       </div>
 
       {handRaiseNotifs.map((n, i) => (
         <div key={n.id} style={{
-          position: 'fixed', top: SIZES.topbar + 16 + (i * 52), right: 20,
-          padding: '10px 16px', borderRadius: 12, zIndex: 200,
-          background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)',
-          color: 'var(--color-warning)', fontSize: 13, fontWeight: 700,
+          position: 'fixed', top: 76 + (i * 52), right: 20,
+          padding: '10px 16px', zIndex: 200,
+          background: '#fff', border: '2px solid #111',
+          color: '#111', fontSize: 13, fontWeight: 700,
           display: 'flex', alignItems: 'center', gap: 8,
-          animation: 'slideIn 0.3s ease both, fadeOut 0.3s ease 5s forwards',
           pointerEvents: 'none',
         }}>
           ✋ {n.name || 'Someone'} raised hand!
         </div>
       ))}
 
-      
     </div>
   );
 }

@@ -40,6 +40,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     english_level: Optional[EnglishLevel] = None
     role: Optional[RoleEnum] = "user"
+    profile_completed: bool = False
     created_at: Optional[datetime] = None
 
 
@@ -50,6 +51,7 @@ class UserUpdateSchema(BaseModel):
     avatar_url: Optional[str] = None
     english_level: Optional[EnglishLevel] = None
     role: Optional[Union[str, RoleEnum]] = None
+    profile_completed: Optional[bool] = None
 
     @field_validator("role")
     @classmethod

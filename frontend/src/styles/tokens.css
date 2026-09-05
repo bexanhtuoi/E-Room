@@ -1,0 +1,21 @@
+/* E-Room public design tokens — white, square, black text, modern basic */
+:root {
+  --er-bg: #ffffff;
+  --er-bg-soft: #f7f7f7;
+  --er-bg-line: #f0f0f0;
+  --er-ink: #111111;
+  --er-ink-2: #333333;
+  --er-ink-3: #666666;
+  --er-ink-4: #999999;
+  --er-line: #e8e8e8;
+  --er-line-strong: #111111;
+  --er-accent: #111111;
+  --er-accent-ink: #ffffff;
+  --er-good: #15803d;
+  --er-warn: #b45309;
+  --er-radius: 0px;
+  --er-radius-sm: 2px;
+  --er-nav-h: 64px;
+  --er-max: 1160px;
+  --er-font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

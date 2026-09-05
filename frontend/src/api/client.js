@@ -23,6 +23,7 @@ async function refreshTokens() {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ refresh_token: refresh }),
     });
     if (!response.ok) return null;
@@ -39,13 +40,13 @@ export async function fetchJson(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (access) headers['Authorization'] = `Bearer ${access}`;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...options, headers });
 
   if ((response.status === 401 || response.status === 403) && path !== '/auth/refresh') {
     const refreshed = await refreshTokens();
     if (refreshed) {
       headers['Authorization'] = `Bearer ${refreshed.access}`;
-      const retryResponse = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...options, headers });
       if (!retryResponse.ok) {
         const body = await retryResponse.json().catch(() => ({}));
         const detail = Array.isArray(body.detail)

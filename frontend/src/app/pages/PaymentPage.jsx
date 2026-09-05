@@ -15,11 +15,11 @@ import { queryClient } from '../../lib/queryClient';
 const PLANS = {
   pro: {
     name: 'Pro', price: 9.99, period: 'month',
-    features: ['Unlimited AI corrections', 'Advanced AI feedback', 'Priority matching', '3 heartbeats per room', 'Web Search Expert'],
+    features: ['Unlimited rooms', 'Full recaps + notes history', 'Priority matching', 'Create private rooms', 'Longer room timers'],
   },
   pro_plus: {
     name: 'Pro+', price: 19.99, period: 'month',
-    features: ['Everything in Pro', 'TTS pronunciation', 'Full RAG + Web Expert', 'Auto session notes', 'Room series', 'Leaderboard', 'Up to 15 participants'],
+    features: ['Everything in Pro', 'Voice playback of recaps', 'Smarter @ai answers', 'Up to 4 seats + guest invites', 'Team analytics'],
   },
 };
 
