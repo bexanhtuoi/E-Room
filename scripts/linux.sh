@@ -5,101 +5,43 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
-# Colors
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo "============================================"
-echo "  E-Room Development Launcher"
+echo "  E-Room Launcher (Linux)"
 echo "============================================"
 echo ""
 
-# ── Step 1: Check .env ──────────────────────────
-echo -e "[1/6] Checking .env..."
+# ── Step 1: env ───────────────────────────────────
+echo "[1/5] Checking backend env..."
 if [ ! -f backend/.env ]; then
     cp backend/.env.example backend/.env
-    echo -e "      ${YELLOW}Created backend/.env${NC} — edit LLM_BASE_URL before starting."
+    echo -e "      ${YELLOW}Created backend/.env — edit LLM/LiveKit as needed.${NC}"
 else
-    echo "      .env already exists, skipping."
+    echo "      backend/.env exists, skipping."
 fi
 
-# ── Step 2: Docker infra ────────────────────────
-echo "[2/6] Checking Docker infrastructure..."
-if ! docker ps --format "{{.Names}}" 2>/dev/null | grep -q "e_room_tidb"; then
-    echo "      Starting Docker services: tidb, redis, minio, livekit, coturn..."
-    docker compose up -d tidb redis minio livekit coturn || {
-        echo -e "      ${RED}[ERROR] Docker failed to start.${NC}"
-        exit 1
-    }
-    echo "      Waiting for TiDB to be ready (may take 20-30s first time)..."
-    sleep 5
-    docker compose exec tidb mysql -h 127.0.0.1 -P 4000 -u root -e "SELECT 1" 2>/dev/null || sleep 15
-else
-    echo "      Docker services already running."
-fi
+# ── Step 2: full stack ────────────────────────────
+echo "[2/5] Starting full stack (api, workers, db, livekit, frontend)..."
+docker compose up -d
 
-# ── Step 3: Backend dependencies ────────────────
-echo "[3/6] Installing backend dependencies..."
-cd backend
-uv sync 2>/dev/null || echo -e "      ${YELLOW}[WARN] uv sync failed.${NC}"
-cd "$PROJECT_DIR"
+# ── Step 3: migrate ───────────────────────────────
+echo "[3/5] Running DB migrations..."
+sleep 15
+(cd backend && uv run alembic upgrade head) || echo -e "      ${YELLOW}[WARN] migrate failed — TiDB may not be ready yet.${NC}"
 
-# ── Step 4: Frontend dependencies ───────────────
-echo "[4/6] Installing frontend dependencies..."
-cd frontend
-npm install 2>/dev/null || echo -e "      ${YELLOW}[WARN] npm install failed.${NC}"
-cd "$PROJECT_DIR"
-
-# ── Step 5: Start services ──────────────────────
-echo "[5/6] Starting servers..."
-
-# Detect terminal emulator
-TERMINAL_CMD=""
-for term in gnome-terminal konsole xterm; do
-    if command -v "$term" &>/dev/null; then
-        TERMINAL_CMD="$term"
-        break
-    fi
-done
-
-run_in_terminal() {
-    local title="$1"
-    local cmd="$2"
-    if [ -n "$TERMINAL_CMD" ]; then
-        case "$TERMINAL_CMD" in
-            gnome-terminal)  gnome-terminal --title="$title" -- bash -c "$cmd; exec bash" ;;
-            konsole)         konsole --new-tab -p tab-title="$title" -e bash -c "$cmd; exec bash" ;;
-            xterm)           xterm -title "$title" -e bash -c "$cmd; exec bash" ;;
-        esac
-    else
-        bash -c "$cmd" &
-    fi
-}
-
-echo "      Starting API server (port 8000)..."
-run_in_terminal "E-Room API" "cd '$PROJECT_DIR/backend' && uv run python -m app.server"
-
-echo "      Starting Frontend (port 3000)..."
-run_in_terminal "E-Room Frontend" "cd '$PROJECT_DIR/frontend' && npm run dev"
-
-sleep 5
-
-# ── Step 6: Open browser ────────────────────────
-echo "[6/6] Opening http://localhost:3000 ..."
-xdg-open http://localhost:3000 2>/dev/null || true
-
+# ── Step 4: URLs ──────────────────────────────────
+echo "[4/5] Done."
 echo ""
-echo -e "${GREEN}============================================${NC}"
-echo -e "${GREEN}  All services started!${NC}"
+echo "============================================"
+echo -e "  ${GREEN}Frontend:${NC}  http://localhost:3000  (docker prod build)"
+echo -e "  ${GREEN}Dev mode:${NC}  cd frontend && npm run dev  (use another port)"
+echo -e "  ${GREEN}API docs:${NC}  http://localhost:8000/docs"
+echo "============================================"
 echo ""
-echo "  API:        http://localhost:8000"
-echo "  Frontend:   http://localhost:3000"
-echo "  Swagger:    http://localhost:8000/docs"
-echo -e "${GREEN}============================================${NC}"
-echo ""
-echo "Commands: L=logs, S=status, R=restart, D=down, Q=quit"
+echo "Commands: L=logs, S=status, R=restart api, D=down, Q=quit"
 
 while true; do
     read -r -n 1 -p "Command: " cmd

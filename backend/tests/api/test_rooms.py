@@ -124,6 +124,38 @@ class TestParticipants:
     def test_participants_unknown_room_returns_404(self, client: TestClient, alice: dict):
         assert client.get("/api/v1/rooms/999999/participants").status_code == 404
 
+    def test_join_endpoint_registers_presence_and_actives_room(self, client: TestClient, alice: dict):
+        from unittest.mock import patch
+
+        from app.integration.redis import smembers as redis_smembers
+
+        room = create_room(client, f"join-room-{alice['id']}")
+        key = f"room:{room['id']}:participants"
+
+        try:
+            with (
+                patch("app.api.routers.room.enqueue_room_observer"),
+                patch("app.api.routers.room.enqueue_room_transcriber"),
+            ):
+                response = client.post(f"/api/v1/rooms/{room['id']}/join")
+            assert response.status_code == 200
+            assert response.json() == {"status": "joined", "room_id": room["id"]}
+            assert str(alice["id"]) in redis_smembers(key)
+            assert client.get(f"/api/v1/rooms/{room['id']}").json()["status"] == "active"
+
+            # Idempotent — join lai khong dup
+            with (
+                patch("app.api.routers.room.enqueue_room_observer"),
+                patch("app.api.routers.room.enqueue_room_transcriber"),
+            ):
+                client.post(f"/api/v1/rooms/{room['id']}/join")
+            assert len(redis_smembers(key)) == 1
+        finally:
+            redis_delete(key)
+
+    def test_join_endpoint_unknown_room_returns_404(self, client: TestClient, alice: dict):
+        assert client.post("/api/v1/rooms/999999/join").status_code == 404
+
     def test_leave_endpoint_removes_self_and_idles_empty_room(self, client: TestClient, alice: dict):
         from app.integration.redis import smembers as redis_smembers
 

@@ -8,6 +8,7 @@ rtc:
 redis:
   address: redis:6379
 
+# DOI keys truoc khi public! Copy file nay thanh livekit.yaml roi dien.
 keys:
   devkey: dev-secret-change-me-32-characters
 

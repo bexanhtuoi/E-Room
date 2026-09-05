@@ -1,88 +1,53 @@
 @echo off
-title E-Room Dev Mode
+title E-Room Launcher
 cd /d "%~dp0.."
 
 echo ============================================
-echo   E-Room Development Launcher
+echo   E-Room Launcher (Windows)
 echo ============================================
 echo.
 
-REM ── Step 1: Check .env ──────────────────────────
+REM -- Step 1: env --------------------------------------------
+echo [1/5] Checking backend env...
 if not exist backend\.env (
-    echo [1/6] Copying .env.example to .env...
     copy backend\.env.example backend\.env >nul
-    echo        Created backend\.env — edit LLM_BASE_URL before starting.
+    echo        Created backend\.env — sua LLM/LiveKit theo nhu cau.
 ) else (
-    echo [1/6] .env already exists, skipping.
+    echo        backend\.env exists, skipping.
 )
 
-REM ── Step 2: Docker infra ────────────────────────
-echo [2/6] Checking Docker infrastructure...
-REM Use --skip-docker to bypass this check
-set "DOCKER_OK="
-if /i "%1"=="--skip-docker" goto :docker_skip
-start /b "" "%windir%\system32\cmd.exe" /c "docker ps --format {{.Names}} > %temp%\docker_ps.txt 2>nul"
-%windir%\system32\ping.exe -n 4 127.0.0.1 >nul
-if exist "%temp%\docker_ps.txt" (
-    for /f "usebackq delims=" %%i in ("%temp%\docker_ps.txt") do (
-        echo %%i | findstr /C:"e_room_tidb" >nul && set "DOCKER_OK=1"
-    )
-    del "%temp%\docker_ps.txt" 2>nul
-)
-if defined DOCKER_OK (
-    echo        Docker services already running.
-) else (
-    echo        Docker services not detected. Attempting to start...
-    start /b "" "%windir%\system32\cmd.exe" /c "docker compose up -d tidb redis minio livekit coturn >nul 2>&1"
-)
-goto :docker_done
-:docker_skip
-echo        Skipped (--skip-docker flag).
-:docker_done
-
-REM ── Step 3: Backend dependencies ────────────────
-echo [3/6] Installing backend dependencies...
-cd backend
-uv sync 2>nul
+REM -- Step 2: full stack --------------------------------------
+echo [2/5] Starting full stack (api, workers, db, livekit, frontend)...
+docker compose up -d
 if %errorlevel% neq 0 (
-    echo        [WARN] uv sync failed — may need manual install.
+    echo        [ERROR] docker compose failed. Is Docker Desktop running?
+    pause
+    exit /b 1
+)
+
+REM -- Step 3: migrate -----------------------------------------
+echo [3/5] Running DB migrations...
+timeout /t 15 /nobreak >nul
+cd backend
+uv run alembic upgrade head 2>nul
+if %errorlevel% neq 0 (
+    echo        [WARN] migrate failed — TiDB co the chua ready, thu lai sau.
 )
 cd ..
 
-REM ── Step 4: Frontend dependencies ───────────────
-echo [4/6] Installing frontend dependencies...
-cd frontend
-call npm install 2>nul
-cd ..
-
-REM ── Step 5: Start services ──────────────────────
-echo [5/6] Starting servers...
-
-echo        Starting API server (port 8000)...
-start "E-Room API" cmd /c "cd /d "%CD%\backend" && uv run python -m app.server"
-
-echo        Starting Frontend (port 3000)...
-start "E-Room Frontend" cmd /c "cd /d "%CD%\frontend" && npm run dev"
-
-timeout /t 5 /nobreak >nul
-
-REM ── Step 6: Open browser ────────────────────────
-echo [6/6] Opening http://localhost:3000 ...
-start http://localhost:3000
-
+REM -- Step 4: URLs --------------------------------------------
+echo [4/5] Done.
 echo.
 echo ============================================
-echo   All services started!
+echo   Frontend:  http://localhost:3000  (docker prod build)
+echo   Dev mode:  cd frontend ^&^& npm run dev  (port 3002 de tranh prod)
+echo   API docs:  http://localhost:8000/docs
 echo.
-echo   API:        http://localhost:8000
-echo   Frontend:   http://localhost:3000
-echo   Swagger:    http://localhost:8000/docs
+echo   Public sharing: scripts\host-public.bat (Tailscale Funnel)
+echo ============================================
 echo.
 echo   Commands:
-echo     [L] View Docker logs
-echo     [S] Docker status
-echo     [D] Docker compose down
-echo     [Q] Quit
+echo     [L] View logs   [S] Status   [R] Restart api   [D] Down   [Q] Quit
 echo ============================================
 echo.
 

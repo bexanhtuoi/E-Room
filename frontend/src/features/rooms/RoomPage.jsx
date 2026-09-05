@@ -35,6 +35,27 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function isInAppBrowser() {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  return /FBAN|FB_IAB|FBAV|Instagram|Zalo|ZaloHIAS|Messenger|Line\/|MicroMessenger|MiuiBrowser|HeyTapBrowser/i.test(ua);
+}
+
+const IN_APP_BROWSER_MSG = 'Trình duyệt trong ứng dụng (Zalo/Facebook/...) không dùng được mic/cam — hãy mở link bằng Chrome (Android) hoặc Safari (iPhone) rồi thử lại.';
+
+function mapMediaFailure(failure) {
+  if (isInAppBrowser()) return IN_APP_BROWSER_MSG;
+  if (failure === 'PermissionDenied') {
+    return 'Browser blocked the mic/camera — tap the lock icon in the address bar to allow access, then try again.';
+  }
+  if (failure === 'NotFound') {
+    return 'No mic/camera found on this device — enable it in system settings, then try again.';
+  }
+  if (failure === 'DeviceInUse') {
+    return 'Your mic/camera looks busy — close other apps or tabs using it, then try again.';
+  }
+  return 'Could not access mic/camera. Check that a device is connected and not used elsewhere, then try again.';
+}
+
 function formatParticipantName(name, identity, isLocal) {
   if (isLocal) return 'You';
   if (name && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(name)) return name;
@@ -81,18 +102,25 @@ function useOptimisticToggle(live) {
   return [opt ?? live, setOpt];
 }
 
-function ControlBtn({ icon: Icon, offIcon: OffIcon, on, onClick, label, danger, small }) {
+function isScreenShareSupported() {
+  // getDisplayMedia khong ton tai tren mobile (iOS Safari, Chrome Android...)
+  // → share man hinh chi lam duoc tren desktop.
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia;
+}
+
+function ControlBtn({ icon: Icon, offIcon: OffIcon, on, onClick, label, danger, small, disabled, disabledTitle }) {
   const ShowIcon = !on && OffIcon ? OffIcon : Icon;
   const labelText = on ? label.on : label.off;
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       aria-label={labelText}
       aria-pressed={on}
-      title={labelText}
+      title={disabled ? disabledTitle || labelText : labelText}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-        minWidth: small ? 56 : 68, minHeight: 56, padding: '8px 10px', cursor: 'pointer',
+        minWidth: small ? 56 : 68, minHeight: 56, padding: '8px 10px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
         background: danger ? '#fff' : on ? '#0a0a0a' : 'transparent',
         color: danger ? '#111' : on ? '#fff' : '#888',
         border: danger ? '2px solid #fff' : on ? '2px solid #fff' : '2px dashed #555',
@@ -115,6 +143,10 @@ function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, s
   // Mic/cam nam hoan toan o trinh duyet (server chi signaling) nen loi nay
   // luon la phia user: chua cap quyen, khong co thiet bi, hoac thiet bi dang ban.
   const onDeviceError = useCallback((e) => {
+    if (isInAppBrowser()) {
+      setDeviceError(IN_APP_BROWSER_MSG);
+      return;
+    }
     const name = e?.name || '';
     console.warn('media device error:', name, e?.message);
     setDeviceError(
@@ -190,6 +222,10 @@ function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, s
 
   const toggleScreenShare = useCallback(async () => {
     if (!localParticipant || screenBusy) return;
+    if (!isScreenShareSupported()) {
+      setDeviceError('Screen sharing needs a desktop browser (Chrome/Edge/Safari on PC) — phones cannot share their screen.');
+      return;
+    }
     setDeviceError('');
     const next = !liveScreenOn;
     setScreenOpt(next);
@@ -217,6 +253,14 @@ function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, s
     });
   }, [localParticipant, setHandRaised]);
 
+  const publishEmoji = useCallback((emoji) => {
+    if (!localParticipant) return;
+    try {
+      const data = JSON.stringify({ type: 'emoji', emoji });
+      localParticipant.publishData(new TextEncoder().encode(data), { reliable: true });
+    } catch {}
+  }, [localParticipant]);
+
   useEffect(() => {
     if (!room) return;
     const handler = (payload, participant) => {
@@ -226,6 +270,10 @@ function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, s
         if (msg.type === 'hand_raise') {
           window.dispatchEvent(new CustomEvent('hand-raise-notif', {
             detail: { identity: participant.identity, name: participant.name || 'Participant', state: msg.state, id: Date.now() + Math.random() }
+          }));
+        } else if (msg.type === 'emoji' && msg.emoji) {
+          window.dispatchEvent(new CustomEvent('emoji-notif', {
+            detail: { emoji: msg.emoji, id: Date.now() + Math.random() }
           }));
         }
       } catch {}
@@ -263,6 +311,8 @@ function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, s
         <ControlBtn icon={HiComputerDesktop} on={screenOn}
           onClick={toggleScreenShare}
           label={{ on: 'Sharing', off: 'Share' }}
+          disabled={!isScreenShareSupported()}
+          disabledTitle="Screen sharing needs a desktop browser"
         />
       </PendingBtn>
     </>
@@ -282,7 +332,7 @@ function MeetControls({ roomId, onLeave, togglePanel, activePanel, handRaised, s
         {showEmojiPicker && (
           <span style={{ position: 'absolute', bottom: 64, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 4, background: '#fff', border: '2px solid #111', padding: 8, zIndex: 50 }}>
             {EMOJIS.map(emoji => (
-              <button key={emoji} onClick={() => sendEmoji(emoji)} style={{ fontSize: 20, background: 'none', border: 'none', cursor: 'pointer' }}>{emoji}</button>
+              <button key={emoji} onClick={() => { publishEmoji(emoji); sendEmoji(emoji); }} style={{ fontSize: 20, background: 'none', border: 'none', cursor: 'pointer' }}>{emoji}</button>
             ))}
           </span>
         )}
@@ -787,13 +837,25 @@ export function RoomPage() {
   const [handRaiseNotifs, setHandRaiseNotifs] = useState([]);
   const [retrySignal, setRetrySignal] = useState(0);
   const [connError, setConnError] = useState('');
+  const [mediaError, setMediaError] = useState('');
   const chat = useRoomChat(roomId);
   const { user } = useAuth();
 
-  const handleDisconnected = useCallback(() => {
-    if (!hasLeftRef.current) {
+  const handleConnected = useCallback(() => {
+    // Bao server truc tiep khi LiveKit da noi — presence + ACTIVE + worker
+    // transcript chay ngay, khong doi webhook (webhook co the miss).
+    fetchJson(`/rooms/${roomId}/join`, { method: 'POST' }).catch(() => {});
+  }, [roomId]);
 
-      setError('Connection to room was lost. Please try again.');
+  const handleDisconnected = useCallback((reason) => {
+    if (!hasLeftRef.current) {
+      // Hien ro ly do (DUPLICATE_IDENTITY khi cung tai khoan vao 2 may,
+      // TOKEN_EXPIRED, ICE failed...) de user bao lai la biet ngay benh.
+      setError(
+        reason
+          ? `Connection to room was lost (${reason}). Please try again.`
+          : 'Connection to room was lost. Please try again.',
+      );
       setPhase('error');
     } else {
       setPhase('left');
@@ -846,6 +908,20 @@ export function RoomPage() {
     };
     window.addEventListener('hand-raise-notif', handler);
     return () => window.removeEventListener('hand-raise-notif', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.detail?.emoji) return;
+      setFloatingEmojis(prev => [...prev, {
+        id: e.detail.id || Date.now(),
+        emoji: e.detail.emoji,
+        x: 30 + Math.random() * 40 + '%',
+        y: 30 + Math.random() * 30 + '%',
+      }].slice(-20));
+    };
+    window.addEventListener('emoji-notif', handler);
+    return () => window.removeEventListener('emoji-notif', handler);
   }, []);
 
   useEffect(() => {
@@ -1008,10 +1084,16 @@ export function RoomPage() {
           <button onClick={() => setConnError('')} aria-label="Dismiss" style={{ background: 'none', border: '1px solid #111', color: '#111', fontWeight: 800, cursor: 'pointer', padding: '2px 8px' }}>✕</button>
         </div>
       )}
+      {mediaError && (
+        <div style={{ background: '#fff', color: '#111', borderBottom: '2px solid #111', padding: '8px 16px', fontSize: 12, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>{mediaError}</span>
+          <button onClick={() => setMediaError('')} aria-label="Dismiss" style={{ background: 'none', border: '1px solid #111', color: '#111', fontWeight: 800, cursor: 'pointer', padding: '2px 8px' }}>✕</button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
-          <LiveKitRoom token={token} serverUrl={livekitUrl} video={true} audio={true} onDisconnected={handleDisconnected} onError={(e) => setConnError(e?.message || 'Could not connect to the live room')}
+          <LiveKitRoom token={token} serverUrl={livekitUrl} video={true} audio={true} onConnected={handleConnected} onDisconnected={handleDisconnected} onError={(e) => setConnError(`${e?.message || 'Could not connect to the live room'} [url=${livekitUrl}]`)} onMediaDeviceFailure={(failure) => setMediaError(mapMediaFailure(failure))}
             className="room-page__livekit" data-lk-theme="default" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: '100%' }}>
             <RemoteAudioRenderer />
             <RoomDataBridge onData={chat.handleLiveData} />

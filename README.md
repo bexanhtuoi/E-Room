@@ -155,7 +155,7 @@ Xem đầy đủ ở `backend/.env.example`. Quan trọng nhất:
 | `TAVILY_API_KEY` | — | Web search (không có thì agent bỏ qua) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Login Google (cần OAuth Client ID, không dùng service-account) |
 
-> ⚠️ `.env` / `.env.docker` không commit (đã có trong `.gitignore`). File `.env.docker` trong repo chỉ giữ giá trị dev mặc định.
+> ⚠️ `.env` / `.env.docker` / `livekit.yaml` không commit (đã có trong `.gitignore`). Clone mới thì copy từ `.env.example` / `livekit.yaml.example` rồi điền secret.
 
 ## API (tóm tắt)
 

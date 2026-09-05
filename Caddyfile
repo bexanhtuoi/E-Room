@@ -1,0 +1,21 @@
+# Reverse proxy noi bo cho Tailscale Funnel (TLS ket thuc o Tailscale edge).
+# 1 public URL duy nhat: / -> frontend, /api -> api, /rtc* + /validate* -> livekit.
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /rtc* {
+		reverse_proxy livekit:7880
+	}
+
+	handle /validate* {
+		reverse_proxy livekit:7880
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

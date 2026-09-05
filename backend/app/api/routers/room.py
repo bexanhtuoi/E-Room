@@ -214,15 +214,8 @@ async def handle_livekit_webhook(
     redis_key = f"room:{room_name}:participants"
 
     if event_type == "participant_joined" and participant_identity:
-        sadd(redis_key, str(participant_identity))
         try:
-            room_id_int = int(room_name)
-            mark_room_activity(room_id_int)
-            db_room = room_crud.get_one(db, id=room_id_int)
-            if db_room and db_room.status != RoomStatus.ACTIVE:
-                room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
-            enqueue_room_observer(room_id_int)
-            enqueue_room_transcriber(room_id_int)
+            register_participant_join(db, room_name, participant_identity)
         except ValueError:
             pass
 
@@ -230,6 +223,34 @@ async def handle_livekit_webhook(
         drop_participant_from_room(db, room_name, participant_identity)
 
     return {"status": "success", "event": event_type}
+
+
+def register_participant_join(db: Session, room_name: str, participant_identity: str) -> None:
+    redis_key = f"room:{room_name}:participants"
+    sadd(redis_key, str(participant_identity))
+    room_id_int = int(room_name)
+    mark_room_activity(room_id_int)
+    db_room = room_crud.get_one(db, id=room_id_int)
+    if db_room and db_room.status != RoomStatus.ACTIVE:
+        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
+    enqueue_room_observer(room_id_int)
+    enqueue_room_transcriber(room_id_int)
+
+
+@router.post("/{room_id}/join")
+def join_room(
+    room_id: int,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> dict:
+    # Client goi truc tiep khi LiveKit onConnected — khong phu thuoc webhook
+    # (webhook Cloud co the chua cau hinh / miss). Idempotent.
+    db_room = room_crud.get_one(db, id=room_id)
+    if not db_room:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+    register_participant_join(db, str(room_id), request.state.current_user.id)
+    return {"status": "joined", "room_id": room_id}
 
 
 def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
