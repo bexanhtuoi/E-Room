@@ -15,7 +15,15 @@
 		reverse_proxy livekit:7880
 	}
 
+	# Assets hash theo content -> cache 1 nam. HTML (SPA fallback)
+	# luon revalidate de deploy moi hien ngay, khoi kẹt ban cu.
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy frontend:3000
+	}
+
 	handle {
+		header Cache-Control "no-cache"
 		reverse_proxy frontend:3000
 	}
 }
