@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +7,10 @@ vi.mock('../../lib/api', () => ({ fetchJson: vi.fn() }));
 vi.mock('../../features/rooms/CreateRoomModal', () => ({
   CreateRoomModal: () => null,
 }));
+vi.mock('../../features/rooms/RoomRow', async (importOriginal) => {
+  const mod = await importOriginal();
+  return { ...mod, useRoomMembers: () => ({ data: [] }) };
+});
 
 import { fetchJson } from '../../lib/api';
 import { ProfilePage } from './ProfilePage';
@@ -17,6 +21,7 @@ const USER = {
   full_name: 'An Nguyen',
   english_level: 'B1',
   avatar_url: 'face:2',
+  created_at: '2026-01-05T10:00:00Z',
 };
 
 vi.mock('../AuthContext', () => ({
@@ -38,11 +43,14 @@ beforeEach(() => {
   fetchJson.mockReset();
   fetchJson.mockImplementation(async (path) => {
     if (path.startsWith('/rooms/')) return ROOMS;
+    if (path.startsWith('/messages/count')) return { count: 42 };
     if (path.startsWith('/messages/')) return MESSAGES;
     if (path.startsWith('/notifications/')) {
       return [{ id: 7, user_id: 9, title: 'Room matched', body: 'Cinema room is live', notification_type: 'match', is_read: false, created_at: '2026-09-03T10:00:00Z' }];
     }
-    if (path.startsWith('/documents/')) return [];
+    if (path.startsWith('/documents/')) {
+      return [{ id: 3, user_id: 9, file_name: 'vocab.pdf', file_type: 'pdf', created_at: '2026-09-01T10:00:00Z' }];
+    }
     return [];
   });
 });
@@ -58,59 +66,93 @@ function renderPortal() {
   );
 }
 
+async function goTo(label) {
+  const sidebar = screen.getByLabelText('Profile sections');
+  fireEvent.click(within(sidebar).getByRole('button', { name: new RegExp(label) }));
+}
+
 describe('ProfilePage portal', () => {
-  it('renders sidebar sections without subscription', async () => {
+  it('renders dark sidebar sections without subscription', async () => {
     renderPortal();
+    const sidebar = await screen.findByLabelText('Profile sections');
     for (const label of ['Overview', 'My rooms', 'Sessions', 'Activity', 'Usage', 'Documents', 'Notifications', 'Settings']) {
-      expect(await screen.findByRole('button', { name: new RegExp(label) })).toBeTruthy();
+      expect(within(sidebar).getByRole('button', { name: new RegExp(label) })).toBeTruthy();
     }
-    expect(screen.queryByRole('button', { name: /Subscription/ })).toBeNull();
+    expect(within(sidebar).queryByRole('button', { name: /Subscription/ })).toBeNull();
   });
 
-  it('shows real stats on the dashboard', async () => {
+  it('shows pagehead and accurate message total from count API', async () => {
     renderPortal();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText('Rooms hosted').previousSibling.textContent).toBe('1');
-      expect(screen.getByText('Rooms joined').previousSibling.textContent).toBe('2');
-      expect(screen.getByText('Messages').previousSibling.textContent).toBe('2');
+      expect(screen.getByText('Messages').previousSibling.textContent).toBe('42');
     });
   });
 
-  it('navigates to My rooms and expands a room with my messages', async () => {
+  it('collapses the sidebar to an icon rail', async () => {
+    const { container } = renderPortal();
+    await screen.findByLabelText('Profile sections');
+    fireEvent.click(screen.getByRole('button', { name: /Collapse sidebar/ }));
+    expect(container.querySelector('.portal-app').className).toContain('is-collapsed');
+  });
+
+  it('filters rooms by tab and search, expands total counts', async () => {
     renderPortal();
-    fireEvent.click(await screen.findByRole('button', { name: /My rooms/ }));
+    await goTo('My rooms');
     expect(await screen.findByText('Hosted Room')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Hosted' }));
+    expect(screen.queryByText('Joined Room')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'All' }));
+    fireEvent.change(screen.getByLabelText('Search rooms'), { target: { value: 'joined' } });
+    expect(screen.queryByText('Hosted Room')).toBeNull();
     expect(screen.getByText('Joined Room')).toBeTruthy();
-    fireEvent.click(screen.getByText('Joined Room'));
-    expect(await screen.findByText('hello there')).toBeTruthy();
   });
 
   it('lists past sessions with search and expandable lines', async () => {
     renderPortal();
-    fireEvent.click(await screen.findByRole('button', { name: /^Sessions/ }));
+    await goTo('Sessions');
     expect(await screen.findByText('Old Session')).toBeTruthy();
     fireEvent.click(screen.getByText('Old Session'));
     expect(await screen.findByText('it was great')).toBeTruthy();
   });
 
-  it('shows usage report with streak and topic meters', async () => {
+  it('shows usage report with streak, heat and donut', async () => {
     renderPortal();
-    fireEvent.click(await screen.findByRole('button', { name: /^Usage/ }));
-    expect(await screen.findByText('day streak')).toBeTruthy();
+    await goTo('Usage');
+    expect(await screen.findByText('Day streak')).toBeTruthy();
     expect(screen.getByText('Travel')).toBeTruthy();
+    expect(screen.getByText('ROOMS')).toBeTruthy();
   });
 
-  it('shows unread notifications with a sidebar badge', async () => {
+  it('filters activity by text and shows room names', async () => {
     renderPortal();
-    fireEvent.click(await screen.findByRole('button', { name: /Notifications/ }));
+    await goTo('Activity');
+    expect(await screen.findByText('hello there')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Search messages'), { target: { value: 'great' } });
+    expect(screen.queryByText('hello there')).toBeNull();
+    expect(screen.getByText('it was great')).toBeTruthy();
+  });
+
+  it('shows documents as cards with type stats', async () => {
+    renderPortal();
+    await goTo('Documents');
+    expect(await screen.findByText('vocab.pdf')).toBeTruthy();
+    expect(screen.getByText('pdf')).toBeTruthy();
+  });
+
+  it('shows unread notifications with tabs and badge', async () => {
+    renderPortal();
+    await goTo('Notifications');
     expect(await screen.findByText('Room matched')).toBeTruthy();
-    expect(screen.getByText('1 new')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Unread/ }));
+    expect(screen.getByText('Room matched')).toBeTruthy();
   });
 
-  it('opens settings with avatar presets and english level', async () => {
+  it('opens settings with identity card, avatar presets and danger zone', async () => {
     renderPortal();
-    fireEvent.click(await screen.findByRole('button', { name: /Settings/ }));
+    await goTo('Settings');
     expect(await screen.findByRole('radiogroup', { name: /Choose avatar/ })).toBeTruthy();
     expect(screen.getByDisplayValue('B1')).toBeTruthy();
+    expect(screen.getByText('Danger zone')).toBeTruthy();
   });
 });

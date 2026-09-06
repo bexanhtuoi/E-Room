@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { HiArrowRightOnRectangle } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
+import { queryClient } from '../../lib/queryClient';
+import { formatDateTime } from '../../lib/formatters';
+import { Face, avatarFaceProps } from '../../components/common/Faces';
 import { AvatarPicker } from './AvatarPicker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -15,7 +18,7 @@ function Switch({ on, onClick, label }) {
   );
 }
 
-export function SettingsSection({ user, onSaved, onSignOut }) {
+export function SettingsSection({ user, tierLabel, onSaved, onSignOut }) {
   const [name, setName] = useState(user?.full_name || '');
   const [level, setLevel] = useState(user?.english_level || '');
   const [avatar, setAvatar] = useState(user?.avatar_url || null);
@@ -27,11 +30,18 @@ export function SettingsSection({ user, onSaved, onSignOut }) {
   const saveMutation = useMutation({
     mutationFn: (data) => fetchJson(`/users/${user.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['room-host'] });
       onSaved?.(updated);
       setNotice({ ok: true, text: 'Profile updated.' });
       setTimeout(() => setNotice(null), 3000);
     },
     onError: (err) => setNotice({ ok: false, text: err?.message || 'Failed to update profile.' }),
+  });
+
+  const delMutation = useMutation({
+    mutationFn: () => fetchJson(`/users/${user.id}`, { method: 'DELETE' }),
+    onSuccess: () => onSignOut?.(),
+    onError: (err) => setNotice({ ok: false, text: err?.message || 'Could not delete account.' }),
   });
 
   const dirty = name.trim() !== (user?.full_name || '') || (level || null) !== (user?.english_level || null) || (avatar || null) !== (user?.avatar_url || null);
@@ -50,10 +60,24 @@ export function SettingsSection({ user, onSaved, onSignOut }) {
     setAvatar(user?.avatar_url || null);
   }
 
+  function handleDelete() {
+    if (!window.confirm('Delete your account and everything in it (rooms, messages, documents)?')) return;
+    if (!window.confirm('This cannot be undone. Delete for real?')) return;
+    delMutation.mutate();
+  }
+
   return (
     <div className="portal-stack">
       <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Profile settings</h2></div>
+        <div className="portal-panel__head"><h2>Identity</h2><span className="portal-flag is-solid">{tierLabel} plan</span></div>
+        <div className="portal-profilecard">
+          <Face {...avatarFaceProps(avatar, name || user?.email)} size={88} />
+          <div className="portal-profilecard__info">
+            <strong>{name || user?.full_name || 'E-Room learner'}</strong>
+            <span className="portal-muted">{user?.email}</span>
+            <span className="portal-muted">Level {level || user?.english_level || 'not set'} · Member since {user?.created_at ? formatDateTime(user.created_at) : '—'}</span>
+          </div>
+        </div>
         {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
         <div className="er-grid er-grid--2 portal-formgrid">
           <div>
@@ -91,10 +115,27 @@ export function SettingsSection({ user, onSaved, onSignOut }) {
           <Switch on={showProfile} onClick={() => setShowProfile((v) => !v)} label="Show profile in rooms" />
         </div>
         <p className="portal-muted">Notification and privacy switches are stored on this device for now.</p>
+      </section>
+
+      <section className="portal-panel">
+        <div className="portal-panel__head"><h2>Account</h2></div>
+        <div className="portal-kv">
+          <div><span>User ID</span><strong>#{user?.id}</strong></div>
+          <div><span>Plan</span><strong>{tierLabel}</strong></div>
+        </div>
         <div className="portal-actions">
           <button className="er-btn er-btn--ghost" onClick={onSignOut}>
             <HiArrowRightOnRectangle size={15} /> Sign out
           </button>
+        </div>
+        <div className="portal-danger">
+          <strong>Danger zone</strong>
+          <span className="portal-muted">Delete your account with all rooms, messages and documents. This cannot be undone.</span>
+          <span>
+            <button className="er-btn er-btn--ghost portal-mini-btn" disabled={delMutation.isPending} onClick={handleDelete}>
+              {delMutation.isPending ? 'Deleting…' : 'Delete account'}
+            </button>
+          </span>
         </div>
       </section>
     </div>
