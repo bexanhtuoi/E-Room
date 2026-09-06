@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiArrowRightOnRectangle, HiBell, HiBookOpen, HiCalendarDays, HiChartBar, HiDocumentText, HiHome, HiPlusCircle, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
+import { HiBell, HiBookOpen, HiCalendarDays, HiChartBar, HiDocumentText, HiHome, HiPlusCircle, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
 import { useAuth } from '../AuthContext';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { CreateRoomModal } from '../../features/rooms/CreateRoomModal';
-import { Face, avatarFaceProps } from '../../components/common/Faces';
 import { OverviewSection } from '../../features/profile/OverviewSection';
 import { RoomsSection } from '../../features/profile/RoomsSection';
 import { SessionsSection } from '../../features/profile/SessionsSection';
@@ -151,11 +150,8 @@ export function ProfilePage() {
     <div className={`portal-app${collapsed ? ' is-collapsed' : ''}`}>
       <aside className="portal-side" aria-label="Profile sections">
         <div className="portal-side__id">
-          <span className="portal-side__avatar">
-            <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={40} />
-          </span>
           <div className="portal-side__id-text">
-            <strong>{user.full_name || 'E-Room learner'}</strong>
+            <strong>E-Room</strong>
             <span>{tierLabel(tier)} workspace</span>
           </div>
           <button type="button" className="portal-side__collapse" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
@@ -175,16 +171,6 @@ export function ProfilePage() {
             </div>
           </div>
         </nav>
-        <div className="portal-side__user">
-          <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={30} />
-          <div className="portal-side__user-info">
-            <strong>{user.full_name || 'E-Room learner'}</strong>
-            <span>{user.email}</span>
-          </div>
-          <button type="button" className="portal-side__signout" title="Sign out" aria-label="Sign out" onClick={handleSignOut}>
-            <HiArrowRightOnRectangle size={16} />
-          </button>
-        </div>
       </aside>
 
       <main className="portal-main">
