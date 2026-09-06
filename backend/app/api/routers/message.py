@@ -31,7 +31,9 @@ def get_messages(
     if role is not None:
         filter_kwargs["role"] = role
 
-    messages = message_crud.get_many(db, skip=skip, limit=limit, **filter_kwargs)
+    # Moi nhat truoc: history load + poll limit moi thay tin moi,
+    # khong thi phong dong (>limit tin) se mat tin moi + poll vo dung.
+    messages = message_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True, **filter_kwargs)
     return messages
 
 

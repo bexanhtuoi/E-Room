@@ -66,6 +66,20 @@ class TestListMessages:
         by_user = client.get(f"/api/v1/messages/?user_id={alice['id']}&room_id={room_a['id']}").json()
         assert by_user[0]["id"] == mine["id"]
 
+    def test_list_newest_first_with_pagination_window(self, client: TestClient, alice: dict):
+        room = client.post("/api/v1/rooms/", json={"name": f"order-msg-{alice['id']}"}).json()
+        first = create_message(client, room["id"], "first line")
+        second = create_message(client, room["id"], "second line")
+
+        listed = client.get(f"/api/v1/messages/?room_id={room['id']}&limit=100").json()
+        ids = [m["id"] for m in listed]
+        assert ids.index(second["id"]) < ids.index(first["id"])
+
+        page_one = client.get(f"/api/v1/messages/?room_id={room['id']}&limit=1").json()
+        assert [m["id"] for m in page_one] == [second["id"]]
+        page_two = client.get(f"/api/v1/messages/?room_id={room['id']}&limit=1&skip=1").json()
+        assert [m["id"] for m in page_two] == [first["id"]]
+
     def test_count_filtered_by_room(self, client: TestClient, alice: dict):
         room = client.post("/api/v1/rooms/", json={"name": f"cnt-room-{alice['id']}"}).json()
         create_message(client, room["id"], "one")

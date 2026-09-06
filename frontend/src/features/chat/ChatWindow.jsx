@@ -29,21 +29,23 @@ function Row({ item, mine, quote }) {
 
   if (item.kind === 'ai') {
     const thinking = item.thinking && !item.text;
+    // Thinking chi hien LUC DANG stream — xong la an, tra bubble sach + quote
+    const showThinking = !!item.streaming && !!item.thinkingText;
     return (
       <div style={{ border: '1px solid #111', borderLeftWidth: 4, padding: '10px 12px', background: '#f7f7f7' }}>
         <div style={{ fontSize: 12, fontWeight: 800 }}>AI {item.streaming ? '• typing…' : ''}</div>
-        {item.thinkingText ? (
-          <details open={!!item.streaming} style={{ margin: '6px 0', background: '#fff', border: '1px solid #ddd', padding: '6px 8px' }}>
-            <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>💭 Thinking</summary>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: '#555', marginTop: 4 }}>{item.thinkingText}</div>
-          </details>
-        ) : null}
         {quote && (
           <div style={{ borderLeft: '3px solid #000', padding: '4px 8px', margin: '6px 0', background: '#fff', fontSize: 12, color: '#555' }}>
             <div style={{ fontWeight: 700, color: '#111' }}>{quote.sender || 'You'}</div>
             <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 280 }}>{quote.text}</div>
           </div>
         )}
+        {showThinking ? (
+          <details open style={{ margin: '6px 0', background: '#fff', border: '1px solid #ddd', padding: '6px 8px' }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>💭 Thinking</summary>
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: '#555', marginTop: 4 }}>{item.thinkingText}</div>
+          </details>
+        ) : null}
         <div style={{ fontSize: 14, color: '#111', marginTop: 4, whiteSpace: 'pre-wrap' }}>
           {thinking ? (<span style={{ color: '#666' }}>AI is thinking<ThinkingDots /></span>) : item.text}
         </div>
@@ -62,18 +64,43 @@ function Row({ item, mine, quote }) {
 export function ChatWindow({ chat, visible, onClose, currentUserId }) {
   const { items, loading, sending, error, send } = chat;
   const [input, setInput] = useState('');
-  const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
+  // stuck = dang dinh day: tin moi tu cuon xuong. Khong stuck thi hien pill.
+  const [stuck, setStuck] = useState(true);
   const byId = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
 
+  function scrollToBottom(smooth) {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  // Chi gesture THAT cua user (lan chuot/cham) moi doi stuck.
+  // Nghe onScroll se bi scrollToBottom tu dong kich hoat giua animation
+  // → tuong user dang cuon → tat auto-scroll → tin moi chat dong duoi viewport.
+  function handleUserScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    setStuck(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [items, visible]);
+    if (stuck) scrollToBottom(false);
+  }, [items, visible, stuck]);
 
   async function handleSend(e) {
     e?.preventDefault();
     if (!input.trim() || sending) return;
     const ok = await send(input);
-    if (ok) setInput('');
+    if (ok) {
+      setInput('');
+      setStuck(true);
+      scrollToBottom(true);
+    }
   }
 
   if (!visible) return null;
@@ -85,7 +112,7 @@ export function ChatWindow({ chat, visible, onClose, currentUserId }) {
         <button onClick={onClose} aria-label="Close chat" style={{ background: '#fff', border: '1px solid #111', width: 30, height: 30, fontWeight: 800, cursor: 'pointer' }}>✕</button>
       </div>
 
-      <div className="er-chat-scroll" style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+      <div ref={scrollRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} className="er-chat-scroll" style={{ position: 'relative', flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
         {loading && <p style={{ color: '#666', fontSize: 13 }}>Loading conversation…</p>}
         {!loading && items.length === 0 && (
           <div style={{ border: '1px dashed #bbb', padding: 18, textAlign: 'center', color: '#666', fontSize: 13 }}>
@@ -100,7 +127,14 @@ export function ChatWindow({ chat, visible, onClose, currentUserId }) {
             quote={item.kind === 'ai' && item.sourceId != null ? byId.get(item.sourceId) || null : null}
           />
         ))}
-        <div ref={bottomRef} />
+        {!stuck && items.length > 0 && (
+          <button
+            onClick={() => { setStuck(true); scrollToBottom(true); }}
+            style={{ position: 'sticky', bottom: 0, alignSelf: 'center', background: '#111', color: '#fff', border: '1px solid #111', fontSize: 12, fontWeight: 800, padding: '6px 14px', cursor: 'pointer' }}
+          >
+            ↓ Mới
+          </button>
+        )}
       </div>
 
       {error && <div style={{ margin: '0 12px', fontSize: 12, color: '#b45309' }}>{error}</div>}

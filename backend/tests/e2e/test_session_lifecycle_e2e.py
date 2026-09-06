@@ -139,7 +139,7 @@ class TestRoomSessionLifecycleE2E:
             headers=headers,
         )
 
-        # Kiem tra phong chuyen sang ENDED
+        # Phong het nguoi → IDLE (van hien list de vao lai), chi ENDED khi bo hoang lau
         with Session(engine) as db:
             db_room = room_crud.get_one(db, id=room_id)
-            assert db_room.status == RoomStatus.ENDED
+            assert db_room.status == RoomStatus.IDLE
