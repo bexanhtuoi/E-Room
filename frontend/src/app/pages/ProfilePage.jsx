@@ -148,6 +148,7 @@ export function ProfilePage() {
     <div className={`portal-app${collapsed ? ' is-collapsed' : ''}`}>
       <aside className="portal-side" aria-label="Profile sections">
         <div className="portal-side__id">
+          <span className="portal-side__logo" aria-hidden="true">E</span>
           <div className="portal-side__id-text">
             <strong>E-Room</strong>
             <span>{tierLabel(tier)} workspace</span>

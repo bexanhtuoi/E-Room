@@ -22,26 +22,28 @@ export function DocumentsSection({ userId }) {
 
   return (
     <div className="portal-stack">
-      <div className="portal-stats">
-        <div className="portal-stat">
-          <span className="portal-stat__tile"><HiFolderOpen size={20} /></span>
-          <span className="portal-stat__body">
-            <span className="portal-stat__value">{mine.length}</span>
-            <span className="portal-stat__label">Documents</span>
-            <span className="portal-stat__sub">{typeCount.size} file types</span>
-          </span>
-        </div>
-        {[...typeCount.entries()].slice(0, 3).map(([type, count]) => (
-          <div key={type} className="portal-stat">
-            <span className="portal-stat__tile"><HiDocumentText size={20} /></span>
+      {mine.length > 0 && (
+        <div className="portal-stats">
+          <div className="portal-stat">
+            <span className="portal-stat__tile"><HiFolderOpen size={20} /></span>
             <span className="portal-stat__body">
-              <span className="portal-stat__value">{count}</span>
-              <span className="portal-stat__label">{type}</span>
-              <span className="portal-stat__sub">files</span>
+              <span className="portal-stat__value">{mine.length}</span>
+              <span className="portal-stat__label">Documents</span>
+              <span className="portal-stat__sub">{typeCount.size} file types</span>
             </span>
           </div>
-        ))}
-      </div>
+          {[...typeCount.entries()].slice(0, 3).map(([type, count]) => (
+            <div key={type} className="portal-stat">
+              <span className="portal-stat__tile"><HiDocumentText size={20} /></span>
+              <span className="portal-stat__body">
+                <span className="portal-stat__value">{count}</span>
+                <span className="portal-stat__label">{type}</span>
+                <span className="portal-stat__sub">files</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <section className="portal-panel">
         <div className="portal-panel__head"><h2>All files</h2></div>

@@ -37,6 +37,19 @@
   border-bottom: 1px solid #eee;
 }
 
+.portal-side__logo {
+  width: 32px;
+  height: 32px;
+  background: #111;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .portal-side__id-text {
   min-width: 0;
   flex: 1;

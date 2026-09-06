@@ -141,6 +141,24 @@ describe('ProfilePage portal', () => {
     expect(screen.getByText('pdf')).toBeTruthy();
   });
 
+  it('hides zero stat cards when there is nothing to count', async () => {
+    fetchJson.mockImplementation(async (path) => {
+      if (path.startsWith('/rooms/')) return [];
+      if (path.startsWith('/messages/')) return [];
+      if (path.startsWith('/messages/count')) return { count: 0 };
+      if (path.startsWith('/notifications/')) return [];
+      if (path.startsWith('/documents/')) return [];
+      return [];
+    });
+    renderPortal();
+    await goTo('Documents');
+    expect(await screen.findByText(/No documents yet/)).toBeTruthy();
+    expect(screen.queryByText('file types')).toBeNull();
+    await goTo('Sessions');
+    expect(await screen.findByText(/will land here as past sessions/)).toBeTruthy();
+    expect(screen.queryByText('Past sessions')).toBeNull();
+  });
+
   it('shows unread notifications with tabs and badge', async () => {
     renderPortal();
     await goTo('Notifications');

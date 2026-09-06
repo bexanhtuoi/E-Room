@@ -17,24 +17,26 @@ export function SessionsSection({ sessions, messagesByRoom, userId }) {
 
   return (
     <div className="portal-stack">
-      <div className="portal-stats">
-        <div className="portal-stat">
-          <span className="portal-stat__tile"><HiCalendarDays size={20} /></span>
-          <span className="portal-stat__body">
-            <span className="portal-stat__value">{filtered.length}</span>
-            <span className="portal-stat__label">Past sessions</span>
-            <span className="portal-stat__sub">finished rooms</span>
-          </span>
+      {sessions.length > 0 && (
+        <div className="portal-stats">
+          <div className="portal-stat">
+            <span className="portal-stat__tile"><HiCalendarDays size={20} /></span>
+            <span className="portal-stat__body">
+              <span className="portal-stat__value">{filtered.length}</span>
+              <span className="portal-stat__label">Past sessions</span>
+              <span className="portal-stat__sub">finished rooms</span>
+            </span>
+          </div>
+          <div className="portal-stat">
+            <span className="portal-stat__tile"><HiChatBubbleLeftRight size={20} /></span>
+            <span className="portal-stat__body">
+              <span className="portal-stat__value">{totalLines}</span>
+              <span className="portal-stat__label">Lines you said</span>
+              <span className="portal-stat__sub">across sessions</span>
+            </span>
+          </div>
         </div>
-        <div className="portal-stat">
-          <span className="portal-stat__tile"><HiChatBubbleLeftRight size={20} /></span>
-          <span className="portal-stat__body">
-            <span className="portal-stat__value">{totalLines}</span>
-            <span className="portal-stat__label">Lines you said</span>
-            <span className="portal-stat__sub">across sessions</span>
-          </span>
-        </div>
-      </div>
+      )}
 
       <section className="portal-panel">
         <div className="portal-panel__head">

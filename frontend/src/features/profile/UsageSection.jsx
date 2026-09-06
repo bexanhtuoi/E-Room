@@ -64,8 +64,11 @@ export function UsageSection({ messages, messagesTotal, hostedRooms, joinedRooms
     { icon: HiCalendarDays, value: pastSessions.length, label: 'Sessions done', sub: `${statusCount.active} live now` },
   ];
 
+  const hasSignal = messagesTotal > 0 || hostedRooms.length + joinedRooms.length > 0;
+
   return (
     <div className="portal-stack">
+      {hasSignal && (
       <div className="portal-stats">
         {kpis.map((k) => (
           <div key={k.label} className="portal-stat">
@@ -78,6 +81,7 @@ export function UsageSection({ messages, messagesTotal, hostedRooms, joinedRooms
           </div>
         ))}
       </div>
+      )}
 
       <section className="portal-panel">
         <div className="portal-panel__head"><h2>Rhythm</h2><span className="portal-muted">Last 14 days · by hour of day</span></div>
