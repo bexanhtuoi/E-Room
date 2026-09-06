@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { HiArrowRightOnRectangle, HiUserCircle } from 'react-icons/hi2';
 import { LogoMark } from '../brand/LogoMark';
@@ -15,8 +15,11 @@ const LINKS = [
 export function PublicLayout({ children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const displayName = user?.full_name || user?.display_name || user?.email || 'Profile';
+  // Portal profile tu quan ly full-height: an footer de sidebar cham day man hinh
+  const bare = location.pathname.startsWith('/profile');
 
   return (
     <div className="er">
@@ -76,7 +79,7 @@ export function PublicLayout({ children }) {
         )}
       </header>
       <main>{children}</main>
-      <footer style={{ background: '#111', color: '#fff' }}>
+      {!bare && <footer style={{ background: '#111', color: '#fff' }}>
         <div className="er-container" style={{ paddingTop: 72, paddingBottom: 28 }}>
           <div className="er-grid er-grid--4">
             <div>
@@ -113,7 +116,7 @@ export function PublicLayout({ children }) {
             <span>Privacy • Terms • Hotline {SITE.hotline}</span>
           </div>
         </div>
-      </footer>
+      </footer>}
     </div>
   );
 }

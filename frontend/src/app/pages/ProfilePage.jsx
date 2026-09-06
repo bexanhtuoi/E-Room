@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiBell, HiBookOpen, HiCreditCard, HiDocumentText, HiHome, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
+import { HiBell, HiBookOpen, HiCalendarDays, HiChartBar, HiDocumentText, HiHome, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
 import { useAuth } from '../AuthContext';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
@@ -10,20 +10,25 @@ import { CreateRoomModal } from '../../features/rooms/CreateRoomModal';
 import { Face, avatarFaceProps } from '../../components/common/Faces';
 import { OverviewSection } from '../../features/profile/OverviewSection';
 import { RoomsSection } from '../../features/profile/RoomsSection';
+import { SessionsSection } from '../../features/profile/SessionsSection';
+import { UsageSection } from '../../features/profile/UsageSection';
 import { ActivitySection } from '../../features/profile/ActivitySection';
 import { DocumentsSection } from '../../features/profile/DocumentsSection';
 import { NotificationsSection } from '../../features/profile/NotificationsSection';
-import { SubscriptionSection } from '../../features/profile/SubscriptionSection';
 import { SettingsSection } from '../../features/profile/SettingsSection';
 import '../../styles/ProfilePage.css';
 
-const SECTIONS = [
+const NAV_MAIN = [
   { key: 'overview', label: 'Overview', icon: HiHome },
   { key: 'rooms', label: 'My rooms', icon: HiUserGroup },
+  { key: 'sessions', label: 'Sessions', icon: HiCalendarDays },
   { key: 'activity', label: 'Activity', icon: HiBookOpen },
+  { key: 'usage', label: 'Usage', icon: HiChartBar },
   { key: 'documents', label: 'Documents', icon: HiDocumentText },
+];
+
+const NAV_BOTTOM = [
   { key: 'notifications', label: 'Notifications', icon: HiBell },
-  { key: 'subscription', label: 'Subscription', icon: HiCreditCard },
   { key: 'settings', label: 'Settings', icon: HiShieldCheck },
 ];
 
@@ -74,6 +79,7 @@ export function ProfilePage() {
     messagesByRoom.get(m.room_id).push(m);
   }
   const joinedRooms = rooms.filter((r) => String(r.host_id) !== String(user?.id) && messagesByRoom.has(r.id));
+  const pastSessions = rooms.filter((r) => r.status === 'ended' && (String(r.host_id) === String(user?.id) || messagesByRoom.has(r.id)));
 
   function handleRoomCreated(room) {
     queryClient.invalidateQueries({ queryKey: ['rooms', 'list'] });
@@ -98,81 +104,80 @@ export function ProfilePage() {
 
   if (!user) return null;
 
+  function navBtn(s, badge) {
+    return (
+      <button
+        key={s.key}
+        type="button"
+        onClick={() => setActiveSection(s.key)}
+        className={`portal-side__btn${activeSection === s.key ? ' is-active' : ''}`}
+      >
+        <s.icon size={17} /> {s.label}
+        {badge > 0 && <span className="portal-count">{badge}</span>}
+      </button>
+    );
+  }
+
   return (
-    <div className="portal">
-      <div className="er-container portal-container">
-        <header className="portal-header">
-          <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={64} />
-          <div className="portal-header__main">
-            <h1>{user.full_name || 'E-Room learner'}</h1>
-            <p>{user.email}</p>
+    <div className="portal-app">
+      <aside className="portal-side" aria-label="Profile sections">
+        <div className="portal-side__id">
+          <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={40} />
+          <div className="portal-side__id-text">
+            <strong>{user.full_name || 'E-Room learner'}</strong>
+            <span>{tierLabel(tier)} workspace</span>
           </div>
-          <div className="portal-header__stats">
-            <div><strong>{messages.length}</strong><span>messages</span></div>
-            <div><strong>{tierLabel(tier)}</strong><span>plan</span></div>
-          </div>
-        </header>
-
-        <div className="portal-layout">
-          <aside className="portal-sidebar" aria-label="Profile sections">
-            <div className="portal-sidebar__identity">
-              <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={36} />
-              <div className="portal-sidebar__identity-text">
-                <strong>{user.full_name || 'E-Room learner'}</strong>
-                <span>{user.email}</span>
-              </div>
-            </div>
-            <nav className="portal-sidebar__nav">
-              {SECTIONS.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => setActiveSection(s.key)}
-                  className={`portal-sidebar__btn${activeSection === s.key ? ' is-active' : ''}`}
-                >
-                  <s.icon size={16} /> {s.label}
-                  {s.key === 'notifications' && unreadCount > 0 && <span className="portal-count">{unreadCount}</span>}
-                </button>
-              ))}
-            </nav>
-            <div className="portal-sidebar__foot">
-              <span className="portal-flag is-solid">{tierLabel(tier)} plan</span>
-            </div>
-          </aside>
-
-          <main className="portal-main">
-            {activeSection === 'overview' && (
-              <OverviewSection
-                user={user}
-                hostedRooms={hostedRooms}
-                joinedRooms={joinedRooms}
-                messages={messages}
-                documents={myDocs}
-                tierLabel={tierLabel(tier)}
-                onCreateRoom={() => setShowCreateRoom(true)}
-              />
-            )}
-            {activeSection === 'rooms' && (
-              <RoomsSection
-                hostedRooms={hostedRooms}
-                joinedRooms={joinedRooms}
-                messagesByRoom={messagesByRoom}
-                onCreateRoom={() => setShowCreateRoom(true)}
-                onRoomDeleted={handleRoomDeleted}
-              />
-            )}
-            {activeSection === 'activity' && (
-              <ActivitySection messages={messages} isLoading={activityQuery.isLoading} isError={activityQuery.isError} onRetry={activityQuery.refetch} />
-            )}
-            {activeSection === 'documents' && <DocumentsSection userId={user.id} />}
-            {activeSection === 'notifications' && <NotificationsSection />}
-            {activeSection === 'subscription' && <SubscriptionSection tier={tier} />}
-            {activeSection === 'settings' && (
-              <SettingsSection user={user} onSaved={handleProfileSaved} onSignOut={() => { logout(); navigate('/login'); }} />
-            )}
-          </main>
         </div>
-      </div>
+        <nav className="portal-side__nav">
+          <div className="portal-side__group">Menu</div>
+          {NAV_MAIN.map((s) => navBtn(s))}
+          <div className="portal-side__bottom">
+            {NAV_BOTTOM.map((s) => navBtn(s, s.key === 'notifications' ? unreadCount : 0))}
+            <div className="portal-side__plan">
+              <strong>{tierLabel(tier)} plan</strong>
+              <span>Unlock recaps, voice and more.</span>
+              <Link to="/pricing">Upgrade</Link>
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      <main className="portal-main">
+        {activeSection === 'overview' && (
+          <OverviewSection
+            user={user}
+            hostedRooms={hostedRooms}
+            joinedRooms={joinedRooms}
+            messages={messages}
+            documentsCount={myDocs.length}
+            onCreateRoom={() => setShowCreateRoom(true)}
+            onGo={setActiveSection}
+          />
+        )}
+        {activeSection === 'rooms' && (
+          <RoomsSection
+            hostedRooms={hostedRooms}
+            joinedRooms={joinedRooms}
+            messagesByRoom={messagesByRoom}
+            onCreateRoom={() => setShowCreateRoom(true)}
+            onRoomDeleted={handleRoomDeleted}
+          />
+        )}
+        {activeSection === 'sessions' && (
+          <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
+        )}
+        {activeSection === 'usage' && (
+          <UsageSection messages={messages} hostedRooms={hostedRooms} joinedRooms={joinedRooms} />
+        )}
+        {activeSection === 'activity' && (
+          <ActivitySection messages={messages} isLoading={activityQuery.isLoading} isError={activityQuery.isError} onRetry={activityQuery.refetch} />
+        )}
+        {activeSection === 'documents' && <DocumentsSection userId={user.id} />}
+        {activeSection === 'notifications' && <NotificationsSection />}
+        {activeSection === 'settings' && (
+          <SettingsSection user={user} onSaved={handleProfileSaved} onSignOut={() => { logout(); navigate('/login'); }} />
+        )}
+      </main>
 
       {showCreateRoom && <CreateRoomModal onClose={() => setShowCreateRoom(false)} onRoomCreated={handleRoomCreated} />}
     </div>
