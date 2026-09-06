@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { HiArrowRight, HiCalendarDays, HiChatBubbleLeftRight, HiDocumentText, HiUserGroup } from 'react-icons/hi2';
-import { formatDateTime } from '../../lib/formatters';
 import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
+import { ActivitySection } from './ActivitySection';
 import { bucketByDay, WeekBars } from './WeekBars';
 
 function LiveRoomLine({ room }) {
@@ -21,10 +21,11 @@ function LiveRoomLine({ room }) {
   );
 }
 
-export function OverviewSection({ hostedRooms, joinedRooms, liveRooms, messages, messagesTotal, documentsCount, onGo }) {
+export function OverviewSection({ hostedRooms, joinedRooms, liveRooms, messages, messagesTotal, documentsCount, rooms, activityLoading, activityError, activityRetry, onGo }) {
   const week = bucketByDay(messages, 7);
   const weekTotal = week.reduce((s, b) => s + b.count, 0);
-  const recent = messages.slice(0, 5);
+  const resume = [...liveRooms, ...joinedRooms, ...hostedRooms].find((r) => r.status === 'active')
+    || [...joinedRooms, ...hostedRooms].find((r) => r.status === 'idle');
 
   const kpis = [
     { icon: HiUserGroup, value: hostedRooms.length, label: 'Rooms hosted', sub: `${joinedRooms.length} joined` },
@@ -69,28 +70,24 @@ export function OverviewSection({ hostedRooms, joinedRooms, liveRooms, messages,
         </section>
 
         <section className="portal-panel">
-          <div className="portal-panel__head">
-            <h2>Latest messages</h2>
-            <button type="button" className="portal-linkbtn" onClick={() => onGo?.('activity')}>View all <HiArrowRight size={13} /></button>
-          </div>
-          {recent.length === 0 ? (
-            <div className="portal-empty">Nothing yet — your voice lands here.</div>
+          <div className="portal-panel__head"><h2>Continue learning</h2></div>
+          {!resume ? (
+            <div className="portal-empty">No open room right now. Create one and learners will join you.</div>
           ) : (
-            <div className="portal-list">
-              {recent.map((m) => (
-                <Link key={m.id} to={`/rooms/${m.room_id}`} className="portal-row">
-                  <span className={`portal-badge${m.role === 'ai' ? ' is-ai' : ''}`}>{m.role === 'ai' ? 'AI' : 'YOU'}</span>
-                  <span className="portal-row__main">
-                    <span className="portal-row__text">{m.text}</span>
-                    <span className="portal-row__sub">{m.created_at ? formatDateTime(m.created_at) : ''}</span>
-                  </span>
-                  <span className="portal-row__go" aria-hidden="true">→</span>
-                </Link>
-              ))}
+            <div className="portal-block">
+              <div className="portal-resume">
+                <div>
+                  <strong>{resume.name}</strong>
+                  <span className="portal-muted">{resume.status === 'active' ? 'Live now — jump back in' : 'Open — waiting for speakers'}</span>
+                </div>
+                <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to={`/rooms/${resume.id}`}>Open</Link>
+              </div>
             </div>
           )}
         </section>
       </div>
+
+      <ActivitySection messages={messages} rooms={rooms} isLoading={activityLoading} isError={activityError} onRetry={activityRetry} />
     </div>
   );
 }

@@ -72,13 +72,15 @@ async function goTo(label) {
 }
 
 describe('ProfilePage portal', () => {
-  it('renders dark sidebar sections without subscription', async () => {
+  it('renders sidebar sections with user row and without subscription/activity', async () => {
     renderPortal();
     const sidebar = await screen.findByLabelText('Profile sections');
-    for (const label of ['Overview', 'My rooms', 'Sessions', 'Activity', 'Usage', 'Documents', 'Notifications', 'Settings']) {
+    for (const label of ['Overview', 'My rooms', 'Sessions', 'Usage', 'Documents', 'Notifications', 'Settings']) {
       expect(within(sidebar).getByRole('button', { name: new RegExp(label) })).toBeTruthy();
     }
     expect(within(sidebar).queryByRole('button', { name: /Subscription/ })).toBeNull();
+    expect(within(sidebar).queryByRole('button', { name: /^Activity/ })).toBeNull();
+    expect(within(sidebar).getByRole('button', { name: /Sign out/ })).toBeTruthy();
   });
 
   it('shows pagehead and accurate message total from count API', async () => {
@@ -124,9 +126,8 @@ describe('ProfilePage portal', () => {
     expect(screen.getByText('ROOMS')).toBeTruthy();
   });
 
-  it('filters activity by text and shows room names', async () => {
+  it('shows full activity at the bottom of overview with filters', async () => {
     renderPortal();
-    await goTo('Activity');
     expect(await screen.findByText('hello there')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Search messages'), { target: { value: 'great' } });
     expect(screen.queryByText('hello there')).toBeNull();

@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiBell, HiBookOpen, HiCalendarDays, HiChartBar, HiDocumentText, HiHome, HiPlusCircle, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
+import { HiArrowRightOnRectangle, HiBell, HiCalendarDays, HiChartBar, HiDocumentText, HiHome, HiPlusCircle, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
 import { useAuth } from '../AuthContext';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { CreateRoomModal } from '../../features/rooms/CreateRoomModal';
+import { Face, avatarFaceProps } from '../../components/common/Faces';
 import { OverviewSection } from '../../features/profile/OverviewSection';
 import { RoomsSection } from '../../features/profile/RoomsSection';
 import { SessionsSection } from '../../features/profile/SessionsSection';
 import { UsageSection } from '../../features/profile/UsageSection';
-import { ActivitySection } from '../../features/profile/ActivitySection';
 import { DocumentsSection } from '../../features/profile/DocumentsSection';
 import { NotificationsSection } from '../../features/profile/NotificationsSection';
 import { SettingsSection } from '../../features/profile/SettingsSection';
@@ -21,7 +21,6 @@ const NAV_MAIN = [
   { key: 'overview', label: 'Overview', icon: HiHome },
   { key: 'rooms', label: 'My rooms', icon: HiUserGroup },
   { key: 'sessions', label: 'Sessions', icon: HiCalendarDays },
-  { key: 'activity', label: 'Activity', icon: HiBookOpen },
   { key: 'usage', label: 'Usage', icon: HiChartBar },
   { key: 'documents', label: 'Documents', icon: HiDocumentText },
 ];
@@ -35,7 +34,6 @@ const PAGEHEAD = {
   overview: { crumb: 'Workspace', title: 'Overview', desc: 'Your learning pulse at a glance.' },
   rooms: { crumb: 'Workspace', title: 'My rooms', desc: 'Rooms you host and rooms you speak in.' },
   sessions: { crumb: 'Workspace', title: 'Sessions', desc: 'Every finished room, with what you said in each.' },
-  activity: { crumb: 'Workspace', title: 'Activity', desc: 'Your full message timeline, newest first.' },
   usage: { crumb: 'Workspace', title: 'Usage', desc: 'Streaks, rhythms and favourite topics.' },
   documents: { crumb: 'Workspace', title: 'Documents', desc: 'Files attached to your learning.' },
   notifications: { crumb: 'Workspace', title: 'Notifications', desc: 'Matches, recaps and reviews.' },
@@ -171,6 +169,16 @@ export function ProfilePage() {
             </div>
           </div>
         </nav>
+        <div className="portal-side__user">
+          <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={32} />
+          <div className="portal-side__user-info">
+            <strong>{user.full_name || 'E-Room learner'}</strong>
+            <span>{user.email}</span>
+          </div>
+          <button type="button" className="portal-side__signout" title="Sign out" aria-label="Sign out" onClick={handleSignOut}>
+            <HiArrowRightOnRectangle size={15} />
+          </button>
+        </div>
       </aside>
 
       <main className="portal-main">
@@ -197,6 +205,10 @@ export function ProfilePage() {
             messages={messages}
             messagesTotal={messagesTotal}
             documentsCount={myDocs.length}
+            rooms={rooms}
+            activityLoading={activityQuery.isLoading}
+            activityError={activityQuery.isError}
+            activityRetry={activityQuery.refetch}
             onGo={setActiveSection}
           />
         )}
@@ -212,9 +224,6 @@ export function ProfilePage() {
         )}
         {activeSection === 'sessions' && (
           <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
-        )}
-        {activeSection === 'activity' && (
-          <ActivitySection messages={messages} rooms={rooms} isLoading={activityQuery.isLoading} isError={activityQuery.isError} onRetry={activityQuery.refetch} />
         )}
         {activeSection === 'usage' && (
           <UsageSection messages={messages} messagesTotal={messagesTotal} hostedRooms={hostedRooms} joinedRooms={joinedRooms} pastSessions={pastSessions} />
