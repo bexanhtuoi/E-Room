@@ -8,6 +8,22 @@ const VARIANTS = [
   { skin: '#f0c297', hair: '#2b2b2b', style: 'sideMale', shirt: '#b45309', bg: '#efefef' },
 ];
 
+export const FACE_VARIANT_COUNT = VARIANTS.length;
+
+// Avatar luu duoi dang "face:N" (preset user chon) de render giong nhau moi noi.
+// Tra ve props cho <Face/>. avatarUrl la/null → hash theo ten nhu cu.
+export function avatarFaceProps(avatarUrl, fallbackName = '?') {
+  const match = /^face:(\d+)$/.exec(String(avatarUrl || ''));
+  if (match) {
+    return { variant: Number(match[1]) % VARIANTS.length, name: fallbackName };
+  }
+  return { variant: undefined, name: fallbackName };
+}
+
+export function avatarValue(variant) {
+  return `face:${variant}`;
+}
+
 function hashName(name) {
   let h = 0;
   const s = String(name || '?');

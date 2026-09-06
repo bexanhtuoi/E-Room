@@ -44,12 +44,13 @@ class TestUpdateUser:
     def test_update_own_profile(self, client: TestClient, alice: dict):
         response = client.patch(
             f"/api/v1/users/{alice['id']}",
-            json={"full_name": "Alice Updated", "english_level": "B2"},
+            json={"full_name": "Alice Updated", "english_level": "B2", "avatar_url": "face:3"},
         )
         assert response.status_code == 200
         data = response.json()
         assert data["full_name"] == "Alice Updated"
         assert data["english_level"] == "B2"
+        assert data["avatar_url"] == "face:3"
 
     def test_update_invalid_english_level_returns_422(self, client: TestClient, alice: dict):
         response = client.patch(f"/api/v1/users/{alice['id']}", json={"english_level": "Z9"})
