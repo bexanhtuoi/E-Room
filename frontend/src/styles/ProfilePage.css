@@ -266,6 +266,13 @@
   max-width: 1280px;
 }
 
+/* Grid blowout: item nao cung duoc phep co lai, chart rong thi tu cuon */
+.portal-stack > *,
+.portal-grid2 > *,
+.portal-panel {
+  min-width: 0;
+}
+
 .portal-pagehead {
   display: flex;
   gap: 16px;
@@ -330,6 +337,15 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.portal-panel__head > * {
+  min-width: 0;
+}
+
+.portal-panel__head .portal-muted {
+  overflow-wrap: break-word;
 }
 
 .portal-panel > *:not(.portal-panel__head):not(.portal-list):not(.portal-table) {
@@ -404,6 +420,11 @@
   gap: 0;
 }
 
+.portal-stat__body > * {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 .portal-stat__value {
   font-size: 24px;
   font-weight: 800;
@@ -443,6 +464,17 @@
   display: flex;
   gap: 6px;
   align-items: stretch;
+}
+
+.bars--empty {
+  border: 1px dashed #cfcfcf;
+  background: #fcfcfc;
+  color: #8a8a8a;
+  font-size: 13px;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  text-align: center;
 }
 
 .bars__col {
@@ -695,6 +727,7 @@
 }
 
 .portal-linkbtn {
+  justify-self: start;
   font-weight: 700;
   font-size: 13px;
   text-decoration: none;
@@ -1503,6 +1536,11 @@ a.portal-row:hover .portal-row__go {
 }
 
 @media (max-width: 560px) {
+  .portal-panel__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .portal-docgrid {
     grid-template-columns: 1fr;
   }
@@ -1545,6 +1583,23 @@ a.portal-row:hover .portal-row__go {
   .portal-stat {
     padding: 12px;
     gap: 10px;
+  }
+
+  .portal-stat__tile {
+    width: 32px;
+    height: 32px;
+  }
+
+  .portal-stat__value {
+    font-size: 20px;
+  }
+
+  .portal-stat__label {
+    font-size: 10px;
+  }
+
+  .bars {
+    gap: 3px;
   }
 
   .portal-meter {
