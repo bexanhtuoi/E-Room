@@ -36,7 +36,7 @@ function RoomDetail({ room, myMessages, expanded }) {
   return (
     <div className="portal-roomdetail">
       <div className="portal-roomdetail__meta">
-        <span className={`portal-status is-${room.status}`}>● {STATUS_LABEL[room.status] || room.status}</span>
+        <span className={`portal-status is-${room.status}`}>{STATUS_LABEL[room.status] || room.status}</span>
         {room.created_at && <span className="portal-muted"><HiCalendarDays size={13} /> {formatDateTime(room.created_at)}</span>}
         <span className="portal-muted">{countQuery.isLoading ? 'Counting…' : `${total} messages total · ${myMessages.length} yours`}</span>
       </div>
@@ -78,13 +78,13 @@ function RoomCard({ room, mine, myMessages, expanded, onToggle, onDeleted }) {
         <span className="portal-room__main">
           <strong>{room.name}</strong>
           <span className="portal-room__meta">
-            <span className={`portal-status is-${room.status}`}>● {STATUS_LABEL[room.status] || room.status}</span>
+            <span className={`portal-status is-${room.status}`}>{STATUS_LABEL[room.status] || room.status}</span>
             <span>{myMessages.length} your lines</span>
             {mine && <span className="portal-flag is-solid">HOST</span>}
           </span>
         </span>
         {live && <LiveFaces roomId={room.id} />}
-        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        <span className="portal-room__chev" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
       </button>
       {expanded && (
         <div className="portal-room__body">

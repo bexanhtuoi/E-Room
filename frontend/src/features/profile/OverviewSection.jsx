@@ -1,17 +1,9 @@
 import { Link } from 'react-router-dom';
-import { HiArrowRight, HiCalendarDays, HiChatBubbleLeftRight, HiDocumentText, HiPlusCircle, HiUserGroup } from 'react-icons/hi2';
+import { HiArrowRight, HiCalendarDays, HiChatBubbleLeftRight, HiDocumentText, HiUserGroup } from 'react-icons/hi2';
 import { formatDateTime } from '../../lib/formatters';
 import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
 import { bucketByDay, WeekBars } from './WeekBars';
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 11) return 'Good morning';
-  if (h < 14) return 'Good day';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 function LiveRoomLine({ room }) {
   const { data: members } = useRoomMembers(room.id);
@@ -29,9 +21,7 @@ function LiveRoomLine({ room }) {
   );
 }
 
-export function OverviewSection({ user, hostedRooms, joinedRooms, liveRooms, messages, messagesTotal, documentsCount, onCreateRoom, onGo }) {
-  const firstName = (user?.full_name || 'learner').split(' ')[0];
-  const today = new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+export function OverviewSection({ hostedRooms, joinedRooms, liveRooms, messages, messagesTotal, documentsCount, onGo }) {
   const week = bucketByDay(messages, 7);
   const weekTotal = week.reduce((s, b) => s + b.count, 0);
   const recent = messages.slice(0, 5);
@@ -45,18 +35,6 @@ export function OverviewSection({ user, hostedRooms, joinedRooms, liveRooms, mes
 
   return (
     <div className="portal-stack">
-      <div className="portal-hero">
-        <div>
-          <div className="portal-hero__date">{today}</div>
-          <h2>{greeting()}, {firstName}.</h2>
-          <p>{weekTotal > 0 ? `${weekTotal} messages in the last 7 days — nice momentum.` : 'Say your first line this week — pick a room and jump in.'}</p>
-        </div>
-        <div className="portal-hero__actions">
-          <button className="er-btn" onClick={onCreateRoom}><HiPlusCircle size={16} /> New room</button>
-          <Link className="er-btn er-btn--ghost" style={{ textDecoration: 'none' }} to="/rooms">Find a room</Link>
-        </div>
-      </div>
-
       <div className="portal-stats">
         {kpis.map((k) => (
           <div key={k.label} className="portal-stat">

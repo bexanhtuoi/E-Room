@@ -1,16 +1,23 @@
-/* ---- Profile portal v2: admin layout, sidebar full-height, square monochrome ---- */
+/* ============================================================
+   Profile portal — calm monochrome system
+   Type scale: 28 h1 / 16 h2 / 14 body / 13 secondary / 12 label
+   Spacing scale: 8 / 16 / 24 / 32. Card = white, 1px #e7e7e7.
+   ============================================================ */
 .portal-app {
   display: flex;
   height: calc(100svh - 64px);
-  background: #f4f4f4;
+  background: #fafafa;
   overflow: hidden;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1a1a1a;
 }
 
-/* ============ SIDEBAR ============ */
+/* ================= SIDEBAR ================= */
 .portal-side {
-  width: 272px;
+  width: 248px;
   flex-shrink: 0;
-  background: #111;
+  background: #141414;
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -19,20 +26,19 @@
 }
 
 .portal-app.is-collapsed .portal-side {
-  width: 76px;
+  width: 72px;
 }
 
 .portal-side__id {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 16px;
-  border-bottom: 1px solid #333;
-  min-height: 78px;
+  padding: 20px 16px;
+  border-bottom: 1px solid #2a2a2a;
 }
 
 .portal-side__avatar {
-  border: 2px solid #fff;
+  border: 2px solid #3a3a3a;
   flex-shrink: 0;
   line-height: 0;
 }
@@ -44,7 +50,8 @@
 
 .portal-side__id-text strong {
   display: block;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 700;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -54,43 +61,45 @@
 .portal-side__id-text span {
   display: block;
   font-size: 12px;
-  color: #999;
+  color: #8a8a8a;
 }
 
 .portal-side__collapse {
   background: transparent;
-  border: 1px solid #444;
-  color: #fff;
-  width: 28px;
-  height: 28px;
-  font-weight: 800;
+  border: 1px solid #3a3a3a;
+  color: #bbb;
+  width: 26px;
+  height: 26px;
+  font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
+  font-size: 12px;
 }
 
 .portal-side__collapse:hover {
-  background: #222;
+  color: #fff;
+  border-color: #666;
 }
 
 .portal-side__nav {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px;
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-height: 0;
   scrollbar-width: thin;
-  scrollbar-color: #444 transparent;
+  scrollbar-color: #3a3a3a transparent;
 }
 
 .portal-side__group {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.14em;
-  color: #777;
-  padding: 10px 12px 4px;
+  color: #6f6f6f;
+  padding: 12px 12px 6px;
   white-space: nowrap;
 }
 
@@ -101,12 +110,11 @@
   gap: 12px;
   padding: 10px 12px;
   border: none;
-  border-left: 3px solid transparent;
   background: transparent;
-  color: #bbb;
+  color: #b5b5b5;
   font: inherit;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
@@ -114,31 +122,31 @@
 
 .portal-side__btn svg {
   flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .portal-side__btn:hover {
   color: #fff;
-  background: #1d1d1d;
+  background: #1e1e1e;
 }
 
 .portal-side__btn.is-active {
-  color: #111;
-  background: #fff;
-  border-left-color: #fff;
+  color: #fff;
+  background: #242424;
+  box-shadow: inset 3px 0 0 #fff;
 }
 
 .portal-side__bottom {
   margin-top: auto;
   display: grid;
   gap: 2px;
-  padding-top: 12px;
-  border-top: 1px solid #333;
+  padding-top: 16px;
 }
 
 .portal-side__plan {
-  margin: 12px 0 4px;
-  border: 1px solid #444;
-  padding: 14px;
+  margin: 16px 4px 4px;
+  border: 1px solid #333;
+  padding: 16px;
   display: grid;
   gap: 4px;
 }
@@ -150,17 +158,17 @@
 
 .portal-side__plan span {
   font-size: 12px;
-  color: #999;
+  color: #8a8a8a;
 }
 
 .portal-side__plan a {
-  margin-top: 8px;
+  margin-top: 10px;
   background: #fff;
   color: #111;
   text-align: center;
   font-size: 13px;
-  font-weight: 800;
-  padding: 9px;
+  font-weight: 700;
+  padding: 10px;
   text-decoration: none;
 }
 
@@ -168,9 +176,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
-  border-top: 1px solid #333;
-  margin-top: 8px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid #2a2a2a;
+  margin-top: 12px;
 }
 
 .portal-side__user-info {
@@ -188,8 +196,8 @@
 }
 
 .portal-side__user-info span {
-  font-size: 11px;
-  color: #888;
+  font-size: 12px;
+  color: #8a8a8a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -198,10 +206,10 @@
 
 .portal-side__signout {
   background: transparent;
-  border: 1px solid #444;
-  color: #fff;
-  width: 32px;
-  height: 32px;
+  border: 1px solid #3a3a3a;
+  color: #bbb;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -210,7 +218,8 @@
 }
 
 .portal-side__signout:hover {
-  background: #222;
+  color: #fff;
+  border-color: #666;
 }
 
 .portal-app.is-collapsed .portal-side__id-text,
@@ -233,40 +242,46 @@
   padding-right: 0;
 }
 
-/* ============ MAIN ============ */
+/* ================= MAIN ================= */
 .portal-main {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: clamp(16px, 3vw, 32px);
+  padding: 32px clamp(16px, 3vw, 40px) 64px;
 }
 
 .portal-stack {
   display: grid;
-  gap: 16px;
-  max-width: 1000px;
+  gap: 20px;
+  max-width: 1024px;
 }
 
+/* Page head — one strong title per page, calm meta */
 .portal-pagehead {
   display: flex;
   gap: 16px;
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  max-width: 1000px;
+  max-width: 1024px;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e2e2;
 }
 
 .portal-pagehead__crumb {
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #888;
+  color: #8a8a8a;
 }
 
 .portal-pagehead h1 {
-  margin: 4px 0;
-  font-size: clamp(22px, 3vw, 30px);
+  margin: 6px 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: #111;
 }
 
@@ -282,9 +297,10 @@
   flex-wrap: wrap;
 }
 
+/* Panels — quiet cards */
 .portal-panel {
   background: #fff;
-  border: 1px solid #e4e4e4;
+  border: 1px solid #e7e7e7;
 }
 
 .portal-panel__head {
@@ -292,13 +308,14 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 13px 20px;
-  border-bottom: 2px solid #111;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
   flex-wrap: wrap;
 }
 
 .portal-panel__head h2 {
   font-size: 15px;
+  font-weight: 700;
   margin: 0;
   color: #111;
   display: inline-flex;
@@ -306,9 +323,16 @@
   gap: 8px;
 }
 
+.portal-panel__body {
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+
+/* Back-compat: sections that place blocks directly under panels */
 .portal-panel > *:not(.portal-panel__head):not(.portal-list):not(.portal-table) {
-  margin-left: 20px;
-  margin-right: 20px;
+  margin-left: 24px;
+  margin-right: 24px;
 }
 
 .portal-panel > .portal-stats,
@@ -320,103 +344,51 @@
 .portal-panel > .portal-resume,
 .portal-panel > .portal-docgrid,
 .portal-panel > .portal-tabs,
+.portal-panel > .portal-toolbar,
+.portal-panel > .portal-kv,
+.portal-panel > .portal-switchlist,
+.portal-panel > .portal-profilecard,
+.portal-panel > .portal-danger,
+.portal-panel > .portal-donutrow,
+.portal-panel > .portal-heat,
 .portal-panel > div {
-  margin-top: 16px;
-  margin-bottom: 16px;
-}
-
-/* ============ HERO ============ */
-.portal-hero {
-  background: #111;
-  color: #fff;
-  padding: clamp(20px, 3vw, 28px);
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  max-width: 1000px;
-  position: relative;
-  overflow: hidden;
-}
-
-.portal-hero::after {
-  content: '';
-  position: absolute;
-  right: -40px;
-  top: -40px;
-  width: 180px;
-  height: 180px;
-  border: 24px solid #1f1f1f;
-}
-
-.portal-hero__date {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: #999;
-  text-transform: uppercase;
-}
-
-.portal-hero h2 {
-  margin: 6px 0;
-  font-size: clamp(22px, 3vw, 30px);
-  color: #fff;
-}
-
-.portal-hero p {
-  margin: 0;
-  color: #bbb;
-  font-size: 14px;
-}
-
-.portal-hero__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
-}
-
-.portal-hero__actions .er-btn--ghost {
-  border-color: #fff !important;
-  color: #fff !important;
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .portal-grid2 {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 16px;
-  max-width: 1000px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  max-width: 1024px;
 }
 
 .portal-grid2 .portal-panel {
   min-width: 0;
 }
 
-/* ============ KPI CARDS ============ */
+/* ================= KPI CARDS ================= */
 .portal-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 1000px;
+  gap: 16px;
+  max-width: 1024px;
 }
 
 .portal-stat {
   background: #fff;
-  border: 1px solid #e4e4e4;
-  border-top: 4px solid #111;
-  padding: 16px;
+  border: 1px solid #e7e7e7;
+  padding: 20px;
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: flex-start;
 }
 
 .portal-stat__tile {
-  width: 42px;
-  height: 42px;
-  background: #111;
-  color: #fff;
+  width: 44px;
+  height: 44px;
+  background: #f2f2f2;
+  color: #111;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -425,31 +397,48 @@
 
 .portal-stat__body {
   min-width: 0;
+  display: grid;
+  gap: 1px;
 }
 
 .portal-stat__value {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 800;
+  letter-spacing: -0.02em;
   color: #111;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .portal-stat__label {
   font-size: 12px;
-  font-weight: 800;
-  color: #111;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #555;
 }
 
 .portal-stat__sub {
-  font-size: 12px;
-  color: #888;
-  margin-top: 2px;
+  font-size: 13px;
+  color: #8a8a8a;
 }
 
-/* ============ BARS / METERS / DONUT / HEAT ============ */
+/* ================= CHARTS ================= */
+.portal-block {
+  display: grid;
+  gap: 12px;
+}
+
+.portal-block__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
 .bars {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: stretch;
 }
 
@@ -462,84 +451,80 @@
 
 .bars__track {
   flex: 1;
-  background: #f0f0f0;
+  background: #f3f3f3;
   display: flex;
   align-items: flex-end;
-  min-height: 40px;
+  min-height: 48px;
 }
 
 .bars__fill {
   width: 100%;
-  background: #111;
-  min-height: 2px;
+  background: #1a1a1a;
+  min-height: 3px;
 }
 
 .bars__fill.is-today {
-  outline: 2px solid #111;
-  outline-offset: 1px;
-}
-
-.bars__fill.is-zero {
-  background: #e0e0e0;
+  outline: 2px solid #1a1a1a;
+  outline-offset: 2px;
 }
 
 .bars__label {
-  font-size: 10px;
+  font-size: 11px;
   color: #999;
   text-align: center;
-  margin-top: 4px;
+  margin-top: 6px;
   white-space: nowrap;
 }
 
 .portal-meters {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .portal-meter {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr) 36px;
-  gap: 12px;
+  grid-template-columns: 150px minmax(0, 1fr) 36px;
+  gap: 14px;
   align-items: center;
 }
 
 .portal-meter__label {
   font-size: 14px;
-  font-weight: 700;
-  color: #111;
+  font-weight: 600;
+  color: #222;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .portal-meter__track {
-  height: 12px;
+  height: 8px;
   background: #f0f0f0;
 }
 
 .portal-meter__fill {
   display: block;
   height: 100%;
-  background: #111;
+  background: #1a1a1a;
 }
 
 .portal-meter__num {
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   color: #111;
   text-align: right;
 }
 
 .portal-donutrow {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .portal-donut {
-  width: 120px;
-  height: 120px;
+  width: 128px;
+  height: 128px;
   border-radius: 50%;
   flex-shrink: 0;
   position: relative;
@@ -551,8 +536,8 @@
 .portal-donut::after {
   content: '';
   position: absolute;
-  width: 68px;
-  height: 68px;
+  width: 76px;
+  height: 76px;
   background: #fff;
   border-radius: 50%;
 }
@@ -565,50 +550,50 @@
 
 .portal-donut__center strong {
   display: block;
-  font-size: 22px;
+  font-size: 24px;
+  font-weight: 800;
   color: #111;
 }
 
 .portal-donut__center span {
   font-size: 10px;
-  color: #888;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  color: #999;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .portal-legend {
   display: grid;
-  gap: 8px;
-  font-size: 13px;
+  gap: 10px;
+  font-size: 14px;
   color: #333;
 }
 
 .portal-legend__dot {
   display: inline-block;
-  width: 12px;
-  height: 12px;
-  margin-right: 8px;
-  vertical-align: baseline;
+  width: 10px;
+  height: 10px;
+  margin-right: 10px;
 }
 
 .portal-heat {
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
-  gap: 3px;
+  gap: 4px;
 }
 
 .portal-heat__cell {
-  aspect-ratio: 1 / 1.4;
+  aspect-ratio: 1 / 1.5;
   background: #f0f0f0;
   min-width: 0;
 }
 
-.portal-heat__cell.is-l1 { background: #d6d6d6; }
-.portal-heat__cell.is-l2 { background: #a8a8a8; }
+.portal-heat__cell.is-l1 { background: #d9d9d9; }
+.portal-heat__cell.is-l2 { background: #a6a6a6; }
 .portal-heat__cell.is-l3 { background: #555; }
 .portal-heat__cell.is-l4 { background: #111; }
 
-/* ============ TABS / SEARCH ============ */
+/* ================= CONTROLS ================= */
 .portal-tabs {
   display: flex;
   gap: 8px;
@@ -616,18 +601,24 @@
 }
 
 .portal-tab {
-  border: 1px solid #111;
+  border: 1px solid #d8d8d8;
   background: #fff;
-  color: #111;
+  color: #333;
   font: inherit;
   font-size: 13px;
-  font-weight: 800;
-  padding: 8px 14px;
+  font-weight: 600;
+  padding: 9px 16px;
   cursor: pointer;
+}
+
+.portal-tab:hover {
+  border-color: #111;
+  color: #111;
 }
 
 .portal-tab.is-active {
   background: #111;
+  border-color: #111;
   color: #fff;
 }
 
@@ -635,10 +626,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #111;
-  padding: 7px 12px;
+  border: 1px solid #d8d8d8;
   background: #fff;
-  color: #111;
+  padding: 9px 14px;
+  color: #555;
+}
+
+.portal-search:focus-within {
+  border-color: #111;
 }
 
 .portal-search input,
@@ -646,24 +641,28 @@
   border: none;
   outline: none;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   color: #111;
   background: transparent;
 }
 
 .portal-search input {
-  width: 200px;
+  width: 210px;
+}
+
+.portal-search input::placeholder {
+  color: #aaa;
 }
 
 .portal-toolbar {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
 }
 
-/* ============ LISTS / ROWS ============ */
+/* ================= TYPE HELPERS ================= */
 .portal-actions {
   display: flex;
   gap: 10px;
@@ -673,17 +672,18 @@
 
 .portal-muted {
   font-size: 13px;
-  color: #888;
+  color: #777;
 }
 
 .portal-empty {
-  border: 1px dashed #bbb;
-  padding: 32px 28px;
+  border: 1px dashed #cfcfcf;
+  background: #fcfcfc;
+  padding: 40px 28px;
   text-align: center;
-  color: #666;
+  color: #777;
   font-size: 14px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
   justify-items: center;
 }
 
@@ -691,41 +691,65 @@
   color: #bbb;
 }
 
-.portal-list {
-  border-top: 2px solid #111;
-}
-
-.portal-row {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  padding: 13px 20px;
-  border-bottom: 1px solid #eee;
+.portal-linkbtn {
+  font-weight: 700;
+  font-size: 13px;
   text-decoration: none;
+  border-bottom: 1px solid #111;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
   color: #111;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 0 1px;
 }
 
-a.portal-row:hover {
-  background: #fafafa;
+.portal-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: #f0f0f0;
+  color: #111;
+  padding: 3px 9px;
+  margin-left: 8px;
+  flex-shrink: 0;
 }
 
-.portal-row.is-unread {
-  background: #f4f4f4;
-  border-left: 4px solid #111;
+.portal-side__btn .portal-count {
+  background: #333;
+  color: #fff;
+  margin-left: auto;
+}
+
+.portal-side__btn.is-active .portal-count {
+  background: #111;
+  color: #fff;
+}
+
+.portal-mini-btn {
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  flex-shrink: 0;
 }
 
 .portal-badge {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   background: #fff;
   color: #111;
-  border: 1px solid #111;
-  padding: 4px 8px;
+  border: 1px solid #d0d0d0;
+  padding: 4px 9px;
   flex-shrink: 0;
 }
 
 .portal-badge.is-ai {
   background: #111;
+  border-color: #111;
   color: #fff;
 }
 
@@ -733,6 +757,46 @@ a.portal-row:hover {
   background: #15803d;
   border-color: #15803d;
   color: #fff;
+}
+
+.portal-flag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid #d0d0d0;
+  padding: 3px 9px;
+  color: #333;
+  white-space: nowrap;
+}
+
+.portal-flag.is-solid {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+
+/* ================= LISTS ================= */
+.portal-list {
+  border-top: 1px solid #f0f0f0;
+}
+
+.portal-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 15px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  text-decoration: none;
+  color: #1a1a1a;
+}
+
+a.portal-row:hover {
+  background: #fafafa;
+}
+
+.portal-row.is-unread {
+  background: #f6f6f6;
+  box-shadow: inset 4px 0 0 #111;
 }
 
 .portal-row__main {
@@ -743,6 +807,7 @@ a.portal-row:hover {
 .portal-row__text {
   display: block;
   font-size: 14px;
+  color: #1a1a1a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -750,74 +815,24 @@ a.portal-row:hover {
 
 .portal-row__sub {
   display: block;
-  font-size: 12px;
-  color: #999;
+  font-size: 13px;
+  color: #7d7d7d;
+  margin-top: 1px;
 }
 
 .portal-row__go {
-  font-weight: 800;
+  font-weight: 700;
   flex-shrink: 0;
+  color: #999;
 }
 
-.portal-linkbtn {
-  font-weight: 800;
-  font-size: 13px;
-  text-decoration: underline;
-  background: none;
-  border: none;
-  cursor: pointer;
+a.portal-row:hover .portal-row__go {
   color: #111;
-  font-family: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
 }
 
-.portal-count {
-  font-size: 11px;
-  font-weight: 800;
-  background: #111;
-  color: #fff;
-  padding: 2px 8px;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.portal-side__btn .portal-count {
-  background: #fff;
-  color: #111;
-  margin-left: auto;
-}
-
-.portal-mini-btn {
-  padding: 7px 12px !important;
-  font-size: 12px !important;
-  flex-shrink: 0;
-}
-
-.portal-fileicon {
-  color: #111;
-  flex-shrink: 0;
-}
-
-.portal-flag {
-  font-size: 11px;
-  font-weight: 800;
-  border: 1px solid #111;
-  padding: 3px 8px;
-  color: #111;
-  white-space: nowrap;
-}
-
-.portal-flag.is-solid {
-  background: #111;
-  color: #fff;
-}
-
-/* ============ ROOM CARDS ============ */
+/* ================= ROOM CARDS ================= */
 .portal-room {
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .portal-room:last-child {
@@ -827,15 +842,15 @@ a.portal-row:hover {
 .portal-room__head {
   width: 100%;
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  padding: 14px 20px;
+  padding: 16px 24px;
   background: #fff;
   border: none;
   cursor: pointer;
   font: inherit;
   text-align: left;
-  color: #111;
+  color: #1a1a1a;
 }
 
 .portal-room__head:hover {
@@ -843,10 +858,10 @@ a.portal-row:hover {
 }
 
 .portal-room__tile {
-  width: 46px;
-  height: 46px;
-  background: #111;
-  color: #fff;
+  width: 48px;
+  height: 48px;
+  background: #f2f2f2;
+  color: #111;
   font-size: 20px;
   font-weight: 800;
   display: inline-flex;
@@ -857,6 +872,7 @@ a.portal-row:hover {
 
 .portal-room__tile.is-live {
   background: #15803d;
+  color: #fff;
 }
 
 .portal-room__main {
@@ -868,6 +884,7 @@ a.portal-row:hover {
 
 .portal-room__main strong {
   font-size: 15px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -875,70 +892,83 @@ a.portal-row:hover {
 
 .portal-room__meta {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  font-size: 12px;
-  color: #888;
+  font-size: 13px;
+  color: #7d7d7d;
 }
 
 .portal-room__faces {
   flex-shrink: 0;
 }
 
+.portal-room__chev {
+  color: #bbb;
+  flex-shrink: 0;
+}
+
 .portal-room__body {
-  padding: 0 20px 18px 80px;
-  border-top: 1px dashed #e8e8e8;
+  padding: 4px 24px 24px 88px;
 }
 
 .portal-roomdetail {
-  padding-top: 14px;
   display: grid;
-  gap: 10px;
+  gap: 14px;
+  padding: 20px;
+  background: #fafafa;
+  border: 1px solid #eee;
 }
 
 .portal-roomdetail__meta {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
   flex-wrap: wrap;
+  font-size: 13px;
 }
 
 .portal-status {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.portal-status.is-active {
-  color: #15803d;
+.portal-status::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 7px;
+  vertical-align: 1px;
 }
 
-.portal-status.is-idle {
-  color: #666;
-}
-
-.portal-status.is-ended {
-  color: #999;
-}
+.portal-status.is-active { color: #15803d; }
+.portal-status.is-idle { color: #777; }
+.portal-status.is-ended { color: #aaa; }
 
 .portal-topics {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .portal-topic {
   font-size: 12px;
-  font-weight: 700;
-  border: 1px solid #111;
-  padding: 3px 10px;
-  color: #111;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid #ddd;
+  padding: 4px 12px;
+  color: #333;
 }
 
 .portal-roomdetail__label {
-  font-size: 13px;
-  font-weight: 800;
-  color: #111;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a8a8a;
 }
 
 .portal-lines {
@@ -946,43 +976,46 @@ a.portal-row:hover {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .portal-lines li {
-  display: grid;
-  gap: 2px;
   font-size: 14px;
-  color: #111;
-  border-left: 3px solid #e8e8e8;
-  padding-left: 10px;
+  color: #222;
 }
 
-/* ============ TABLE (sessions) ============ */
+.portal-lines li > span:first-child {
+  display: block;
+  font-size: 12px;
+  color: #999;
+}
+
+/* ================= TABLE (sessions) ================= */
 .portal-table {
-  border-top: 2px solid #111;
+  border-top: 1px solid #f0f0f0;
 }
 
 .portal-table__head,
 .portal-table__row {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) auto auto 24px;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
-  padding: 12px 20px;
+  padding: 13px 24px;
 }
 
 .portal-table__head {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #999;
-  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .portal-table__group {
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .portal-table__group:last-child {
@@ -996,7 +1029,7 @@ a.portal-row:hover {
   cursor: pointer;
   font: inherit;
   text-align: left;
-  color: #111;
+  color: #1a1a1a;
 }
 
 .portal-table__row:hover {
@@ -1004,7 +1037,7 @@ a.portal-row:hover {
 }
 
 .portal-table__name {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
@@ -1014,7 +1047,7 @@ a.portal-row:hover {
 
 .portal-table__tags {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: #999;
   white-space: nowrap;
   overflow: hidden;
@@ -1022,29 +1055,31 @@ a.portal-row:hover {
 }
 
 .portal-table__num {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 .portal-table__detail {
-  padding: 0 20px 18px;
+  padding: 4px 24px 24px;
   display: grid;
-  gap: 10px;
-}
-
-/* ============ DOC CARDS ============ */
-.portal-docgrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.portal-doc {
-  border: 1px solid #e4e4e4;
-  padding: 16px;
+/* ================= DOC CARDS ================= */
+.portal-docgrid {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.portal-doc {
+  border: 1px solid #e7e7e7;
+  padding: 20px;
+  display: grid;
+  gap: 10px;
   background: #fff;
+  align-content: start;
 }
 
 .portal-doc:hover {
@@ -1052,10 +1087,10 @@ a.portal-row:hover {
 }
 
 .portal-doc__icon {
-  width: 40px;
-  height: 40px;
-  background: #111;
-  color: #fff;
+  width: 42px;
+  height: 42px;
+  background: #f2f2f2;
+  color: #111;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1063,9 +1098,10 @@ a.portal-row:hover {
 
 .portal-doc__name {
   font-size: 14px;
-  font-weight: 800;
-  color: #111;
+  font-weight: 700;
+  color: #1a1a1a;
   word-break: break-word;
+  line-height: 1.45;
 }
 
 .portal-doc__foot {
@@ -1073,45 +1109,67 @@ a.portal-row:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #f0f0f0;
 }
 
-/* ============ SETTINGS ============ */
-.portal-formgrid {
+/* ================= RESUME / MISC ================= */
+.portal-resume {
+  display: flex;
   gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e7e7e7;
+  padding: 18px 20px;
+  background: #fff;
+}
+
+.portal-resume strong {
+  display: block;
+  font-size: 15px;
+  color: #111;
+}
+
+/* ================= SETTINGS ================= */
+.portal-formgrid {
+  gap: 16px;
 }
 
 .portal-profilecard {
   display: flex;
-  gap: 18px;
+  gap: 20px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .portal-profilecard__info {
   display: grid;
-  gap: 2px;
+  gap: 3px;
 }
 
 .portal-profilecard__info strong {
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: #111;
 }
 
 .portal-kv {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .portal-kv > div {
   border: 1px solid #eee;
-  padding: 10px 14px;
+  background: #fcfcfc;
+  padding: 12px 16px;
 }
 
 .portal-kv span {
   display: block;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #999;
@@ -1121,32 +1179,34 @@ a.portal-row:hover {
   display: block;
   font-size: 14px;
   color: #111;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .portal-switchlist {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .portal-switch {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   width: 100%;
   background: #fff;
-  border: 1px solid #e4e4e4;
-  padding: 12px 14px;
+  border: 1px solid #e7e7e7;
+  padding: 14px 18px;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 700;
-  color: #111;
+  font-weight: 600;
+  color: #1a1a1a;
   font-family: inherit;
+  text-align: left;
 }
 
 .portal-switch__track {
-  width: 44px;
-  height: 24px;
+  width: 46px;
+  height: 26px;
   background: #ddd;
   display: inline-flex;
   align-items: center;
@@ -1161,15 +1221,15 @@ a.portal-row:hover {
 }
 
 .portal-switch__thumb {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   background: #fff;
 }
 
 .portal-danger {
-  border: 1px solid #111;
-  border-left: 6px solid #111;
-  padding: 16px 20px;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #111;
+  padding: 20px 24px;
   display: grid;
   gap: 8px;
   background: #fff;
@@ -1183,15 +1243,15 @@ a.portal-row:hover {
 .avatar-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 10px;
 }
 
 .avatar-cell {
   position: relative;
-  border: 2px solid #e4e4e4;
+  border: 1px solid #e0e0e0;
   background: #fff;
-  padding: 6px;
+  padding: 8px;
   cursor: pointer;
   display: flex;
   justify-content: center;
@@ -1203,39 +1263,40 @@ a.portal-row:hover {
 
 .avatar-cell.is-selected {
   border-color: #111;
-  background: #f4f4f4;
+  box-shadow: inset 0 0 0 1px #111;
+  background: #fafafa;
 }
 
 .avatar-check {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 4px;
+  right: 4px;
   width: 20px;
   height: 20px;
   background: #111;
   color: #fff;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .avatar-hint {
-  font-size: 12px;
-  color: #999;
-  margin: 8px 0 0;
+  font-size: 13px;
+  color: #8a8a8a;
+  margin: 10px 0 0;
 }
 
-/* ============ SKELETON ============ */
+/* ================= SKELETON ================= */
 .portal-skeleton {
   display: grid;
   gap: 10px;
 }
 
 .portal-skeleton span {
-  height: 54px;
-  background: linear-gradient(90deg, #f0f0f0, #e2e2e2, #f0f0f0);
+  height: 58px;
+  background: linear-gradient(90deg, #f2f2f2, #e4e4e4, #f2f2f2);
   background-size: 220% 100%;
   animation: portalShimmer 1.2s ease-in-out infinite;
 }
@@ -1244,7 +1305,7 @@ a.portal-row:hover {
   to { background-position: -220% 0; }
 }
 
-/* ============ RESPONSIVE ============ */
+/* ================= RESPONSIVE ================= */
 @media (max-width: 991.98px) {
   .portal-app {
     flex-direction: column;
@@ -1265,8 +1326,7 @@ a.portal-row:hover {
   }
 
   .portal-side__id {
-    min-height: 0;
-    padding: 12px 16px;
+    padding: 14px 16px;
   }
 
   .portal-app.is-collapsed .portal-side__id-text,
@@ -1288,12 +1348,13 @@ a.portal-row:hover {
   }
 
   .portal-side__btn {
-    border: 1px solid #444;
+    border: 1px solid #333;
     white-space: nowrap;
     width: auto;
   }
 
   .portal-side__btn.is-active {
+    box-shadow: none;
     border-color: #fff;
   }
 
@@ -1308,6 +1369,7 @@ a.portal-row:hover {
 
   .portal-main {
     overflow: visible;
+    padding: 20px 16px 48px;
   }
 
   .portal-stats {
@@ -1336,11 +1398,11 @@ a.portal-row:hover {
   }
 
   .portal-room__body {
-    padding-left: 20px;
+    padding-left: 24px;
   }
 
   .portal-meter {
-    grid-template-columns: 100px minmax(0, 1fr) 30px;
+    grid-template-columns: 104px minmax(0, 1fr) 30px;
   }
 
   .avatar-grid {

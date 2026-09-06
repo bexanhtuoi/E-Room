@@ -205,14 +205,12 @@ export function ProfilePage() {
 
         {activeSection === 'overview' && (
           <OverviewSection
-            user={user}
             hostedRooms={hostedRooms}
             joinedRooms={joinedRooms}
             liveRooms={liveRooms}
             messages={messages}
             messagesTotal={messagesTotal}
             documentsCount={myDocs.length}
-            onCreateRoom={() => setShowCreateRoom(true)}
             onGo={setActiveSection}
           />
         )}
