@@ -6,6 +6,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def livekit_profile_env(suffix: str, default: str = "") -> str:
+    # Doc cum local/cloud theo LIVEKIT_MODE. Tra ve default khi MODE khong hop le.
+    mode = os.getenv("LIVEKIT_MODE", "").strip().lower()
+
+    if mode not in ("local", "cloud"):
+        return default
+
+    return os.getenv(f"LIVEKIT_{mode.upper()}_{suffix}", default)
+
+
 class Settings:
     # ─── App ────────────────────────────────────────
     app_name: str = os.getenv("APP_NAME", "E-Room API")
@@ -83,9 +93,12 @@ class Settings:
     stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
     # ─── LiveKit (WebRTC) ──────────────────────────
-    livekit_url: str = os.getenv("LIVEKIT_URL", "ws://localhost:7880")
-    livekit_api_key: str = os.getenv("LIVEKIT_API_KEY", "")
-    livekit_api_secret: str = os.getenv("LIVEKIT_API_SECRET", "")
+    # Chon cum bang LIVEKIT_MODE=local|cloud (xem backend/.env.docker).
+    # LIVEKIT_URL/KEY/SECRET rieng le (neu co) van duoc uu tien de tuong thich cu.
+    livekit_mode: str = os.getenv("LIVEKIT_MODE", "").strip().lower()
+    livekit_url: str = os.getenv("LIVEKIT_URL", livekit_profile_env("URL", "ws://localhost:7880"))
+    livekit_api_key: str = os.getenv("LIVEKIT_API_KEY", livekit_profile_env("API_KEY"))
+    livekit_api_secret: str = os.getenv("LIVEKIT_API_SECRET", livekit_profile_env("API_SECRET"))
 
     # ─── MinIO (Object Storage) ─────────────────────
     minio_endpoint: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")

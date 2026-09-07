@@ -19,8 +19,10 @@ Mở `backend/.env.example` — đầy đủ từng biến, chia 2 profile LiveK
 
 | Profile | Khi nào | Đổi gì |
 |---|---|---|
-| **A. LOCAL** (mặc định) | Dev, LAN | Không cần đổi gì (chạy docker compose là xong) |
-| **B. CLOUD** (public) | Khách ngoài internet | Mở comment 3 dòng `LIVEKIT_URL/KEY/SECRET` của Cloud, comment PROFILE A lại |
+| **LOCAL** (mặc định) | Dev, LAN | Chạy `scripts\livekit-local.bat` |
+| **CLOUD** (public) | Khách ngoài internet | Chạy `scripts\livekit-cloud.bat` |
+
+Cả 2 cụm local/cloud nằm sẵn trong `backend/.env.docker`, chọn bằng 1 biến `LIVEKIT_MODE=local|cloud` — script tự đổi + recreate api + tạo token thử để verify. Không sửa tay từng dòng nữa.
 
 Bắt buộc đổi trước khi public: `SECRET_KEY`, `LIVEKIT_API_KEY/SECRET` (random 32+ ký tự). MinIO/TiDB/Redis không password nhưng **chỉ listen nội bộ, không forward ra ngoài**.
 

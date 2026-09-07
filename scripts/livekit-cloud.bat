@@ -1,0 +1,30 @@
+@echo off
+title E-Room - LiveKit CLOUD
+cd /d "%~dp0.."
+
+echo ============================================
+echo   LiveKit -^> CLOUD (wss://...livekit.cloud)
+echo ============================================
+echo.
+
+echo [1/4] Set LIVEKIT_MODE=cloud trong backend\.env.docker...
+powershell -NoProfile -Command "(Get-Content backend\.env.docker) -replace '^LIVEKIT_MODE=.*','LIVEKIT_MODE=cloud' | Set-Content backend\.env.docker"
+findstr /B "LIVEKIT_MODE=" backend\.env.docker
+echo.
+
+echo [2/4] Stop container livekit local (khoi chay thua)...
+docker compose stop livekit
+echo.
+
+echo [3/4] Recreate api de nap env moi (restart khong nap env)...
+docker compose up -d api
+timeout /t 20 /nobreak >nul
+echo.
+
+echo [4/4] Verify: tao token thu bang dung key dang chay...
+docker exec api uv run python -c "from app.config import settings; from app.integration.livekit import create_token; print('MODE:', settings.livekit_mode); print('URL :', settings.livekit_url); print('TOKEN_OK:', len(create_token('probe','1')) > 50)"
+if errorlevel 1 (
+  echo        [FAIL] api chua len hoac key sai. Thu: docker logs api --tail 20
+) else (
+  echo        [OK] Xong. Webhook Cloud la optional (presence goi direct).
+)
