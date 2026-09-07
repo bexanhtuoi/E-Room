@@ -17,7 +17,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 
 | Đối tượng | Cách vào | Ghi chú |
 |---|---|---|
-| Dev (local) | `http://localhost:8080` (prod qua nginx) hoặc `https://localhost:3002` (dev) | Mic/cam cần HTTPS → dùng bản HTTPS hoặc localhost |
+| Dev (local) | `http://localhost:3001` (prod) hoặc `https://localhost:3000` (dev) | Mic/cam cần HTTPS → dùng bản HTTPS hoặc localhost |
 | Khách public | `https://<machine>.<tailnet>.ts.net` (Tailscale Funnel) | Không cài gì, mic/cam chạy vì đã HTTPS |
 | Tài khoản | Đăng ký thường hoặc Google OAuth | Session cookie 7 ngày |
 

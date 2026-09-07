@@ -32,7 +32,7 @@ sleep 15
 echo "[4/5] Done."
 echo ""
 echo "============================================"
-echo "  Frontend:  http://localhost:8080  (prod qua nginx, cong 3000 khong mo ra host)"
+echo "  Frontend:  http://localhost:3001  (prod container)"
 echo "  Dev mode:  cd frontend && npm run dev  (use another port)"
 echo "  API docs:  http://localhost:8000/docs"
 echo "============================================"

@@ -45,24 +45,19 @@ echo [5/5] Verify LiveKit local...
 docker exec api uv run python -c "from app.config import settings; from app.integration.livekit import create_token; print('MODE:', settings.livekit_mode); print('URL :', settings.livekit_url); print('TOKEN_OK:', len(create_token('probe','1')) > 50)"
 echo.
 echo ============================================
-echo   Prod build (container): http://localhost:8080  (qua nginx)
-echo   Frontend dev (hot reload): phim F - mo https://localhost:3002
-echo     (Chrome bao cert tu ky -^> Advanced -^> Proceed to localhost)
-echo   API docs:  http://localhost:8000/docs
-echo   Luu y: cong 3000 KHONG mo ra host - dung 8080 hoac 3002.
+echo   Web prod (container): http://localhost:3001
+echo   Web qua nginx:        http://localhost:8080
+echo   API docs:             http://localhost:8000/docs
+echo   Hot reload: cd frontend ^&^& npm run dev  (https://localhost:3000)
 echo ============================================
 echo.
 echo   Commands:
-echo     [L] View logs   [S] Status   [R] Recreate api   [F] Frontend dev   [D] Down   [Q] Quit
+echo     [L] View logs   [S] Status   [R] Recreate api   [D] Down   [Q] Quit
 echo ============================================
 echo.
 
 :menu
-choice /c LSRDQF /n /m "Command (L=logs, S=status, R=recreate api, D=down, Q=quit, F=frontend dev): "
-if errorlevel 6 (
-    start "E-Room frontend dev" cmd /k "cd frontend ^&^& npm run dev -- --port 3002 --strictPort"
-    goto menu
-)
+choice /c LSRDQ /n /m "Command (L=logs, S=status, R=recreate api, D=down, Q=quit): "
 if errorlevel 5 exit /b 0
 if errorlevel 4 (
     docker compose down
