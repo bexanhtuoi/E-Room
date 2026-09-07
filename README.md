@@ -77,7 +77,7 @@ E-Room/
 │   ├── features/              # rooms, chat (useRoomChat), auth, onboarding, ...
 │   ├── components/ data/ i18n/ lib/ stores/ styles/
 │   └── main.jsx
-├── scripts/                   # win.bat / mac.sh / linux.sh (chạy 1 lệnh)
+├── scripts/                   # dev.bat / golive.bat (chạy 1 lệnh) + mac.sh / linux.sh
 └── docker-compose.yml         # 12 services
 ```
 
@@ -102,7 +102,8 @@ E-Room/
 
 | Platform | Command |
 |---|---|
-| Windows | `scripts\win.bat` |
+| Windows (dev/local) | `scripts\dev.bat` |
+| Windows (public) | `scripts\golive.bat` |
 | macOS | `bash scripts/mac.sh` |
 | Linux | `bash scripts/linux.sh` |
 

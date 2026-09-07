@@ -117,7 +117,7 @@ E-Room/
 │   ├── app/           # router, guards, pages
 │   ├── features/      # rooms, chat, auth, onboarding, ...
 │   └── ...components/data/i18n/lib/stores/styles
-├── scripts/           # win.bat / mac.sh / linux.sh (dev) + host-public.bat (public)
+├── scripts/           # dev.bat (local) / golive.bat (public) + mac.sh / linux.sh
 ├── docs/              # overview, features, workflow, setup (bạn đang đọc)
 ├── Caddyfile          # reverse proxy cho Funnel
 └── docker-compose.yml # 13 services

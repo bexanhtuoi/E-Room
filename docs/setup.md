@@ -19,8 +19,8 @@ Mở `backend/.env.example` — đầy đủ từng biến, chia 2 profile LiveK
 
 | Profile | Khi nào | Đổi gì |
 |---|---|---|
-| **LOCAL** (mặc định) | Dev, LAN | Chạy `scripts\livekit-local.bat` |
-| **CLOUD** (public) | Khách ngoài internet | Chạy `scripts\livekit-cloud.bat` |
+| **LOCAL** (mặc định) | Dev, LAN | Chạy `scripts\dev.bat` |
+| **CLOUD** (public) | Khách ngoài internet | Chạy `scripts\golive.bat` |
 
 Cả 2 cụm local/cloud nằm sẵn trong `backend/.env.docker`, chọn bằng 1 biến `LIVEKIT_MODE=local|cloud` — script tự đổi + recreate api + tạo token thử để verify. Không sửa tay từng dòng nữa.
 
@@ -37,7 +37,7 @@ cd backend && uv run alembic upgrade head
 cd frontend && npm install && npm run dev -- --port 3002 --strictPort
 ```
 
-Hoặc 1 lệnh: `scripts\win.bat` (Windows) / `bash scripts/mac.sh` / `bash scripts/linux.sh`.
+Hoặc 1 lệnh: `scripts\dev.bat` (Windows) / `bash scripts/mac.sh` / `bash scripts/linux.sh`.
 Mở `http://localhost:3002` (dev) hoặc `http://localhost:3000` (prod container). Swagger: `http://localhost:8000/docs`.
 
 ## 4. Public cho người ngoài (đang dùng thật)
@@ -46,15 +46,15 @@ Mở `http://localhost:3002` (dev) hoặc `http://localhost:3000` (prod containe
 
 ```bash
 # 1 lệnh duy nhất (Windows):
-scripts\host-public.bat
+scripts\golive.bat
 ```
 
-Script tự: mở Docker → `compose up -d` → đợi API → `tailscale funnel --bg 8080` → in link `https://<may>.<tailnet>.ts.net/`.
+Script tự: mở Docker → MODE=cloud → `compose up -d` → recreate api/workers → đợi API → `tailscale funnel --bg 8080` → in link `https://<may>.<tailnet>.ts.net/`.
 
 Tự động sau reboot (chạy 1 lần):
 
 ```cmd
-schtasks /create /tn "E-Room Public" /tr "C:\...\E-Room\scripts\host-public.bat" /sc onlogon /rl highest /f
+schtasks /create /tn "E-Room Public" /tr "C:\...\E-Room\scripts\golive.bat" /sc onlogon /rl highest /f
 ```
 
 Kiến trúc public: Funnel (TLS) → Caddy `:8080` (`/` static, `/api` api, `/rtc*` livekit) + media qua LiveKit Cloud. Khách không cài gì. Nhớ thêm webhook URL `https://eroom.tail9f35e1.ts.net/api/v1/rooms/livekit/webhook` trong dashboard Cloud project.
