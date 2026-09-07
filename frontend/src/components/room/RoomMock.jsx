@@ -34,7 +34,7 @@ export function RoomMock() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #111', background: '#fff', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <strong style={{ fontSize: 15 }}>AI Agents & Automation</strong>
-          <span style={{ fontSize: 12, color: '#666', marginLeft: 10 }}>00:12:46 • up to 4 seats</span>
+          <span style={{ fontSize: 12, color: '#666', marginLeft: 10 }}>00:12:46 • up to 6 seats</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 700, border: '1px solid #111', padding: '5px 10px' }}>4 / 4 talking</span>

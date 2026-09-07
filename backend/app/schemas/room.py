@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 from app.models import RoomStatus
 
 MAX_TOPICS_PER_ROOM = 5
-MAX_SEATS_PER_ROOM = 4
+MAX_SEATS_PER_ROOM = 6
 
 
 def normalize_topic_name(value: str) -> str:

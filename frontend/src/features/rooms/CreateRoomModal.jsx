@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { fetchJson } from '../../lib/api';
 import { MAX_TOPICS, TopicPicker } from './TopicPicker';
-
-const SEAT_OPTS = [2, 3, 4];
+import { SeatSlider } from './SeatSlider';
 
 export function CreateRoomModal({ onClose, onRoomCreated }) {
   const [name, setName] = useState('');
@@ -69,21 +68,7 @@ export function CreateRoomModal({ onClose, onRoomCreated }) {
             <TopicPicker topics={topics} onChange={setTopics} />
           </div>
 
-          <div>
-            <label className="er-label">Seats</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {SEAT_OPTS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setSeats(n)}
-                  style={{ flex: 1, padding: '12px 0', fontWeight: 800, cursor: 'pointer', background: seats === n ? '#111' : '#fff', color: seats === n ? '#fff' : '#111', border: '1px solid #111' }}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
+          <SeatSlider value={seats} onChange={setSeats} id="new-room-seats" />
 
           {error && <div className="er-alert er-alert--err">{error}</div>}
           <div style={{ display: 'flex', gap: 10 }}>

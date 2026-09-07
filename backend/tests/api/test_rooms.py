@@ -320,7 +320,15 @@ class TestRoomTopics:
         )
         assert response.status_code == 422
 
-    def test_create_room_rejects_more_than_four_seats(self, client: TestClient, alice: dict):
+    def test_create_room_accepts_up_to_six_seats(self, client: TestClient, alice: dict):
+        response = client.post(
+            "/api/v1/rooms/",
+            json={"name": f"six-room-{alice['id']}", "max_participants": 6},
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["max_participants"] == 6
+
+    def test_create_room_rejects_more_than_six_seats(self, client: TestClient, alice: dict):
         response = client.post(
             "/api/v1/rooms/",
             json={"name": f"big-room-{alice['id']}", "max_participants": 8},

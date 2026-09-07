@@ -7,6 +7,7 @@ import { fetchJson, ApiClient } from '../../lib/api';
 import { ChatWindow, RoomDataBridge } from '../chat/ChatWindow';
 import { useRoomChat } from '../chat/useRoomChat';
 import { MAX_TOPICS, TopicPicker } from './TopicPicker';
+import { SeatSlider } from './SeatSlider';
 import { toBrowserLivekitUrl } from './livekitUrl';
 import { Face } from '../../components/common/Faces';
 import { useAuth } from '../../app/AuthContext';
@@ -783,17 +784,7 @@ function RoomSettings({ roomId, current, onClose, onSave, api }) {
           </div>
           <TopicPicker topics={topics} onChange={setTopics} />
         </div>
-        <div>
-          <label className="er-label">Seats</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[2, 3, 4].map((n) => (
-              <button key={n} type="button" onClick={() => setSeats(n)}
-                style={{ flex: 1, padding: '12px 0', fontWeight: 800, cursor: 'pointer', background: seats === n ? '#111' : '#fff', color: seats === n ? '#fff' : '#111', border: '1px solid #111' }}>
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SeatSlider value={seats} onChange={setSeats} id="room-settings-seats" />
         <div>
           <label className="er-label">Features</label>
           <div style={{ display: 'grid', gap: 8 }}>
