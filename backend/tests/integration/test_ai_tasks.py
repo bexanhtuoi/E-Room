@@ -11,6 +11,7 @@ from app.ai.tasks import (
     enqueue_room_transcriber,
     mark_room_activity,
 )
+from app.config import settings
 from app.database import engine
 from app.models import RoomStatus
 from app.services import room_crud
@@ -42,7 +43,9 @@ class TestAITasksFlow:
             patch("app.ai.tasks.transcribe_room_audio.apply_async") as mock_apply_async,
         ):
             enqueue_room_transcriber(room_id=10)
-            mock_setnx.assert_called_once_with("room:10:transcriber_running", "1", 300)
+            mock_setnx.assert_called_once_with(
+                "room:10:transcriber_running", "1", settings.ai_timeout_seconds
+            )
             mock_apply_async.assert_called_once()
 
     def test_check_room_heartbeats_idle_room(self):

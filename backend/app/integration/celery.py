@@ -34,7 +34,7 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_soft_time_limit=settings.ai_timeout_seconds,
+    task_soft_time_limit=settings.ai_soft_timeout_seconds,
     task_time_limit=settings.ai_timeout_seconds,
     broker_connection_retry_on_startup=True,
 )

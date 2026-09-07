@@ -57,7 +57,13 @@ class Settings:
     embedding_base_url: str = os.getenv("EMBEDDING_BASE_URL", "")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "")
     embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
-    ai_timeout_seconds: int = int(os.getenv("AI_TIMEOUT_SECONDS", 300))
+    ai_timeout_seconds: int = int(os.getenv("AI_TIMEOUT_SECONDS", 900))
+    # Soft < hard de worker kip dang cau xin loi truoc khi bi kill.
+    # Mac dinh kem hard 60s (toi thieu 60s); khong bao gio vuot qua hard.
+    ai_soft_timeout_seconds: int = min(
+        int(os.getenv("AI_SOFT_TIMEOUT_SECONDS", max(60, ai_timeout_seconds - 60))),
+        ai_timeout_seconds,
+    )
     # Phong trong (0 nguoi) qua lau thi ENDED cho gon list (mac dinh 24h)
     room_empty_end_seconds: int = int(os.getenv("ROOM_EMPTY_END_SECONDS", 86400))
     ai_queue_name: str = os.getenv("AI_QUEUE_NAME", "ai")

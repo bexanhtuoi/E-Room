@@ -118,7 +118,8 @@ def stream_ai_response(
         response_text = asyncio.run(stream_to_room(room_id, stream_agent_events(query)))
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
-        response_text = "Sorry, I could not finish my response within five minutes."
+        soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))
+        response_text = f"Sorry, I could not finish my response within {soft_minutes} minutes."
     except Exception:
         log.exception("AI stream failed | room_id=%s job_type=%s", room_id, job_type)
         response_text = "Sorry, I could not generate a response right now."
