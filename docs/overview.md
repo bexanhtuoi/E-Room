@@ -17,7 +17,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 
 | Đối tượng | Cách vào | Ghi chú |
 |---|---|---|
-| Dev (local) | `http://localhost:3000` (prod) hoặc `:3002` (dev) | Mic/cam cần HTTPS → dùng bản HTTPS hoặc localhost |
+| Dev (local) | `http://localhost:8080` (prod qua nginx) hoặc `https://localhost:3002` (dev) | Mic/cam cần HTTPS → dùng bản HTTPS hoặc localhost |
 | Khách public | `https://<machine>.<tailnet>.ts.net` (Tailscale Funnel) | Không cài gì, mic/cam chạy vì đã HTTPS |
 | Tài khoản | Đăng ký thường hoặc Google OAuth | Session cookie 7 ngày |
 
@@ -32,7 +32,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 | Jobs | Celery (queues: `ai`, `ai_observer`, `ai_transcriber`) + beat, Redis |
 | Data | TiDB (MySQL-compatible), Qdrant (vectors), MinIO (S3 files) |
 | Auth | JWT cookie HttpOnly + Google OAuth |
-| Public | Tailscale Funnel (TLS) + Caddy reverse proxy nội bộ |
+| Public | Tailscale Funnel (TLS) + Nginx reverse proxy nội bộ |
 
 ## 4. Kiến trúc tổng thể
 
@@ -43,7 +43,7 @@ flowchart LR
     end
     subgraph Home["PC nhà (Docker)"]
         FUN[Tailscale Funnel<br/>TLS edge]
-        CAD[Caddy :8080<br/>/ → frontend<br/>/api → api<br/>/rtc* → livekit]
+        CAD[Nginx :8080<br/>/ → frontend<br/>/api → api<br/>/rtc* → livekit]
         FE[frontend :3000<br/>prod build]
         API[api :8000<br/>FastAPI]
         W[ai-worker<br/>ai-transcriber<br/>ai-observer<br/>ai-beat]
@@ -71,7 +71,7 @@ flowchart LR
 
 | Service | Port | Public? | Ghi chú |
 |---|---|---|---|
-| Caddy | 8080 (funnel 443) | ✅ qua Funnel | Reverse proxy duy nhất ra ngoài |
+| Nginx | 8080 (funnel 443) | ✅ qua Funnel | Reverse proxy duy nhất ra ngoài |
 | frontend | 3000 (nội bộ) | ➖ qua Caddy | Prod build |
 | api | 8000 (nội bộ) | ➖ qua Caddy `/api` | REST + webhook |
 | livekit (self-host) | 7880, UDP 50000–50100 | ❌ đang tắt | Dự phòng, hiện dùng Cloud |
@@ -82,7 +82,7 @@ flowchart LR
 | redis | 6379 | ❌ | Queue + presence |
 | minio | 9000/9001 | ❌ | Files |
 
-Chỉ Caddy (qua Funnel) là cửa công khai. **Không bao giờ** forward DB/Redis/MinIO ra internet.
+Chỉ Nginx (qua Funnel) là cửa công khai. **Không bao giờ** forward DB/Redis/MinIO ra internet.
 
 ## 6. Vòng đời phòng (3 trạng thái)
 
@@ -119,7 +119,7 @@ E-Room/
 │   └── ...components/data/i18n/lib/stores/styles
 ├── scripts/           # dev.bat (local) / golive.bat (public) + mac.sh / linux.sh
 ├── docs/              # overview, features, workflow, setup (bạn đang đọc)
-├── Caddyfile          # reverse proxy cho Funnel
+├── nginx.conf          # reverse proxy cho Funnel
 └── docker-compose.yml # 13 services
 ```
 

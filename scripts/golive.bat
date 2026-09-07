@@ -59,14 +59,14 @@ docker exec api uv run python -c "from app.config import settings; from app.inte
 echo        Waiting for reverse proxy :8080 ...
 for /l %%i in (1,1,24) do (
     powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'http://localhost:8080/api/v1/rooms/count' -TimeoutSec 5 | Out-Null; exit 0 } catch { exit 1 }"
-    if %errorlevel% equ 0 goto :caddy_ok
+    if %errorlevel% equ 0 goto :nginx_ok
     timeout /t 5 /nobreak >nul
 )
-echo        [ERROR] Caddy/API not responding after 2 minutes. Check: docker compose logs api caddy
+echo        [ERROR] Nginx/API not responding after 2 minutes. Check: docker compose logs api nginx
 pause
 exit /b 1
-:caddy_ok
-echo        Caddy + API OK.
+:nginx_ok
+echo        Nginx + API OK.
 
 REM -- Step 6: Funnel -----------------------------------------------
 echo [6/6] Opening public link...

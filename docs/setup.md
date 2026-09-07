@@ -38,7 +38,7 @@ cd frontend && npm install && npm run dev -- --port 3002 --strictPort
 ```
 
 Hoặc 1 lệnh: `scripts\dev.bat` (Windows) / `bash scripts/mac.sh` / `bash scripts/linux.sh`.
-Mở `http://localhost:3002` (dev) hoặc `http://localhost:3000` (prod container). Swagger: `http://localhost:8000/docs`.
+Mở `https://localhost:3002` (dev, phím F trong dev.bat — Chrome báo cert tự ký thì Advanced → Proceed) hoặc `http://localhost:8080` (prod qua nginx). Swagger: `http://localhost:8000/docs`. Cổng 3000 container KHÔNG mở ra host.
 
 ## 4. Public cho người ngoài (đang dùng thật)
 
@@ -57,11 +57,11 @@ Tự động sau reboot (chạy 1 lần):
 schtasks /create /tn "E-Room Public" /tr "C:\...\E-Room\scripts\golive.bat" /sc onlogon /rl highest /f
 ```
 
-Kiến trúc public: Funnel (TLS) → Caddy `:8080` (`/` static, `/api` api, `/rtc*` livekit) + media qua LiveKit Cloud. Khách không cài gì. Nhớ thêm webhook URL `https://eroom.tail9f35e1.ts.net/api/v1/rooms/livekit/webhook` trong dashboard Cloud project.
+Kiến trúc public: Funnel (TLS) → Nginx `:8080` (`/` static, `/api` api, `/rtc*` livekit) + media qua LiveKit Cloud. Khách không cài gì. Nhớ thêm webhook URL `https://eroom.tail9f35e1.ts.net/api/v1/rooms/livekit/webhook` trong dashboard Cloud project.
 
 ## 5. Ports tham khảo
 
-`3000` web prod · `3002` web dev · `8000` api · `7880` livekit signal · `UDP 50000–50100` media (chỉ cần nếu self-host media) · `8012/8013` llama · `6333` qdrant · `4000` tidb · `6379` redis · `9000` minio · `8080` caddy.
+`8080` web prod (nginx) · `3002` web dev (https, cert tự ký) · `8000` api · `7880` livekit signal · `UDP 50000–50100` media (chỉ cần nếu self-host media) · `8012/8013` llama · `6333` qdrant · `4000` tidb · `6379` redis · `9000` minio. Cổng 3000 container KHÔNG mở ra host.
 
 ## 6. Tests
 

@@ -129,7 +129,7 @@ AI (`ai_*`) không bao giờ hiện trong các luồng trên (webhook + UI đề
 ```mermaid
 flowchart LR
     V[Khach 4G<br/>khong cai gi] -->|https| F[Tailscale Funnel<br/>TLS tu dong]
-    F --> C[Caddy :8080<br/>/ static, /api, /rtc]
+    F --> C[Nginx :8080<br/>/ static, /api, /rtc]
     C --> FE[frontend prod]
     C --> API[api]
     C --> LK[livekit local<br/>hien TAT]

@@ -131,7 +131,7 @@ uv run celery -A app.integration.celery.celery_app beat --loglevel=INFO
 # 5. Frontend (terminal mới)
 cd ../frontend
 npm install
-npm run dev                            # http://localhost:3000
+npm run dev                            # https://localhost:3000 (cert tu ky)
 ```
 
 ### Full Docker
