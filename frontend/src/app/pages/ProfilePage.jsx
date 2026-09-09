@@ -18,11 +18,11 @@ import { NotificationsPopup } from '../../features/profile/NotificationsPopup';
 import '../../styles/ProfilePage.css';
 
 const NAV_MAIN = [
-  { key: 'overview', label: 'Overview', to: '/profile/overview', icon: HiHome },
-  { key: 'rooms', label: 'My rooms', to: '/profile/rooms', icon: HiUserGroup },
-  { key: 'sessions', label: 'Session', to: '/profile/sessions', icon: HiCalendarDays },
-  { key: 'schedule', label: 'Schedule', to: '/profile/schedule', icon: HiClock },
-  { key: 'assessment', label: 'Assessment', to: '/profile/assessment', icon: HiAcademicCap },
+  { key: 'overview', label: 'Overview', to: '/overview', icon: HiHome },
+  { key: 'rooms', label: 'My rooms', to: '/my-rooms', icon: HiUserGroup },
+  { key: 'sessions', label: 'Session', to: '/session', icon: HiCalendarDays },
+  { key: 'schedule', label: 'Schedule', to: '/schedule', icon: HiClock },
+  { key: 'assessment', label: 'Assessment', to: '/assessment', icon: HiAcademicCap },
 ];
 
 const PAGEHEAD = {
@@ -160,7 +160,7 @@ export function ProfilePage({ section = 'overview' }) {
           </div>
         </nav>
         <div className="portal-side__user">
-          <Link to="/profile/me" className="portal-side__profile" title="My profile">
+          <Link to="/profile" className="portal-side__profile" title="My profile">
             <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={32} />
             <span className="portal-side__user-info">
               <strong>{user.full_name || 'E-Room learner'}</strong>
@@ -201,7 +201,7 @@ export function ProfilePage({ section = 'overview' }) {
             activityLoading={activityQuery.isLoading}
             activityError={activityQuery.isError}
             activityRetry={activityQuery.refetch}
-            onGo={(key) => navigate(`/profile/${key}`)}
+            onGo={(key) => navigate(key === 'rooms' ? '/my-rooms' : key === 'sessions' ? '/session' : `/${key}`)}
             onCreateRoom={() => setShowCreateRoom(true)}
           />
         )}

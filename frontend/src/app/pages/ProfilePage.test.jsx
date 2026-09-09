@@ -74,7 +74,7 @@ describe('ProfilePage portal', () => {
   it('renders five section links with routes, no usage/documents/settings pages', async () => {
     renderPortal();
     const sidebar = await screen.findByLabelText('Profile sections');
-    for (const [label, href] of [['Overview', '/profile/overview'], ['My rooms', '/profile/rooms'], ['Session', '/profile/sessions'], ['Schedule', '/profile/schedule'], ['Assessment', '/profile/assessment']]) {
+    for (const [label, href] of [['Overview', '/overview'], ['My rooms', '/my-rooms'], ['Session', '/session'], ['Schedule', '/schedule'], ['Assessment', '/assessment']]) {
       const link = within(sidebar).getByRole('link', { name: new RegExp(label) });
       expect(link.getAttribute('href')).toBe(href);
     }
@@ -96,7 +96,7 @@ describe('ProfilePage portal', () => {
   it('links avatar and name to the profile page', async () => {
     renderPortal();
     const profile = await screen.findByTitle('My profile');
-    expect(profile.getAttribute('href')).toBe('/profile/me');
+    expect(profile.getAttribute('href')).toBe('/profile');
   });
 
   it('shows only hosted rooms in My rooms', async () => {

@@ -54,13 +54,12 @@ export function App() {
             <Route path="/rooms" element={<Protected><RoomsPage /></Protected>} />
             <Route path="/learning" element={<Navigate to="/rooms" replace />} />
             <Route path="/meeting" element={<Navigate to="/rooms" replace />} />
-            <Route path="/profile" element={<Navigate to="/profile/overview" replace />} />
-            <Route path="/profile/overview" element={<Protected><ProfilePage section="overview" /></Protected>} />
-            <Route path="/profile/rooms" element={<Protected><ProfilePage section="rooms" /></Protected>} />
-            <Route path="/profile/sessions" element={<Protected><ProfilePage section="sessions" /></Protected>} />
-            <Route path="/profile/schedule" element={<Protected><ProfilePage section="schedule" /></Protected>} />
-            <Route path="/profile/assessment" element={<Protected><ProfilePage section="assessment" /></Protected>} />
-            <Route path="/profile/me" element={<Protected><ProfilePage section="me" /></Protected>} />
+            <Route path="/profile" element={<Protected><ProfilePage section="me" /></Protected>} />
+            <Route path="/overview" element={<Protected><ProfilePage section="overview" /></Protected>} />
+            <Route path="/my-rooms" element={<Protected><ProfilePage section="rooms" /></Protected>} />
+            <Route path="/session" element={<Protected><ProfilePage section="sessions" /></Protected>} />
+            <Route path="/schedule" element={<Protected><ProfilePage section="schedule" /></Protected>} />
+            <Route path="/assessment" element={<Protected><ProfilePage section="assessment" /></Protected>} />
             <Route path="/pricing" element={<AppShell><PricingPage /></AppShell>} />
             <Route path="/payment" element={<Protected><PaymentPage /></Protected>} />
             {/* v1 routes removed: portal profile v2 covers rooms/activity/documents/notifications */}

@@ -260,7 +260,7 @@
 .portal-app.is-collapsed .portal-side__btn span.portal-side__label,
 .portal-app.is-collapsed .portal-side__plan,
 .portal-app.is-collapsed .portal-side__user-info,
-.portal-app.is-collapsed .portal-side__profile svg {
+.portal-app.is-collapsed .portal-side__profile {
   display: none;
 }
 
