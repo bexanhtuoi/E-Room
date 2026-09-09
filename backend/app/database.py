@@ -20,7 +20,30 @@ def health() -> bool:
         return False
 
 
+def ensure_database() -> None:
+    # Fresh TiDB/MySQL chua co database — tu tao truoc khi create_all.
+    url = settings.database_url
+    if url.startswith("sqlite"):
+        return
+
+    from sqlalchemy import create_engine as create_server_engine
+    from sqlalchemy.engine.url import make_url
+
+    parsed = make_url(url)
+    if not parsed.database:
+        return
+
+    # URL.set(database=None) la no-op — dung URL khong ten DB de tao database
+    server_url = f"{parsed.drivername}://{parsed.username}:{parsed.password or ''}@{parsed.host}:{parsed.port}/"
+    server_engine = create_server_engine(server_url, connect_args=settings.db_connect_args)
+    with server_engine.connect() as conn:
+        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{parsed.database}`"))
+        conn.commit()
+    server_engine.dispose()
+
+
 def create_db_and_tables() -> None:
+    ensure_database()
     SQLModel.metadata.create_all(engine)
     ensure_schema_columns()
 
