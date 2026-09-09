@@ -22,17 +22,17 @@ async def rerank_documents(
 
     texts = [d["text"] for d in documents]
     total_chars = sum(len(t) for t in texts)
-    url = f"{base_url.rstrip('/')}/rerank"
+    payload = {"model": model, "query": query, "documents": texts, "top_k": top_k}
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     log.info("Reranking %d docs (query_len=%d, total_chars=%d)", len(documents), len(query.split()), total_chars)
 
     try:
         async with httpx.AsyncClient(timeout=300) as client:
-            resp = await client.post(
-                url,
-                json={"model": model, "query": query, "documents": texts, "top_k": top_k},
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
+            # llama.cpp moi dung /v1/rerank, ban cu dung /rerank
+            resp = await client.post(f"{base_url.rstrip('/')}/v1/rerank", json=payload, headers=headers)
+            if resp.status_code == 404:
+                resp = await client.post(f"{base_url.rstrip('/')}/rerank", json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
         results = data.get("results", [])

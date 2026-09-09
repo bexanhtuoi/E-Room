@@ -44,15 +44,14 @@ function renderConfig() {
 }
 
 describe('RoomConfigPage', () => {
-  it('shows all five config cards for the host', async () => {
+  it('shows all config cards for the host', async () => {
     currentUserId = 9;
     renderConfig();
-    for (const title of ['Basics', 'Access', 'AI prompt', 'Skills', 'Documents for AI']) {
+    for (const title of ['Basics', 'Who can enter', 'AI prompt', /Documents for AI/]) {
       expect(await screen.findByRole('heading', { name: title })).toBeTruthy();
     }
     expect(await screen.findByDisplayValue('Hosted Room')).toBeTruthy();
     expect(screen.getByText('friend@example.com')).toBeTruthy();
-    expect(screen.getByText('Coach')).toBeTruthy();
     expect(screen.getByText('notes.md')).toBeTruthy();
   });
 

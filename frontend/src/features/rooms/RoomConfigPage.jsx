@@ -1,35 +1,41 @@
 import { useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { HiArrowLeft, HiCheck, HiPlus, HiTrash, HiXMark } from 'react-icons/hi2';
+import { HiArrowLeft, HiCheck, HiCloudArrowUp, HiLockClosed, HiPlus, HiTrash, HiXMark } from 'react-icons/hi2';
 import { useAuth } from '../../app/AuthContext';
 import { API_BASE_URL, fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
+import { formatDateTime } from '../../lib/formatters';
 import { TopicPicker } from './TopicPicker';
 import { SeatSlider } from './SeatSlider';
 import '../../styles/ProfilePage.css';
 
-function Card({ title, desc, children }) {
-  return (
-    <section className="portal-panel">
-      <div className="portal-panel__head"><h2>{title}</h2></div>
-      {desc && <p className="portal-muted" style={{ margin: '0 0 12px' }}>{desc}</p>}
-      {children}
-    </section>
-  );
-}
-
-function Switch({ on, onClick, label }) {
-  return (
-    <button type="button" onClick={onClick} aria-pressed={on} className="portal-switch">
-      {label}
-      <span className={`portal-switch__track${on ? ' is-on' : ''}`}><span className="portal-switch__thumb" /></span>
-    </button>
-  );
-}
-
 function patchRoom(roomId, data) {
   return fetchJson(`/rooms/${roomId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+function ResumeHeader({ room }) {
+  const topics = Array.isArray(room.topics) ? room.topics : [];
+  return (
+    <header className="pf-resume__head">
+      <span className="portal-room__tile pf-room__tile">{(room.name || '?').trim().charAt(0).toUpperCase()}</span>
+      <div className="pf-resume__id">
+        <div className="pf-resume__name">
+          <h1>{room.name}</h1>
+          {room.is_private
+            ? <span className="portal-flag" title="Only you and allowed emails can see this"><HiLockClosed size={11} /> PRIVATE</span>
+            : <span className="portal-flag is-solid">PUBLIC</span>}
+          <span className={`portal-status is-${room.status}`}>{room.status}</span>
+        </div>
+        <div className="portal-muted">
+          {topics.length > 0 ? `${topics.join(' · ')} — ` : ''}
+          opened {room.created_at ? formatDateTime(room.created_at) : '—'}
+        </div>
+        {room.description && <p className="pf-resume__desc">{room.description}</p>}
+      </div>
+      <Link className="er-btn" style={{ textDecoration: 'none', flexShrink: 0 }} to={`/rooms/${room.id}`}>Enter room</Link>
+    </header>
+  );
 }
 
 function BasicsCard({ room }) {
@@ -37,28 +43,24 @@ function BasicsCard({ room }) {
   const [description, setDescription] = useState(room.description || '');
   const [topics, setTopics] = useState(Array.isArray(room.topics) ? room.topics : []);
   const [seats, setSeats] = useState(room.max_participants || 4);
-  const [heartbeat, setHeartbeat] = useState(room.enable_heartbeat !== false);
-  const [transcript, setTranscript] = useState(room.enable_transcript !== false);
-  const [agent, setAgent] = useState(room.enable_agent !== false);
   const [notice, setNotice] = useState(null);
 
   const saveMutation = useMutation({
     mutationFn: () => patchRoom(room.id, {
-      name: name.trim(), description: description.trim() || null, topics,
-      max_participants: seats, enable_heartbeat: heartbeat,
-      enable_transcript: transcript, enable_agent: agent,
+      name: name.trim(), description: description.trim() || null, topics, max_participants: seats,
     }),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms', 'list'] });
       queryClient.invalidateQueries({ queryKey: ['room', room.id] });
-      setNotice({ ok: true, text: `Saved. ${updated.name}` });
+      setNotice({ ok: true, text: 'Basics saved.' });
       setTimeout(() => setNotice(null), 3000);
     },
     onError: (err) => setNotice({ ok: false, text: err?.message || 'Could not save.' }),
   });
 
   return (
-    <Card title="Basics" desc="Name, topics and room behaviour.">
+    <section className="portal-panel">
+      <div className="portal-panel__head"><h2>Basics</h2></div>
       {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
       <div style={{ display: 'grid', gap: 12 }}>
         <div>
@@ -74,18 +76,13 @@ function BasicsCard({ room }) {
           <TopicPicker topics={topics} onChange={setTopics} />
         </div>
         <SeatSlider value={seats} onChange={setSeats} id="cfg-seats" />
-        <div className="portal-switchlist">
-          <Switch on={heartbeat} onClick={() => setHeartbeat((v) => !v)} label="Heartbeat (auto-close empty rooms)" />
-          <Switch on={transcript} onClick={() => setTranscript((v) => !v)} label="Live transcript" />
-          <Switch on={agent} onClick={() => setAgent((v) => !v)} label="AI companion (@ai)" />
-        </div>
         <div className="portal-actions">
           <button className="er-btn" disabled={saveMutation.isPending || !name.trim()} onClick={() => saveMutation.mutate()}>
             {saveMutation.isPending ? 'Saving…' : 'Save basics'}
           </button>
         </div>
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -114,11 +111,20 @@ function AccessCard({ room }) {
   }
 
   return (
-    <Card title="Access" desc="Public rooms appear on /rooms and home. Private rooms are invisible to everyone except you and the emails below.">
+    <section className="portal-panel">
+      <div className="portal-panel__head"><h2>Who can enter</h2></div>
       {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
       <div className="portal-switchlist">
-        <Switch on={!isPrivate} onClick={() => setIsPrivate((v) => !v)} label={isPrivate ? 'Private room' : 'Public room'} />
+        <button type="button" onClick={() => setIsPrivate((v) => !v)} aria-pressed={isPrivate} className="portal-switch">
+          {isPrivate ? 'Private room' : 'Public room'}
+          <span className={`portal-switch__track${isPrivate ? ' is-on' : ''}`}><span className="portal-switch__thumb" /></span>
+        </button>
       </div>
+      <p className="portal-muted">
+        {isPrivate
+          ? 'Invisible everywhere except for you and the emails below.'
+          : 'Anyone can find this room on /rooms and home.'}
+      </p>
       {isPrivate && (
         <div style={{ marginTop: 12 }}>
           <label className="er-label" htmlFor="cfg-email">Allowed emails ({emails.length})</label>
@@ -153,113 +159,49 @@ function AccessCard({ room }) {
           {saveMutation.isPending ? 'Saving…' : 'Save access'}
         </button>
       </div>
-    </Card>
+    </section>
   );
 }
 
 function PromptCard({ room }) {
-  const [prompt, setPrompt] = useState(room.system_prompt || '');
+  const defaultQuery = useQuery({
+    queryKey: ['rooms', 'prompt-default'],
+    queryFn: () => fetchJson('/rooms/prompt-default').then((r) => r?.default_system_prompt || ''),
+    staleTime: 300_000,
+  });
+  const [override, setOverride] = useState(room.system_prompt || '');
   const [notice, setNotice] = useState(null);
 
   const saveMutation = useMutation({
-    mutationFn: () => patchRoom(room.id, { system_prompt: prompt.trim() || null }),
+    mutationFn: () => patchRoom(room.id, { system_prompt: override.trim() || null }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['room', room.id] });
-      setNotice({ ok: true, text: 'AI prompt saved.' });
+      setNotice({ ok: true, text: override.trim() ? 'Custom prompt saved.' : 'Back to the default prompt.' });
       setTimeout(() => setNotice(null), 3000);
     },
     onError: (err) => setNotice({ ok: false, text: err?.message || 'Could not save.' }),
   });
 
   return (
-    <Card title="AI prompt" desc="Extra instructions for @ai in this room. Empty means default behaviour.">
+    <section className="portal-panel">
+      <div className="portal-panel__head"><h2>AI prompt</h2>{override.trim() ? <span className="portal-flag is-solid">OVERRIDDEN</span> : <span className="portal-flag">DEFAULT</span>}</div>
       {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
+      <details className="pf-details">
+        <summary>See the default E-Room prompt</summary>
+        <pre className="pf-pre">{defaultQuery.isLoading ? 'Loading…' : (defaultQuery.data || 'Default prompt unavailable.')}</pre>
+      </details>
+      <label className="er-label" htmlFor="cfg-prompt" style={{ marginTop: 12 }}>Your override (empty = use default)</label>
       <textarea
-        className="er-textarea" rows={4} value={prompt}
+        id="cfg-prompt" className="er-textarea" rows={4} value={override}
         placeholder="e.g. Correct my grammar gently after each answer. Explain new words with examples."
-        onChange={(e) => setPrompt(e.target.value)}
+        onChange={(e) => setOverride(e.target.value)}
       />
       <div className="portal-actions">
         <button className="er-btn" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
           {saveMutation.isPending ? 'Saving…' : 'Save prompt'}
         </button>
       </div>
-    </Card>
-  );
-}
-
-function SkillsCard({ room }) {
-  const skillsQuery = useQuery({
-    queryKey: ['rooms', room.id, 'skills'],
-    queryFn: () => fetchJson(`/rooms/${room.id}/skills`),
-  });
-  const skills = Array.isArray(skillsQuery.data) ? skillsQuery.data : [];
-  const [name, setName] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [notice, setNotice] = useState(null);
-
-  function refresh() {
-    queryClient.invalidateQueries({ queryKey: ['rooms', room.id, 'skills'] });
-  }
-
-  const addMutation = useMutation({
-    mutationFn: () => fetchJson(`/rooms/${room.id}/skills`, { method: 'POST', body: JSON.stringify({ name: name.trim(), prompt: prompt.trim() }) }),
-    onSuccess: () => { setName(''); setPrompt(''); refresh(); },
-    onError: (err) => setNotice(err?.message || 'Could not add skill.'),
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: (skill) => fetchJson(`/rooms/${room.id}/skills/${skill.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !skill.enabled }) }),
-    onSuccess: refresh,
-    onError: (err) => setNotice(err?.message || 'Could not update skill.'),
-  });
-
-  const delMutation = useMutation({
-    mutationFn: (id) => fetchJson(`/rooms/${room.id}/skills/${id}`, { method: 'DELETE' }),
-    onSuccess: refresh,
-    onError: (err) => setNotice(err?.message || 'Could not delete skill.'),
-  });
-
-  return (
-    <Card title="Skills" desc="Reusable prompt fragments the AI follows in this room. Toggle off to pause one without deleting it.">
-      {notice && <div className="er-alert er-alert--err">{notice} <button type="button" className="portal-linkbtn" onClick={() => setNotice(null)}>Dismiss</button></div>}
-      {skillsQuery.isLoading && <div className="portal-skeleton"><span /><span /></div>}
-      {skills.length > 0 && (
-        <div className="portal-list" style={{ marginBottom: 12 }}>
-          {skills.map((skill) => (
-            <div key={skill.id} className="portal-row">
-              <button
-                type="button" className="portal-tool" title={skill.enabled ? 'Disable' : 'Enable'}
-                aria-label={`${skill.enabled ? 'Disable' : 'Enable'} skill ${skill.file_name}`}
-                onClick={() => toggleMutation.mutate(skill)}
-              >
-                {skill.enabled ? <HiCheck size={15} /> : <HiXMark size={15} />}
-              </button>
-              <span className="portal-row__main">
-                <span className="portal-row__text">{skill.file_name} {!skill.enabled && <span className="portal-flag">OFF</span>}</span>
-                {skill.content && <span className="portal-row__sub">{skill.content}</span>}
-              </span>
-              <button
-                type="button" className="portal-tool is-danger" title="Delete skill"
-                aria-label={`Delete skill ${skill.file_name}`}
-                onClick={() => { if (window.confirm(`Delete skill "${skill.file_name}"?`)) delMutation.mutate(skill.id); }}
-              >
-                <HiTrash size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div style={{ display: 'grid', gap: 8 }}>
-        <input className="er-input" value={name} placeholder="Skill name, e.g. Vocab coach" onChange={(e) => setName(e.target.value)} aria-label="Skill name" />
-        <textarea className="er-textarea" rows={2} value={prompt} placeholder="What should the AI do? e.g. Explain every new word with one example." onChange={(e) => setPrompt(e.target.value)} aria-label="Skill prompt" />
-        <div className="portal-actions">
-          <button className="er-btn er-btn--ghost portal-mini-btn" disabled={addMutation.isPending || !name.trim() || !prompt.trim()} onClick={() => addMutation.mutate()}>
-            <HiPlus size={14} /> {addMutation.isPending ? 'Adding…' : 'Add skill'}
-          </button>
-        </div>
-      </div>
-    </Card>
+    </section>
   );
 }
 
@@ -270,15 +212,14 @@ function DocumentsCard({ room }) {
   });
   const docs = (Array.isArray(docsQuery.data) ? docsQuery.data : []).filter((d) => d.kind !== 'skill');
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['rooms', room.id, 'documents'] });
   }
 
-  async function handleFile(event) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  async function uploadFile(file) {
     if (!file) return;
     setNotice(null);
     setUploading(true);
@@ -309,23 +250,32 @@ function DocumentsCard({ room }) {
   });
 
   return (
-    <Card title="Documents for AI" desc="pdf, md or txt up to 10MB. @ai searches these first when answering in this room.">
+    <section className="portal-panel">
+      <div className="portal-panel__head"><h2>Documents for AI <span className="portal-count">{docs.length}</span></h2></div>
       {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
-      <div className="portal-actions" style={{ marginBottom: 12 }}>
-        <label className="er-btn er-btn--ghost portal-mini-btn" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
-          <HiPlus size={14} /> {uploading ? 'Indexing…' : 'Upload document'}
-          <input type="file" accept=".pdf,.md,.txt" hidden disabled={uploading} onChange={handleFile} />
-        </label>
+      <div
+        className={`pf-drop${dragging ? ' is-drag' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); uploadFile(e.dataTransfer.files?.[0]); }}
+        onClick={() => document.getElementById('cfg-file').click()}
+        role="button" tabIndex={0} aria-label="Upload document"
+        onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('cfg-file').click(); }}
+      >
+        <HiCloudArrowUp size={28} />
+        <strong>{uploading ? 'Indexing…' : 'Drop a file here or click to browse'}</strong>
+        <span className="portal-muted">pdf, md or txt up to 10MB — @ai searches these first</span>
+        <input id="cfg-file" type="file" accept=".pdf,.md,.txt" hidden disabled={uploading} onChange={(e) => { uploadFile(e.target.files?.[0]); e.target.value = ''; }} />
       </div>
       {docsQuery.isLoading && <div className="portal-skeleton"><span /><span /></div>}
       {!docsQuery.isLoading && docs.length === 0 && (
         <div className="portal-empty">No documents yet. Upload slides, notes or a reading and @ai will use them.</div>
       )}
       {docs.length > 0 && (
-        <div className="portal-list">
+        <div className="portal-list" style={{ marginTop: 12 }}>
           {docs.map((doc) => (
             <div key={doc.id} className="portal-row">
-              <span className="portal-badge">{(doc.file_type || 'FILE').toUpperCase()}</span>
+              <span className="portal-badge"><HiCheck size={12} /> {(doc.file_type || 'FILE').toUpperCase()}</span>
               <span className="portal-row__main">
                 <span className="portal-row__text">{doc.file_name}</span>
                 {doc.created_at && <span className="portal-row__sub">{new Date(doc.created_at).toLocaleDateString()}</span>}
@@ -341,7 +291,7 @@ function DocumentsCard({ room }) {
           ))}
         </div>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -381,23 +331,17 @@ export function RoomConfigPage() {
 
   return (
     <div className="portal-app">
-      <main className="portal-main">
+      <main className="portal-main pf-center">
         <div className="portal-pagehead">
           <div>
             <div className="portal-pagehead__crumb"><Link to="/my-rooms">My rooms</Link> / Config</div>
-            <h1>{room.name}</h1>
-            <p>Room settings, access, AI prompt, skills and documents.</p>
-          </div>
-          <div className="portal-pagehead__actions">
-            <Link className="er-btn" style={{ textDecoration: 'none' }} to={`/rooms/${room.id}`}>Enter room</Link>
           </div>
         </div>
-        <div style={{ height: 16 }} />
-        <div className="portal-stack">
-          <BasicsCard key={`b-${room.updated_at || room.id}`} room={room} />
-          <AccessCard key={`a-${room.updated_at || room.id}`} room={room} />
-          <PromptCard key={`p-${room.updated_at || room.id}`} room={room} />
-          <SkillsCard room={room} />
+        <div className="pf-resume">
+          <ResumeHeader room={room} />
+          <BasicsCard key={`b-${room.id}`} room={room} />
+          <AccessCard key={`a-${room.id}`} room={room} />
+          <PromptCard key={`p-${room.id}`} room={room} />
           <DocumentsCard room={room} />
         </div>
       </main>

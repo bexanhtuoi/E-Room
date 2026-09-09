@@ -64,6 +64,13 @@ def count_rooms(db: Session = Depends(get_session)) -> dict:
     return {"count": room_crud.count(db)}
 
 
+@router.get("/prompt-default")
+def get_default_prompt() -> dict:
+    from app.ai.prompt import get_main_prompt
+
+    return {"default_system_prompt": get_main_prompt()}
+
+
 @router.get("/{room_id}", response_model=RoomResponse)
 def get_room(
     room_id: int,

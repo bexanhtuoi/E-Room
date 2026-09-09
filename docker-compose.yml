@@ -18,6 +18,10 @@ services:
         condition: service_started
       llama:
         condition: service_started
+      ollama:
+        condition: service_started
+      reranker:
+        condition: service_started
 
   ai-worker:
     build: ./backend
@@ -153,6 +157,33 @@ services:
     volumes:
       - llama_data:/root/.cache/huggingface
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c", "ollama serve > /tmp/ollama.log 2>&1 & sleep 10; ollama pull qwen3-embedding:0.6b; wait"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q qwen3-embedding"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+
+  reranker:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: reranker
+    entrypoint: ["/app/llama-server"]
+    command: ["-hf", "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", "--host", "0.0.0.0", "--port", "8014", "-c", "4096", "--pooling", "rank", "--rerank"]
+    restart: unless-stopped
+    ports:
+      - "8014:8014"
+    volumes:
+      - reranker_data:/root/.cache/huggingface
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
@@ -194,3 +225,5 @@ volumes:
   llama_data:
   whisper_data:
   qdrant_data:
+  ollama_data:
+  reranker_data:
