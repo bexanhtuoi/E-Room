@@ -9,22 +9,10 @@ import { AvatarPicker } from './AvatarPicker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
-function Switch({ on, onClick, label }) {
-  return (
-    <button type="button" onClick={onClick} aria-pressed={on} className="portal-switch">
-      {label}
-      <span className={`portal-switch__track${on ? ' is-on' : ''}`}><span className="portal-switch__thumb" /></span>
-    </button>
-  );
-}
-
-export function SettingsSection({ user, tierLabel, onSaved, onSignOut }) {
+export function ProfileInfoSection({ user, tierLabel, onSaved, onSignOut }) {
   const [name, setName] = useState(user?.full_name || '');
   const [level, setLevel] = useState(user?.english_level || '');
   const [avatar, setAvatar] = useState(user?.avatar_url || null);
-  const [match, setMatch] = useState(true);
-  const [reminders, setReminders] = useState(true);
-  const [showProfile, setShowProfile] = useState(true);
   const [notice, setNotice] = useState(null);
 
   const saveMutation = useMutation({
@@ -105,16 +93,6 @@ export function SettingsSection({ user, tierLabel, onSaved, onSignOut }) {
           </button>
           <button className="er-btn er-btn--ghost" disabled={!dirty} onClick={handleReset}>Reset</button>
         </div>
-      </section>
-
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Preferences</h2></div>
-        <div className="portal-switchlist">
-          <Switch on={match} onClick={() => setMatch((v) => !v)} label="Room match notifications" />
-          <Switch on={reminders} onClick={() => setReminders((v) => !v)} label="Session reminders" />
-          <Switch on={showProfile} onClick={() => setShowProfile((v) => !v)} label="Show profile in rooms" />
-        </div>
-        <p className="portal-muted">Notification and privacy switches are stored on this device for now.</p>
       </section>
 
       <section className="portal-panel">

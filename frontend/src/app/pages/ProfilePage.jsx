@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiArrowRightOnRectangle, HiBell, HiCalendarDays, HiChartBar, HiDocumentText, HiHome, HiPlusCircle, HiShieldCheck, HiUserGroup } from 'react-icons/hi2';
+import { HiAcademicCap, HiArrowRightOnRectangle, HiBell, HiCalendarDays, HiClock, HiHome, HiPlusCircle, HiUserGroup } from 'react-icons/hi2';
 import { useAuth } from '../AuthContext';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
@@ -11,33 +11,27 @@ import { Face, avatarFaceProps } from '../../components/common/Faces';
 import { OverviewSection } from '../../features/profile/OverviewSection';
 import { RoomsSection } from '../../features/profile/RoomsSection';
 import { SessionsSection } from '../../features/profile/SessionsSection';
-import { UsageSection } from '../../features/profile/UsageSection';
-import { DocumentsSection } from '../../features/profile/DocumentsSection';
-import { NotificationsSection } from '../../features/profile/NotificationsSection';
-import { SettingsSection } from '../../features/profile/SettingsSection';
+import { ScheduleSection } from '../../features/profile/ScheduleSection';
+import { AssessmentSection } from '../../features/profile/AssessmentSection';
+import { ProfileInfoSection } from '../../features/profile/ProfileInfoSection';
+import { NotificationsPopup } from '../../features/profile/NotificationsPopup';
 import '../../styles/ProfilePage.css';
 
 const NAV_MAIN = [
-  { key: 'overview', label: 'Overview', icon: HiHome },
-  { key: 'rooms', label: 'My rooms', icon: HiUserGroup },
-  { key: 'sessions', label: 'Sessions', icon: HiCalendarDays },
-  { key: 'usage', label: 'Usage', icon: HiChartBar },
-  { key: 'documents', label: 'Documents', icon: HiDocumentText },
-];
-
-const NAV_BOTTOM = [
-  { key: 'notifications', label: 'Notifications', icon: HiBell },
-  { key: 'settings', label: 'Settings', icon: HiShieldCheck },
+  { key: 'overview', label: 'Overview', to: '/profile/overview', icon: HiHome },
+  { key: 'rooms', label: 'My rooms', to: '/profile/rooms', icon: HiUserGroup },
+  { key: 'sessions', label: 'Session', to: '/profile/sessions', icon: HiCalendarDays },
+  { key: 'schedule', label: 'Schedule', to: '/profile/schedule', icon: HiClock },
+  { key: 'assessment', label: 'Assessment', to: '/profile/assessment', icon: HiAcademicCap },
 ];
 
 const PAGEHEAD = {
   overview: { crumb: 'Workspace', title: 'Overview', desc: 'Your learning pulse at a glance.' },
-  rooms: { crumb: 'Workspace', title: 'My rooms', desc: 'Rooms you host and rooms you speak in.' },
-  sessions: { crumb: 'Workspace', title: 'Sessions', desc: 'Every finished room, with what you said in each.' },
-  usage: { crumb: 'Workspace', title: 'Usage', desc: 'Streaks, rhythms and favourite topics.' },
-  documents: { crumb: 'Workspace', title: 'Documents', desc: 'Files attached to your learning.' },
-  notifications: { crumb: 'Workspace', title: 'Notifications', desc: 'Matches, recaps and reviews.' },
-  settings: { crumb: 'Workspace', title: 'Settings', desc: 'Identity, avatar, preferences and account.' },
+  rooms: { crumb: 'Workspace', title: 'My rooms', desc: 'Rooms you created.' },
+  sessions: { crumb: 'Workspace', title: 'Session', desc: 'Every finished room, with what you said in each.' },
+  schedule: { crumb: 'Workspace', title: 'Schedule', desc: 'Live now and open rooms waiting for you.' },
+  assessment: { crumb: 'Workspace', title: 'Assessment', desc: 'Replay what you said and level up your English.' },
+  me: { crumb: 'Workspace', title: 'Profile', desc: 'Your identity and account.' },
 };
 
 function tierLabel(tier) {
@@ -46,12 +40,12 @@ function tierLabel(tier) {
   return 'Free';
 }
 
-export function ProfilePage() {
+export function ProfilePage({ section = 'overview' }) {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState('overview');
   const [collapsed, setCollapsed] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
   const tier = useSubscriptionStore((state) => state.tier);
 
   const roomsQuery = useQuery({
@@ -120,22 +114,7 @@ export function ProfilePage() {
 
   if (!user) return null;
 
-  const head = PAGEHEAD[activeSection] || PAGEHEAD.overview;
-
-  function navBtn(s, badge) {
-    return (
-      <button
-        key={s.key}
-        type="button"
-        title={s.label}
-        onClick={() => setActiveSection(s.key)}
-        className={`portal-side__btn${activeSection === s.key ? ' is-active' : ''}`}
-      >
-        <s.icon size={18} /> <span className="portal-side__label">{s.label}</span>
-        {badge > 0 && <span className="portal-count">{badge}</span>}
-      </button>
-    );
-  }
+  const head = PAGEHEAD[section] || PAGEHEAD.overview;
 
   return (
     <div className={`portal-app${collapsed ? ' is-collapsed' : ''}`}>
@@ -152,10 +131,27 @@ export function ProfilePage() {
         </div>
         <nav className="portal-side__nav">
           <div className="portal-side__group">Menu</div>
-          {NAV_MAIN.map((s) => navBtn(s))}
+          {NAV_MAIN.map((s) => (
+            <NavLink
+              key={s.key}
+              to={s.to}
+              title={s.label}
+              className={({ isActive }) => `portal-side__btn${isActive ? ' is-active' : ''}`}
+            >
+              <s.icon size={18} /> <span className="portal-side__label">{s.label}</span>
+            </NavLink>
+          ))}
           <div className="portal-side__bottom">
             <div className="portal-side__group">General</div>
-            {NAV_BOTTOM.map((s) => navBtn(s, s.key === 'notifications' ? unreadCount : 0))}
+            <button
+              type="button"
+              title="Notifications"
+              onClick={() => setShowNotif(true)}
+              className="portal-side__btn"
+            >
+              <HiBell size={18} /> <span className="portal-side__label">Notifications</span>
+              {unreadCount > 0 && <span className="portal-count">{unreadCount}</span>}
+            </button>
             <div className="portal-side__plan">
               <strong>{tierLabel(tier)} plan</strong>
               <span>Unlock recaps, voice and more.</span>
@@ -164,11 +160,13 @@ export function ProfilePage() {
           </div>
         </nav>
         <div className="portal-side__user">
-          <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={32} />
-          <div className="portal-side__user-info">
-            <strong>{user.full_name || 'E-Room learner'}</strong>
-            <span>{user.email}</span>
-          </div>
+          <Link to="/profile/me" className="portal-side__profile" title="My profile">
+            <Face {...avatarFaceProps(user.avatar_url, user.full_name || user.email)} size={32} />
+            <span className="portal-side__user-info">
+              <strong>{user.full_name || 'E-Room learner'}</strong>
+              <span>{user.email}</span>
+            </span>
+          </Link>
           <button type="button" className="portal-side__signout" title="Sign out" aria-label="Sign out" onClick={handleSignOut}>
             <HiArrowRightOnRectangle size={15} />
           </button>
@@ -183,7 +181,7 @@ export function ProfilePage() {
             <p>{head.desc}</p>
           </div>
           <div className="portal-pagehead__actions">
-            {(activeSection === 'overview' || activeSection === 'rooms') && (
+            {(section === 'overview' || section === 'rooms') && (
               <button className="er-btn" onClick={() => setShowCreateRoom(true)}><HiPlusCircle size={16} /> New room</button>
             )}
           </div>
@@ -191,7 +189,7 @@ export function ProfilePage() {
 
         <div style={{ height: 16 }} />
 
-        {activeSection === 'overview' && (
+        {section === 'overview' && (
           <OverviewSection
             userName={(user.full_name || '').split(' ')[0]}
             hostedRooms={hostedRooms}
@@ -203,34 +201,35 @@ export function ProfilePage() {
             activityLoading={activityQuery.isLoading}
             activityError={activityQuery.isError}
             activityRetry={activityQuery.refetch}
-            onGo={setActiveSection}
+            onGo={(key) => navigate(`/profile/${key}`)}
             onCreateRoom={() => setShowCreateRoom(true)}
           />
         )}
-        {activeSection === 'rooms' && (
+        {section === 'rooms' && (
           <RoomsSection
             hostedRooms={hostedRooms}
-            joinedRooms={joinedRooms}
             liveRooms={liveRooms}
             messagesByRoom={messagesByRoom}
             onCreateRoom={() => setShowCreateRoom(true)}
             onRoomDeleted={handleRoomDeleted}
           />
         )}
-        {activeSection === 'sessions' && (
+        {section === 'sessions' && (
           <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
         )}
-        {activeSection === 'usage' && (
-          <UsageSection messages={messages} stats={stats} hostedRooms={hostedRooms} joinedRooms={joinedRooms} pastSessions={pastSessions} />
+        {section === 'schedule' && (
+          <ScheduleSection rooms={rooms} hostedRooms={hostedRooms} onCreateRoom={() => setShowCreateRoom(true)} />
         )}
-        {activeSection === 'documents' && <DocumentsSection userId={user.id} />}
-        {activeSection === 'notifications' && <NotificationsSection />}
-        {activeSection === 'settings' && (
-          <SettingsSection user={user} tierLabel={tierLabel(tier)} onSaved={handleProfileSaved} onSignOut={handleSignOut} />
+        {section === 'assessment' && (
+          <AssessmentSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user.id} />
+        )}
+        {section === 'me' && (
+          <ProfileInfoSection user={user} tierLabel={tierLabel(tier)} onSaved={handleProfileSaved} onSignOut={handleSignOut} />
         )}
       </main>
 
       {showCreateRoom && <CreateRoomModal onClose={() => setShowCreateRoom(false)} onRoomCreated={handleRoomCreated} />}
+      {showNotif && <NotificationsPopup onClose={() => setShowNotif(false)} />}
     </div>
   );
 }

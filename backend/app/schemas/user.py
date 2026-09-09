@@ -44,6 +44,16 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class UserStatsResponse(BaseModel):
+    messages_total: int
+    messages_this_week: int
+    messages_last_week: int
+    week_delta: int
+    streak_days: int
+    most_active_day: Optional[str] = None
+    most_active_day_count: int = 0
+
+
 class UserUpdateSchema(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None

@@ -1,11 +1,12 @@
-﻿from typing import List
+﻿from datetime import date, datetime, timedelta
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session
 
 from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
 from app.database import get_session
-from app.schemas import UserCreateSchema, UserResponse, UserUpdateSchema
+from app.schemas import UserCreateSchema, UserResponse, UserStatsResponse, UserUpdateSchema
 from app.security import hash_password
 from app.services import (
     document_crud,
@@ -30,6 +31,78 @@ def get_me(
 @router.get("/count")
 def count_users(db: Session = Depends(get_session)) -> dict:
     return {"count": user_crud.count(db)}
+
+
+def as_naive_utc(value: datetime) -> datetime:
+    # DB co the tra naive (sqlite) hoac aware (postgres)
+    if value.tzinfo is not None:
+        return value.replace(tzinfo=None)
+
+    return value
+
+
+def count_streak(active_days: set, today: date) -> int:
+    # Hom nay chua noi thi tinh tiep tu hom qua
+    cursor = today if today in active_days else today - timedelta(days=1)
+
+    streak = 0
+    while cursor in active_days:
+        streak += 1
+        cursor -= timedelta(days=1)
+
+    return streak
+
+
+def find_most_active_day(day_counts: dict) -> tuple[Optional[str], int]:
+    if not day_counts:
+        return None, 0
+
+    # Ngay nhieu tin nhat, hoa thi lay ngay gan nhat
+    best_day = max(sorted(day_counts), key=lambda day: day_counts[day])
+
+    return best_day.isoformat(), day_counts[best_day]
+
+
+@router.get("/me/stats", response_model=UserStatsResponse)
+def get_my_stats(
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> UserStatsResponse:
+    current_user = request.state.current_user
+
+    # Chi can moc thoi gian 90 ngay gan nhat de tinh streak va tuan
+    now = as_naive_utc(now_utc())
+    today = now.date()
+    monday = today - timedelta(days=today.weekday())
+    last_monday = monday - timedelta(weeks=1)
+
+    times = message_crud.get_message_times(
+        db,
+        user_id=current_user.id,
+        since=datetime.combine(last_monday, datetime.min.time()),
+    )
+    days = [as_naive_utc(moment).date() for moment in times]
+
+    this_week = sum(1 for day in days if day >= monday)
+    last_week = sum(1 for day in days if last_monday <= day < monday)
+
+    recent_counts: dict = {}
+    for day in days:
+        if day >= today - timedelta(days=6):
+            recent_counts[day] = recent_counts.get(day, 0) + 1
+
+    best_day, best_count = find_most_active_day(recent_counts)
+
+    return UserStatsResponse(
+        messages_total=message_crud.count(db, user_id=current_user.id),
+        messages_this_week=this_week,
+        messages_last_week=last_week,
+        week_delta=this_week - last_week,
+        streak_days=count_streak(set(days), today),
+        most_active_day=best_day,
+        most_active_day_count=best_count,
+    )
 
 
 @router.get("/{user_id}", response_model=UserResponse)

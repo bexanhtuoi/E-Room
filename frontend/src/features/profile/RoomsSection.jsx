@@ -11,8 +11,6 @@ import { useRoomMembers } from '../rooms/RoomRow';
 const STATUS_LABEL = { idle: 'Open', active: 'Live', ended: 'Ended' };
 const TABS = [
   { key: 'all', label: 'All' },
-  { key: 'hosted', label: 'Hosted' },
-  { key: 'joined', label: 'Joined' },
   { key: 'live', label: 'Live' },
 ];
 
@@ -123,19 +121,16 @@ const SORTS = [
   { key: 'lines', label: 'Most lines' },
 ];
 
-export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRoom, onCreateRoom, onRoomDeleted }) {
+export function RoomsSection({ hostedRooms, liveRooms, messagesByRoom, onCreateRoom, onRoomDeleted }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('recent');
   const [expandedId, setExpandedId] = useState(null);
 
-  const all = [...hostedRooms, ...joinedRooms];
-  const hostedIds = new Set(hostedRooms.map((r) => r.id));
+  const all = hostedRooms;
   const q = search.trim().toLowerCase();
 
   const filtered = all.filter((r) => {
-    if (tab === 'hosted' && !hostedIds.has(r.id)) return false;
-    if (tab === 'joined' && hostedIds.has(r.id)) return false;
     if (tab === 'live' && r.status !== 'active') return false;
     if (!q) return true;
     const topics = Array.isArray(r.topics) ? r.topics.join(' ') : '';
@@ -176,7 +171,7 @@ export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRo
       </div>
       {filtered.length === 0 ? (
         <div className="portal-empty">
-          {all.length === 0 ? 'You have not hosted or joined any room yet.' : 'No room matches this filter.'}
+          {all.length === 0 ? 'You have not created any room yet.' : 'No room matches this filter.'}
         </div>
       ) : (
         <div className="portal-list">
@@ -184,7 +179,7 @@ export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRo
             <RoomCard
               key={room.id}
               room={room}
-              mine={hostedIds.has(room.id)}
+              mine
               myMessages={messagesByRoom.get(room.id) || []}
               expanded={expandedId === room.id}
               onToggle={() => setExpandedId((cur) => (cur === room.id ? null : room.id))}

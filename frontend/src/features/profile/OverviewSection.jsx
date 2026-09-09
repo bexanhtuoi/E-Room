@@ -113,7 +113,7 @@ export function OverviewSection({
             <WeekBars data={week} />
           </div>
           <div className="portal-block">
-            <button type="button" className="portal-linkbtn" onClick={() => onGo?.('usage')}>Full usage report <HiArrowRight size={13} /></button>
+            <button type="button" className="portal-linkbtn" onClick={() => onGo?.('assessment')}>Check my English level <HiArrowRight size={13} /></button>
           </div>
         </section>
 

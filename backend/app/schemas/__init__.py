@@ -19,7 +19,7 @@ from app.schemas.room import (
     RoomTokenResponse,
     RoomUpdateSchema,
 )
-from app.schemas.user import Token, UserBaseSchema, UserCreateSchema, UserResponse, UserUpdateSchema
+from app.schemas.user import Token, UserBaseSchema, UserCreateSchema, UserResponse, UserStatsResponse, UserUpdateSchema
 
 __all__ = [
     "AgentEnum",
@@ -48,5 +48,6 @@ __all__ = [
     "UserBaseSchema",
     "UserCreateSchema",
     "UserResponse",
+    "UserStatsResponse",
     "UserUpdateSchema",
 ]

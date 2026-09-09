@@ -135,6 +135,7 @@
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .portal-side__btn svg {
@@ -202,6 +203,20 @@
   min-width: 0;
 }
 
+.portal-side__profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.portal-side__profile:hover .portal-side__user-info strong {
+  text-decoration: underline;
+}
+
 .portal-side__user-info strong {
   display: block;
   font-size: 13px;
@@ -240,10 +255,12 @@
 }
 
 .portal-app.is-collapsed .portal-side__id-text,
+.portal-app.is-collapsed .portal-side__logo,
 .portal-app.is-collapsed .portal-side__group,
 .portal-app.is-collapsed .portal-side__btn span.portal-side__label,
 .portal-app.is-collapsed .portal-side__plan,
-.portal-app.is-collapsed .portal-side__user-info {
+.portal-app.is-collapsed .portal-side__user-info,
+.portal-app.is-collapsed .portal-side__profile svg {
   display: none;
 }
 
@@ -1750,6 +1767,76 @@ a.portal-row:hover .portal-row__go {
 
 .portal-panel.is-danger .portal-panel__head h2 {
   color: var(--pf-down, #b42318);
+}
+
+.portal-row--btn {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid transparent;
+  font: inherit;
+  color: inherit;
+}
+
+.portal-row--btn:hover {
+  border-color: var(--pf-line, #e7e7e7);
+}
+
+.portal-row--btn.is-active {
+  border-color: var(--pf-ink, #1a1a1a);
+}
+
+.pf-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pf-modal__box {
+  background: #fff;
+  max-width: 640px;
+  width: 100%;
+  max-height: 90svh;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.pf-modal__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.pf-modal__head h3 {
+  margin: 0 0 2px;
+  font-size: 18px;
+}
+
+.pf-modal__head p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.pf-modal__close {
+  background: #fff;
+  border: 1px solid #ddd;
+  width: 32px;
+  height: 32px;
+  font-weight: 800;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pf-modal__close:hover {
+  border-color: #111;
 }
 
 .portal-table__quote {
