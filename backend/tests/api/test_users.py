@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.database import engine
 from app.services import message_crud
+from app.utils.datetime_utils import now_utc
 from tests.conftest import make_user, switch_to
 
 
@@ -123,7 +124,7 @@ class TestUserStats:
 
         with Session(engine) as db:
             message = message_crud.get_one(db, id=old["id"])
-            message_crud.update(db, db_obj=message, obj_in={"created_at": datetime.now() - timedelta(days=1)})
+            message_crud.update(db, db_obj=message, obj_in={"created_at": now_utc() - timedelta(days=1)})
 
         response = client.get("/api/v1/users/me/stats")
 
