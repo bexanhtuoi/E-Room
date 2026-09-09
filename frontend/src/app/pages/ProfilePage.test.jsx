@@ -99,10 +99,17 @@ describe('ProfilePage portal', () => {
     expect(profile.getAttribute('href')).toBe('/profile');
   });
 
-  it('shows only hosted rooms in My rooms', async () => {
+  it('shows only hosted rooms with search and manage actions', async () => {
     renderPortal('rooms');
     expect(await screen.findByText('Hosted Room')).toBeTruthy();
     expect(screen.queryByText('Joined Room')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Search rooms'), { target: { value: 'zzz-no-match' } });
+    expect(screen.queryByText('Hosted Room')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Search rooms'), { target: { value: 'hosted' } });
+    expect(await screen.findByText('Hosted Room')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Configure Hosted Room' }).getAttribute('href')).toBe('/rooms/1/config');
+    expect(screen.getByRole('link', { name: 'Enter Hosted Room' }).getAttribute('href')).toBe('/rooms/1');
+    expect(screen.getByRole('button', { name: 'Delete Hosted Room' })).toBeTruthy();
   });
 
   it('opens notifications as a popup with delete action', async () => {

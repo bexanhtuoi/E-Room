@@ -3,25 +3,32 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlmodel import Session
 
-from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
+from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.ai.tasks import enqueue_ai_job, mark_room_activity
 from app.database import get_session
 from app.models import MessageRole
 from app.schemas import MessageCreateSchema, MessageResponse
-from app.services import message_crud
+from app.services import message_crud, room_crud
 
 router = APIRouter()
 
 
 @router.get("/", response_model=List[MessageResponse])
 def get_messages(
+    request: Request,
     room_id: Optional[int] = Query(None, description="Filter messages by room_id"),
     user_id: Optional[int] = Query(None, description="Filter messages by user_id"),
     role: Optional[str] = Query(None, description="Filter messages by role (user/ai)"),
     db: Session = Depends(get_session),
     pagination: tuple[int, int] = Depends(get_pagination_params),
+    _: str = Depends(require_auth),
 ) -> List[MessageResponse]:
     skip, limit = pagination
+
+    if room_id is not None:
+        db_room = room_crud.get_one(db, id=room_id)
+        if db_room is not None:
+            authorize_room_access(db_room, request)
 
     filter_kwargs = {}
     if room_id is not None:
@@ -39,11 +46,18 @@ def get_messages(
 
 @router.get("/count")
 def count_messages(
+    request: Request,
     room_id: Optional[int] = Query(None, description="Filter count by room_id"),
     user_id: Optional[int] = Query(None, description="Filter count by user_id"),
     role: Optional[str] = Query(None, description="Filter count by role"),
     db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
 ) -> dict:
+    if room_id is not None:
+        db_room = room_crud.get_one(db, id=room_id)
+        if db_room is not None:
+            authorize_room_access(db_room, request)
+
     filter_kwargs = {}
     if room_id is not None:
         filter_kwargs["room_id"] = room_id

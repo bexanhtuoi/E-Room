@@ -27,6 +27,9 @@ class Room(SQLModel, table=True):
     enable_heartbeat: bool = Field(default=True)
     enable_transcript: bool = Field(default=True)
     enable_agent: bool = Field(default=True)
+    is_private: bool = Field(default=False)
+    allowed_emails: str = Field(default="[]", sa_column=Column(String(4000), nullable=False))
+    system_prompt: Optional[str] = Field(default=None, sa_column=Column(String(4000)))
     created_at: datetime = Field(default_factory=now_utc, nullable=False)
     updated_at: datetime = Field(default_factory=now_utc, nullable=False)
 

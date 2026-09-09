@@ -77,7 +77,7 @@ function ReviewWheel({ items }) {
 function RoomsSection() {
   const { data: rooms, isLoading, isError } = useQuery({
     queryKey: ['rooms', 'home'],
-    queryFn: () => fetchJson('/rooms/?limit=10'),
+    queryFn: () => fetchJson('/rooms/?limit=10&public_only=true'),
     staleTime: 10_000,
     refetchInterval: 10_000,
   });

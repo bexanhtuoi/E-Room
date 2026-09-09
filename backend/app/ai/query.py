@@ -36,8 +36,8 @@ def tool_thinking_lines(update: Any) -> List[str]:
     return lines
 
 
-async def stream_agent_events(query: str) -> AsyncIterable[Dict[str, str]]:
-    agent = get_agent()
+async def stream_agent_events(query: str, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
+    agent = get_agent(system_extra)
 
     stream = agent.astream(
         {"messages": [{"role": "user", "content": query}]},

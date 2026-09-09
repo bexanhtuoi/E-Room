@@ -114,8 +114,21 @@ def stream_ai_response(
 
     set(get_running_key(room_id), self.request.id, ttl=settings.ai_timeout_seconds)
 
+    # Nap cau hinh rieng cua phong (prompt, skills, tag tai lieu) vao agent
+    system_extra = ""
     try:
-        response_text = asyncio.run(stream_to_room(room_id, stream_agent_events(query)))
+        from app.ai.room_context import build_room_context
+        from app.services import document_crud
+
+        with Session(engine) as db:
+            context_room = room_crud.get_one(db, id=room_id)
+            context_docs = document_crud.get_many(db, room_id=room_id) if context_room is not None else []
+            system_extra = build_room_context(context_room, context_docs)
+    except Exception:
+        log.exception("Room context failed | room_id=%s", room_id)
+
+    try:
+        response_text = asyncio.run(stream_to_room(room_id, stream_agent_events(query, system_extra)))
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
         soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))

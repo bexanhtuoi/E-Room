@@ -38,6 +38,44 @@ def topics_to_json(values: Optional[List[str]]) -> str:
     return json.dumps(normalize_topic_list(values))
 
 
+MAX_ROOM_EMAILS = 50
+
+
+def normalize_email_list(values: Optional[List[str]]) -> List[str]:
+    seen = set()
+    result = []
+    for item in values or []:
+        email = str(item or "").strip().lower()
+        if not email or "@" not in email:
+            continue
+        if email in seen:
+            continue
+        seen.add(email)
+        result.append(email)
+    return result[:MAX_ROOM_EMAILS]
+
+
+def emails_to_json(values: Optional[List[str]]) -> str:
+    import json
+
+    return json.dumps(normalize_email_list(values))
+
+
+def emails_from_json(raw) -> List[str]:
+    import json
+
+    if isinstance(raw, list):
+        return normalize_email_list(raw)
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            return []
+        if isinstance(parsed, list):
+            return normalize_email_list(parsed)
+    return []
+
+
 def topics_from_json(raw) -> List[str]:
     import json
 
@@ -58,6 +96,9 @@ class RoomCreateSchema(BaseModel):
     topics: List[str] = []
     description: Optional[str] = None
     max_participants: int = 4
+    is_private: bool = False
+    allowed_emails: List[str] = []
+    system_prompt: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -87,6 +128,19 @@ class RoomCreateSchema(BaseModel):
         text = value.strip()
         return text[:2000] if text else None
 
+    @field_validator("allowed_emails")
+    @classmethod
+    def validate_emails(cls, values: List[str]) -> List[str]:
+        return normalize_email_list(values)
+
+    @field_validator("system_prompt")
+    @classmethod
+    def validate_system_prompt(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        text = value.strip()
+        return text[:4000] if text else None
+
 
 class RoomUpdateSchema(BaseModel):
     name: Optional[str] = None
@@ -97,6 +151,9 @@ class RoomUpdateSchema(BaseModel):
     enable_heartbeat: Optional[bool] = None
     enable_transcript: Optional[bool] = None
     enable_agent: Optional[bool] = None
+    is_private: Optional[bool] = None
+    allowed_emails: Optional[List[str]] = None
+    system_prompt: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -132,6 +189,21 @@ class RoomUpdateSchema(BaseModel):
         text = value.strip()
         return text[:2000] if text else None
 
+    @field_validator("allowed_emails")
+    @classmethod
+    def validate_update_emails(cls, values: Optional[List[str]]) -> Optional[List[str]]:
+        if values is None:
+            return None
+        return normalize_email_list(values)
+
+    @field_validator("system_prompt")
+    @classmethod
+    def validate_update_system_prompt(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        text = value.strip()
+        return text[:4000] if text else None
+
 
 class RoomResponse(BaseModel):
     model_config = {"from_attributes": True}
@@ -146,12 +218,20 @@ class RoomResponse(BaseModel):
     enable_heartbeat: bool = True
     enable_transcript: bool = True
     enable_agent: bool = True
+    is_private: bool = False
+    allowed_emails: List[str] = []
+    system_prompt: Optional[str] = None
     created_at: Optional[datetime] = None
 
     @field_validator("topics", mode="before")
     @classmethod
     def parse_topics(cls, raw) -> List[str]:
         return topics_from_json(raw)
+
+    @field_validator("allowed_emails", mode="before")
+    @classmethod
+    def parse_emails(cls, raw) -> List[str]:
+        return emails_from_json(raw)
 
 
 class RoomTokenResponse(BaseModel):

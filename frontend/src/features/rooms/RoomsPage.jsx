@@ -28,8 +28,8 @@ export function RoomsPage() {
   const sentinelRef = useRef(null);
 
   const { data: rooms, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['rooms', 'list'],
-    queryFn: () => fetchJson('/rooms/?limit=100'),
+    queryKey: ['rooms', 'list', 'public'],
+    queryFn: () => fetchJson('/rooms/?limit=100&public_only=true'),
     staleTime: 10_000,
     // List tuoi lien tuc: status doi (live/open/ended) thay ngay
     refetchInterval: 10_000,

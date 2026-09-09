@@ -12,6 +12,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ defaul
 const PaymentPage = lazy(() => import('./pages/PaymentPage').then(m => ({ default: m.PaymentPage })));
 const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const RoomPage = lazy(() => import('../features/rooms/RoomPage').then(m => ({ default: m.RoomPage })));
+const RoomConfigPage = lazy(() => import('../features/rooms/RoomConfigPage').then(m => ({ default: m.RoomConfigPage })));
 const OnboardingWizard = lazy(() => import('../features/onboarding/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
 const BlogPage = lazy(() => import('./pages/BlogPage').then(m => ({ default: m.BlogPage })));
 const BlogDetailPage = lazy(() => import('./pages/BlogDetailPage').then(m => ({ default: m.BlogDetailPage })));
@@ -63,6 +64,7 @@ export function App() {
             <Route path="/pricing" element={<AppShell><PricingPage /></AppShell>} />
             <Route path="/payment" element={<Protected><PaymentPage /></Protected>} />
             {/* v1 routes removed: portal profile v2 covers rooms/activity/documents/notifications */}
+            <Route path="/rooms/:roomId/config" element={<AuthGuard><RoomConfigPage /></AuthGuard>} />
             <Route path="/rooms/:roomId" element={<AuthGuard><RoomPage /></AuthGuard>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />

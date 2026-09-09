@@ -87,6 +87,9 @@ class TestDeleteUser:
         assert deleted.status_code == 200
         assert deleted.json()["email"] == temp["email"]
 
+        # Tai khoan da xoa khong xac thuc duoc nua — kiem tra bang user khac
+        observer = make_user(client, "Cascade Observer")
+        switch_to(client, observer)
         assert client.get(f"/api/v1/rooms/{room['id']}").status_code == 404
         remaining = client.get(f"/api/v1/messages/?room_id={room['id']}").json()
         assert remaining == []

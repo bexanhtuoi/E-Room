@@ -8,7 +8,13 @@ from app.schemas.agent import (
     RagMetadata,
     ShortTermMemoryMessage,
 )
-from app.schemas.document import DocumentCreateSchema, DocumentResponse, DocumentUpdateSchema
+from app.schemas.document import (
+    DocumentCreateSchema,
+    DocumentResponse,
+    DocumentUpdateSchema,
+    RoomSkillCreateSchema,
+    RoomSkillUpdateSchema,
+)
 from app.schemas.message import MessageCreateSchema, MessageResponse
 from app.schemas.notification import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
 from app.schemas.room import (
@@ -28,6 +34,8 @@ __all__ = [
     "DocumentCreateSchema",
     "DocumentResponse",
     "DocumentUpdateSchema",
+    "RoomSkillCreateSchema",
+    "RoomSkillUpdateSchema",
     "GradeDocuments",
     "KnowledgeAgentOutput",
     "LongTermMemoryMessage",

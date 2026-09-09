@@ -33,9 +33,13 @@ def get_llm() -> ChatOpenAI:
     )
 
 
-def get_agent():
+def get_agent(system_extra: str = ""):
+    system_prompt = get_main_prompt()
+    if system_extra.strip():
+        system_prompt = f"{system_prompt}\n\n{system_extra.strip()}"
+
     return create_langchain_agent(
         model=get_llm(),
         tools=[retrieval_documents, web_search],
-        system_prompt=get_main_prompt(),
+        system_prompt=system_prompt,
     )

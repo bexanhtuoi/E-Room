@@ -181,7 +181,7 @@ export function ProfilePage({ section = 'overview' }) {
             <p>{head.desc}</p>
           </div>
           <div className="portal-pagehead__actions">
-            {(section === 'overview' || section === 'rooms') && (
+            {section === 'overview' && (
               <button className="er-btn" onClick={() => setShowCreateRoom(true)}><HiPlusCircle size={16} /> New room</button>
             )}
           </div>
@@ -210,7 +210,6 @@ export function ProfilePage({ section = 'overview' }) {
             hostedRooms={hostedRooms}
             liveRooms={liveRooms}
             messagesByRoom={messagesByRoom}
-            onCreateRoom={() => setShowCreateRoom(true)}
             onRoomDeleted={handleRoomDeleted}
           />
         )}

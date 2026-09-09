@@ -18,7 +18,7 @@ export function TopicPicker({ topics, onChange }) {
 
   const { data: rooms } = useQuery({
     queryKey: ['rooms', 'topics'],
-    queryFn: () => fetchJson('/rooms/?limit=50'),
+    queryFn: () => fetchJson('/rooms/?limit=50&public_only=true'),
     staleTime: 60_000,
   });
 
