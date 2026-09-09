@@ -43,7 +43,12 @@ beforeEach(() => {
   fetchJson.mockReset();
   fetchJson.mockImplementation(async (path) => {
     if (path.startsWith('/rooms/')) return ROOMS;
-    if (path.startsWith('/messages/count')) return { count: 42 };
+    if (path.startsWith('/users/me/stats')) {
+      return {
+        messages_total: 42, messages_this_week: 5, messages_last_week: 3,
+        week_delta: 2, streak_days: 4, most_active_day: '2026-09-07', most_active_day_count: 3,
+      };
+    }
     if (path.startsWith('/messages/')) return MESSAGES;
     if (path.startsWith('/notifications/')) {
       return [{ id: 7, user_id: 9, title: 'Room matched', body: 'Cinema room is live', notification_type: 'match', is_read: false, created_at: '2026-09-03T10:00:00Z' }];
@@ -83,7 +88,7 @@ describe('ProfilePage portal', () => {
     expect(within(sidebar).getByRole('button', { name: /Sign out/ })).toBeTruthy();
   });
 
-  it('shows pagehead and accurate message total from count API', async () => {
+  it('shows pagehead and accurate message total from stats API', async () => {
     renderPortal();
     expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
     await waitFor(() => {

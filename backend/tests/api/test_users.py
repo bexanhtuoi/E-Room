@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+from datetime import datetime, timedelta
 
+from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.database import engine
+from app.services import message_crud
 from tests.conftest import make_user, switch_to
 
 
@@ -101,3 +106,47 @@ class TestDeleteUser:
 
         relogin = client.post("/api/v1/auth/login", data={"username": temp["email"], "password": PASSWORD})
         assert relogin.status_code == 400
+
+
+class TestUserStats:
+    def test_my_stats_counts_weeks_and_streak(self, client: TestClient):
+        temp = make_user(client, "Stats Learner")
+        switch_to(client, temp)
+
+        room = client.post("/api/v1/rooms/", json={"name": f"stats-room-{temp['id']}"}).json()
+        for _ in range(2):
+            client.post("/api/v1/messages/", json={"room_id": room["id"], "text": "today speak", "role": "user"})
+        old = client.post("/api/v1/messages/", json={"room_id": room["id"], "text": "old speak", "role": "user"}).json()
+
+        with Session(engine) as db:
+            message = message_crud.get_one(db, id=old["id"])
+            message_crud.update(db, db_obj=message, obj_in={"created_at": datetime.now() - timedelta(days=1)})
+
+        response = client.get("/api/v1/users/me/stats")
+
+        assert response.status_code == 200
+        stats = response.json()
+        assert stats["messages_total"] == 3
+        assert stats["messages_this_week"] + stats["messages_last_week"] == 3
+        assert stats["week_delta"] == stats["messages_this_week"] - stats["messages_last_week"]
+        assert stats["streak_days"] >= 2
+        assert stats["most_active_day_count"] >= 1
+
+        client.delete(f"/api/v1/users/{temp['id']}")
+
+    def test_my_stats_empty_user(self, client: TestClient):
+        temp = make_user(client, "Quiet Learner")
+        switch_to(client, temp)
+
+        stats = client.get("/api/v1/users/me/stats").json()
+
+        assert stats["messages_total"] == 0
+        assert stats["streak_days"] == 0
+        assert stats["most_active_day"] is None
+
+        client.delete(f"/api/v1/users/{temp['id']}")
+
+    def test_my_stats_requires_auth(self):
+        from app.main import app
+
+        assert TestClient(app).get("/api/v1/users/me/stats").status_code in (401, 403)

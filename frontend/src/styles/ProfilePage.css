@@ -2,8 +2,20 @@
    Profile portal — light sidebar, dense main, square monochrome
    Type scale: 24 h1 / 15 h2 / 14 body / 13 secondary / 12 label
    Spacing: 8 / 12 / 16 / 24. Card = white, 1px #e7e7e7.
+   New components use the pf- tokens below. Legacy portal-
+   classes stay untouched until each tab migrates over.
    ============================================================ */
 .portal-app {
+  --pf-gap: 16px;
+  --pf-card-pad: 16px;
+  --pf-line: #e7e7e7;
+  --pf-muted: #6f6f6f;
+  --pf-faint: #9a9a9a;
+  --pf-ink: #1a1a1a;
+  --pf-live: #c81e1e;
+  --pf-up: #1a7f37;
+  --pf-down: #b42318;
+  --pf-tile: #f1f1f1;
   display: flex;
   height: calc(100svh - 64px);
   background: #f3f3f3;
@@ -1629,5 +1641,139 @@ a.portal-row:hover .portal-row__go {
   .portal-side {
     animation: none;
     transition: none;
+  }
+}
+
+/* ================= PF (redesign tokens + components) ================= */
+.pf-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-gap);
+  background: var(--pf-ink);
+  color: #fff;
+  padding: 20px;
+  margin-bottom: var(--pf-gap);
+}
+
+.pf-hero__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-hero__hello {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #bdbdbd;
+}
+
+.pf-hero__title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 2px 0 4px;
+}
+
+.pf-hero__sub {
+  font-size: 13px;
+  color: #d6d6d6;
+}
+
+.pf-hero .er-btn {
+  flex-shrink: 0;
+  background: #fff;
+  color: var(--pf-ink);
+  border-color: #fff;
+}
+
+.pf-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--pf-gap);
+  margin-bottom: var(--pf-gap);
+}
+
+.pf-kpi {
+  background: #fff;
+  border: 1px solid var(--pf-line);
+  padding: var(--pf-card-pad);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.pf-kpi__tile {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: var(--pf-tile);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-kpi__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-kpi__value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.pf-kpi__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pf-muted);
+}
+
+.pf-kpi__sub {
+  font-size: 12px;
+  color: var(--pf-muted);
+}
+
+.pf-kpi__sub.is-up {
+  color: var(--pf-up);
+}
+
+.pf-kpi__sub.is-down {
+  color: var(--pf-down);
+}
+
+.portal-panel.is-danger {
+  border-color: #e5a3a3;
+}
+
+.portal-panel.is-danger .portal-panel__head h2 {
+  color: var(--pf-down, #b42318);
+}
+
+.portal-table__quote {
+  display: block;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--pf-muted, #6f6f6f);
+  margin-top: 2px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 991.98px) {
+  .pf-hero {
+    padding: 14px;
+  }
+
+  .pf-hero__title {
+    font-size: 17px;
+  }
+
+  .pf-kpis {
+    grid-template-columns: 1fr;
   }
 }

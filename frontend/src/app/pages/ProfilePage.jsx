@@ -67,12 +67,12 @@ export function ProfilePage() {
   });
   const messages = Array.isArray(activityQuery.data) ? activityQuery.data : [];
 
-  const msgCountQuery = useQuery({
-    queryKey: ['messages', 'count', user?.id],
-    queryFn: () => fetchJson(`/messages/count?user_id=${user.id}`).then((r) => r?.count ?? 0).catch(() => messages.length),
+  const statsQuery = useQuery({
+    queryKey: ['users', 'me', 'stats'],
+    queryFn: () => fetchJson('/users/me/stats'),
     enabled: Boolean(user?.id),
   });
-  const messagesTotal = typeof msgCountQuery.data === 'number' ? msgCountQuery.data : messages.length;
+  const stats = statsQuery.data ?? null;
 
   const notifQuery = useQuery({
     queryKey: ['notifications', 'mine'],
@@ -80,13 +80,6 @@ export function ProfilePage() {
     enabled: Boolean(user?.id),
   });
   const unreadCount = Array.isArray(notifQuery.data) ? notifQuery.data.filter((n) => !n.is_read).length : 0;
-
-  const docsQuery = useQuery({
-    queryKey: ['documents', 'list'],
-    queryFn: () => fetchJson('/documents/?limit=100'),
-    enabled: Boolean(user?.id),
-  });
-  const myDocs = Array.isArray(docsQuery.data) ? docsQuery.data.filter((d) => String(d.user_id) === String(user?.id)) : [];
 
   const hostedRooms = rooms.filter((r) => String(r.host_id) === String(user?.id));
   const messagesByRoom = new Map();
@@ -200,17 +193,18 @@ export function ProfilePage() {
 
         {activeSection === 'overview' && (
           <OverviewSection
+            userName={(user.full_name || '').split(' ')[0]}
             hostedRooms={hostedRooms}
             joinedRooms={joinedRooms}
             liveRooms={liveRooms}
             messages={messages}
-            messagesTotal={messagesTotal}
-            documentsCount={myDocs.length}
+            stats={stats}
             rooms={rooms}
             activityLoading={activityQuery.isLoading}
             activityError={activityQuery.isError}
             activityRetry={activityQuery.refetch}
             onGo={setActiveSection}
+            onCreateRoom={() => setShowCreateRoom(true)}
           />
         )}
         {activeSection === 'rooms' && (
@@ -227,7 +221,7 @@ export function ProfilePage() {
           <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
         )}
         {activeSection === 'usage' && (
-          <UsageSection messages={messages} messagesTotal={messagesTotal} hostedRooms={hostedRooms} joinedRooms={joinedRooms} pastSessions={pastSessions} />
+          <UsageSection messages={messages} stats={stats} hostedRooms={hostedRooms} joinedRooms={joinedRooms} pastSessions={pastSessions} />
         )}
         {activeSection === 'documents' && <DocumentsSection userId={user.id} />}
         {activeSection === 'notifications' && <NotificationsSection />}

@@ -73,6 +73,9 @@ export function SessionsSection({ sessions, messagesByRoom, userId }) {
                     <span>
                       <span className="portal-table__name">{room.name}</span>
                       {topics.length > 0 && <span className="portal-table__tags">{topics.join(' · ')}</span>}
+                      {!expanded && mine.length > 0 && (
+                        <span className="portal-table__quote">“{mine[0].text.length > 90 ? `${mine[0].text.slice(0, 90)}…` : mine[0].text}”</span>
+                      )}
                     </span>
                     <span className="portal-muted">{room.created_at ? formatDateTime(room.created_at) : '—'}</span>
                     <span>{isHost ? <span className="portal-flag is-solid">HOST</span> : <span className="portal-flag">GUEST</span>}</span>

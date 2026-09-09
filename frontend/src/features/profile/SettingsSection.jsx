@@ -128,8 +128,11 @@ export function SettingsSection({ user, tierLabel, onSaved, onSignOut }) {
             <HiArrowRightOnRectangle size={15} /> Sign out
           </button>
         </div>
+      </section>
+
+      <section className="portal-panel is-danger">
+        <div className="portal-panel__head"><h2>Danger zone</h2></div>
         <div className="portal-danger">
-          <strong>Danger zone</strong>
           <span className="portal-muted">Delete your account with all rooms, messages and documents. This cannot be undone.</span>
           <span>
             <button className="er-btn er-btn--ghost portal-mini-btn" disabled={delMutation.isPending} onClick={handleDelete}>

@@ -31,10 +31,11 @@ function bucketByHour(messages) {
   return hours;
 }
 
-export function UsageSection({ messages, messagesTotal, hostedRooms, joinedRooms, pastSessions }) {
+export function UsageSection({ messages, stats, hostedRooms, joinedRooms, pastSessions }) {
   const fortnight = bucketByDay(messages, 14);
   const activeDays = fortnight.filter((b) => b.count > 0).length;
-  const streak = dayStreak(messages);
+  const messagesTotal = stats?.messages_total ?? messages.length;
+  const streak = stats?.streak_days ?? dayStreak(messages);
   const hours = bucketByHour(messages);
   const hourMax = Math.max(1, ...hours.map((x) => x.count));
   const peak = hours.reduce((a, b) => (b.count > a.count ? b : a), hours[0]);
@@ -66,8 +67,32 @@ export function UsageSection({ messages, messagesTotal, hostedRooms, joinedRooms
 
   const hasSignal = messagesTotal > 0 || hostedRooms.length + joinedRooms.length > 0;
 
+  const delta = stats ? stats.week_delta : null;
+
   return (
     <div className="portal-stack">
+      {stats && (messagesTotal > 0) && (
+        <section className="portal-panel">
+          <div className="portal-panel__head"><h2>Momentum</h2><span className="portal-muted">This week vs last week</span></div>
+          <div className="portal-block">
+            <div className="portal-resume">
+              <div>
+                <strong>
+                  {stats.messages_this_week} messages this week
+                  {delta > 0 && ` — up ${delta}`}
+                  {delta < 0 && ` — down ${Math.abs(delta)}`}
+                  {delta === 0 && ' — same pace'}
+                </strong>
+                <span className="portal-muted">
+                  {stats.most_active_day
+                    ? `Peak day ${stats.most_active_day} with ${stats.most_active_day_count} messages`
+                    : 'Speak more days in a row to build a streak'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
       {hasSignal && (
       <div className="portal-stats">
         {kpis.map((k) => (

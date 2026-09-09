@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { HiCalendarDays, HiMagnifyingGlass, HiPlusCircle } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
-import { formatDateTime } from '../../lib/formatters';
+import { formatDate, formatDateTime } from '../../lib/formatters';
 import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
 
@@ -61,6 +61,15 @@ function RoomDetail({ room, myMessages, expanded }) {
   );
 }
 
+function lastSpokeAt(myMessages) {
+  const latest = myMessages
+    .map((m) => m?.created_at)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  return latest || null;
+}
+
 function RoomCard({ room, mine, myMessages, expanded, onToggle, onDeleted }) {
   const live = room.status === 'active';
   const delMutation = useMutation({
@@ -81,6 +90,7 @@ function RoomCard({ room, mine, myMessages, expanded, onToggle, onDeleted }) {
             <span className={`portal-status is-${room.status}`}>{STATUS_LABEL[room.status] || room.status}</span>
             <span>{myMessages.length} your lines</span>
             {mine && <span className="portal-flag is-solid">HOST</span>}
+            {lastSpokeAt(myMessages) && <span>last spoke {formatDate(lastSpokeAt(myMessages))}</span>}
           </span>
         </span>
         {live && <LiveFaces roomId={room.id} />}
@@ -108,9 +118,15 @@ function RoomCard({ room, mine, myMessages, expanded, onToggle, onDeleted }) {
   );
 }
 
+const SORTS = [
+  { key: 'recent', label: 'Newest' },
+  { key: 'lines', label: 'Most lines' },
+];
+
 export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRoom, onCreateRoom, onRoomDeleted }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('recent');
   const [expandedId, setExpandedId] = useState(null);
 
   const all = [...hostedRooms, ...joinedRooms];
@@ -124,6 +140,13 @@ export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRo
     if (!q) return true;
     const topics = Array.isArray(r.topics) ? r.topics.join(' ') : '';
     return `${r.name || ''} ${topics}`.toLowerCase().includes(q);
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === 'lines') {
+      return (messagesByRoom.get(b.id)?.length || 0) - (messagesByRoom.get(a.id)?.length || 0);
+    }
+    return (b.created_at || '').localeCompare(a.created_at || '') || b.id - a.id;
   });
 
   return (
@@ -144,6 +167,12 @@ export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRo
           <HiMagnifyingGlass size={14} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rooms…" aria-label="Search rooms" />
         </div>
+        <label className="portal-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          Sort
+          <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort rooms">
+            {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </label>
       </div>
       {filtered.length === 0 ? (
         <div className="portal-empty">
@@ -151,7 +180,7 @@ export function RoomsSection({ hostedRooms, joinedRooms, liveRooms, messagesByRo
         </div>
       ) : (
         <div className="portal-list">
-          {filtered.map((room) => (
+          {sorted.map((room) => (
             <RoomCard
               key={room.id}
               room={room}

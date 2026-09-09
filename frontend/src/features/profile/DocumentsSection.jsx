@@ -4,6 +4,19 @@ import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
 
+function docMeta(doc) {
+  const bits = [doc.file_type];
+  try {
+    const meta = JSON.parse(doc.metadata_json || '{}');
+    if (meta.chunks) bits.push(`${meta.chunks} chunks`);
+    if (meta.language) bits.push(String(meta.language).toUpperCase());
+  } catch {
+    // metadata_json tuy chon, bo qua khi khong parse duoc
+  }
+  if (doc.created_at) bits.push(formatDateTime(doc.created_at));
+  return bits.filter(Boolean).join(' · ');
+}
+
 export function DocumentsSection({ userId }) {
   const docsQuery = useQuery({
     queryKey: ['documents', 'list'],
@@ -66,7 +79,7 @@ export function DocumentsSection({ userId }) {
                 <span className="portal-doc__icon"><HiDocumentText size={20} /></span>
                 <span className="portal-doc__name">{d.file_name}</span>
                 <div className="portal-doc__foot">
-                  <span className="portal-muted">{d.file_type}{d.created_at ? ` · ${formatDateTime(d.created_at)}` : ''}</span>
+                  <span className="portal-muted">{docMeta(d)}</span>
                   <button
                     type="button"
                     className="er-btn er-btn--ghost portal-mini-btn"
