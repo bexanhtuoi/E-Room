@@ -64,6 +64,38 @@ class TestPrivateRooms:
         assert room["id"] in mine_ids
 
 
+class TestRoomInvites:
+    def test_invited_user_gets_notification_once(self, client: TestClient, alice: dict):
+        friend_email = unique_email()
+        friend = register(client, friend_email, "Invited Friend")
+        switch_to(client, alice)
+
+        room = client.post(
+            "/api/v1/rooms/",
+            json={"name": f"invite-{alice['id']}", "is_private": True, "allowed_emails": [friend_email]},
+        ).json()
+
+        switch_to(client, friend)
+        notifs = client.get("/api/v1/notifications/").json()
+        invites = [n for n in notifs if n["notification_type"] == "invite"]
+        assert len(invites) == 1
+        assert f"room:{room['id']}" in invites[0]["body"]
+
+        # Patch lai cung danh sach → khong spam them
+        switch_to(client, alice)
+        client.patch(f"/api/v1/rooms/{room['id']}", json={"allowed_emails": [friend_email]})
+        switch_to(client, friend)
+        again = [n for n in client.get("/api/v1/notifications/").json() if n["notification_type"] == "invite"]
+        assert len(again) == 1
+
+    def test_unknown_email_skipped_silently(self, client: TestClient, alice: dict):
+        response = client.post(
+            "/api/v1/rooms/",
+            json={"name": f"invite-ghost-{alice['id']}", "allowed_emails": ["ghost-nobody@example.com"]},
+        )
+        assert response.status_code == 201
+
+
 class TestRoomSkills:
     def test_host_crud_skills(self, client: TestClient, alice: dict):
         room = client.post("/api/v1/rooms/", json={"name": f"skill-{alice['id']}"}).json()

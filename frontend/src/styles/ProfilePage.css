@@ -2663,6 +2663,54 @@ a.portal-row:hover .portal-row__go {
   }
 }
 
+.pf-divider {
+  border-top: 1px solid #eee;
+  margin: 4px 0;
+}
+
+.pf-section {
+  display: grid;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.pf-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pf-section__head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.pf-section__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+}
+
+.pf-addline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px dashed #cfcfcf;
+  color: var(--pf-muted, #6f6f6f);
+  font-size: 13px;
+  padding: 8px 12px;
+  cursor: pointer;
+  justify-self: start;
+}
+
+.pf-addline:hover {
+  color: var(--pf-ink, #1a1a1a);
+  border-color: var(--pf-ink, #1a1a1a);
+}
+
 .pf-goal__text {
   font-size: 16px;
   font-weight: 600;

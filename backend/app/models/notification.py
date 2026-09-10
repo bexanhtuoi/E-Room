@@ -12,6 +12,7 @@ class NotificationType(StrEnum):
     SESSION = "session"
     REVIEW = "review"
     SYSTEM = "system"
+    INVITE = "invite"
 
 
 class Notification(SQLModel, table=True):

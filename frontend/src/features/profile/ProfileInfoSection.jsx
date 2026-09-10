@@ -26,6 +26,14 @@ function Done({ label, onClick }) {
   );
 }
 
+function AddLine({ label, hint, onClick }) {
+  return (
+    <button type="button" className="pf-addline" aria-label={label} title={label} onClick={onClick}>
+      <HiPencil size={13} /> {hint}
+    </button>
+  );
+}
+
 export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) {
   const [name, setName] = useState(user?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -89,6 +97,9 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
     setEditing(null);
   }
 
+  const shownBio = bio || user?.bio || '';
+  const shownGoal = goal || user?.learning_goal || '';
+
   return (
     <div className="portal-stack pf-center pf-wide">
       <section className="portal-panel pf-resume-card">
@@ -120,11 +131,13 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
                   <input className="er-input" value={headline} autoFocus placeholder="e.g. Frontend Developer" onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
                   <Done label="headline" onClick={() => setEditing(null)} />
                 </span>
-              ) : (
+              ) : (headline || user?.headline) ? (
                 <>
-                  <strong>{headline || user?.headline || 'Add your headline'}</strong>
+                  <strong>{headline || user?.headline}</strong>
                   <Pencil label="headline" onClick={() => setEditing('headline')} />
                 </>
+              ) : (
+                <AddLine label="Edit headline" hint="Add your headline" onClick={() => setEditing('headline')} />
               )}
             </div>
             <div className="pf-resume__line">
@@ -167,13 +180,15 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
                   <input className="er-input" value={website} placeholder="https://…" onChange={(e) => setWebsite(e.target.value)} aria-label="Website" />
                   <Done label="contact" onClick={() => setEditing(null)} />
                 </span>
-              ) : (
+              ) : (location || user?.location || website || user?.website) ? (
                 <>
                   <span className="portal-muted">
-                    {[location || user?.location, website || user?.website].filter(Boolean).join(' · ') || 'Add location & website'}
+                    {[location || user?.location, website || user?.website].filter(Boolean).join(' · ')}
                   </span>
                   <Pencil label="contact" onClick={() => setEditing('contact')} />
                 </>
+              ) : (
+                <AddLine label="Edit contact" hint="Add location & website" onClick={() => setEditing('contact')} />
               )}
             </div>
             <div className="portal-muted pf-resume__foot">
@@ -181,81 +196,90 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="portal-panel">
-        <div className="portal-panel__head">
-          <h2>Overview</h2>
-          {editing !== 'bio' && <Pencil label="bio" onClick={() => setEditing('bio')} />}
+        <div className="pf-divider" />
+
+        <div className="pf-section">
+          <div className="pf-section__head">
+            <h2>Overview</h2>
+            {editing !== 'bio' && <Pencil label="bio" onClick={() => setEditing('bio')} />}
+          </div>
+          {editing === 'bio' ? (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <textarea className="er-textarea" rows={4} value={bio} autoFocus placeholder="A few lines about you…" onChange={(e) => setBio(e.target.value)} aria-label="Bio" />
+              <div className="portal-actions"><Done label="bio" onClick={() => setEditing(null)} /></div>
+            </div>
+          ) : shownBio ? (
+            <p className="pf-section__text">{shownBio}</p>
+          ) : (
+            <AddLine label="Edit bio" hint="Write a short intro about yourself" onClick={() => setEditing('bio')} />
+          )}
         </div>
-        {editing === 'bio' ? (
-          <div style={{ display: 'grid', gap: 8 }}>
-            <textarea className="er-textarea" rows={4} value={bio} autoFocus placeholder="A few lines about you…" onChange={(e) => setBio(e.target.value)} aria-label="Bio" />
-            <div className="portal-actions"><Done label="bio" onClick={() => setEditing(null)} /></div>
-          </div>
-        ) : (
-          <p className="portal-muted" style={{ margin: 0 }}>{bio || user?.bio || 'Tell people who you are and what you want to practice.'}</p>
-        )}
-      </section>
 
-      <section className="portal-panel pf-goal">
-        <div className="portal-panel__head">
-          <h2>My learning goal</h2>
-          {editing !== 'goal' && <Pencil label="learning goal" onClick={() => setEditing('goal')} />}
+        <div className="pf-divider" />
+
+        <div className="pf-section">
+          <div className="pf-section__head">
+            <h2>My learning goal</h2>
+            {editing !== 'goal' && <Pencil label="learning goal" onClick={() => setEditing('goal')} />}
+          </div>
+          {editing === 'goal' ? (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <textarea
+                className="er-textarea" rows={2} value={goal} autoFocus
+                placeholder="e.g. Speak 15 minutes every evening for the next 30 days."
+                onChange={(e) => setGoal(e.target.value)} aria-label="Learning goal"
+              />
+              <div className="portal-actions"><Done label="learning goal" onClick={() => setEditing(null)} /></div>
+            </div>
+          ) : shownGoal ? (
+            <p className="pf-goal__text">{shownGoal}</p>
+          ) : (
+            <AddLine label="Edit learning goal" hint="Set one clear goal to stay honest" onClick={() => setEditing('goal')} />
+          )}
+          {shownGoal && editing !== 'goal' && (
+            <div className="portal-muted" style={{ marginTop: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <HiFlag size={13} /> Pinned to the top of your learning week.
+            </div>
+          )}
         </div>
-        {editing === 'goal' ? (
-          <div style={{ display: 'grid', gap: 8 }}>
-            <textarea
-              className="er-textarea" rows={2} value={goal} autoFocus
-              placeholder="e.g. Speak 15 minutes every evening for the next 30 days."
-              onChange={(e) => setGoal(e.target.value)} aria-label="Learning goal"
-            />
-            <div className="portal-actions"><Done label="learning goal" onClick={() => setEditing(null)} /></div>
-          </div>
-        ) : (
-          <p className={goal || user?.learning_goal ? 'pf-goal__text' : 'portal-muted'} style={{ margin: 0 }}>
-            {goal || user?.learning_goal || 'Set one clear goal — it shows up here to keep you honest.'}
-          </p>
-        )}
-        {(goal || user?.learning_goal) && (
-          <div className="portal-muted" style={{ marginTop: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <HiFlag size={13} /> Pinned to the top of your learning week.
-          </div>
-        )}
-      </section>
 
-      {topRooms.length > 0 && (
-        <section className="portal-panel">
-          <div className="portal-panel__head">
-            <h2>Top rooms</h2>
-            <Link className="portal-linkbtn" style={{ textDecoration: 'none' }} to="/my-rooms">
-              All rooms <HiArrowRight size={13} />
-            </Link>
-          </div>
-          <div className="portal-list">
-            {topRooms.map(({ room, lines, live }) => (
-              <div key={room.id} className="portal-row">
-                <span className={`portal-room__tile${live ? ' is-live' : ''}`} style={{ width: 36, height: 36, fontSize: 15 }}>
-                  {(room.name || '?').trim().charAt(0).toUpperCase()}
-                </span>
-                <span className="portal-row__main">
-                  <span className="portal-row__text">{room.name}</span>
-                  <span className="portal-row__sub">
-                    {live ? 'Live now' : room.status === 'idle' ? 'Open' : 'Ended'} · {lines} your lines
-                  </span>
-                </span>
-                <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to={`/rooms/${room.id}`}>
-                  {live ? 'Join' : 'Open'}
+        {topRooms.length > 0 && (
+          <>
+            <div className="pf-divider" />
+            <div className="pf-section">
+              <div className="pf-section__head">
+                <h2>Top rooms</h2>
+                <Link className="portal-linkbtn" style={{ textDecoration: 'none' }} to="/my-rooms">
+                  All rooms <HiArrowRight size={13} />
                 </Link>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+              <div className="portal-list">
+                {topRooms.map(({ room, lines, live }) => (
+                  <div key={room.id} className="portal-row">
+                    <span className={`portal-room__tile${live ? ' is-live' : ''}`} style={{ width: 36, height: 36, fontSize: 15 }}>
+                      {(room.name || '?').trim().charAt(0).toUpperCase()}
+                    </span>
+                    <span className="portal-row__main">
+                      <span className="portal-row__text">{room.name}</span>
+                      <span className="portal-row__sub">
+                        {live ? 'Live now' : room.status === 'idle' ? 'Open' : 'Ended'} · {lines} your lines
+                      </span>
+                    </span>
+                    <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to={`/rooms/${room.id}`}>
+                      {live ? 'Join' : 'Open'}
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Plan</h2><span className="portal-flag is-solid">{tierLabel}</span></div>
-        <div className="portal-block">
+        <div className="pf-divider" />
+
+        <div className="pf-section">
+          <div className="pf-section__head"><h2>Plan</h2><span className="portal-flag is-solid">{tierLabel}</span></div>
           <div className="portal-resume">
             <div>
               <strong>You are on {tierLabel}</strong>

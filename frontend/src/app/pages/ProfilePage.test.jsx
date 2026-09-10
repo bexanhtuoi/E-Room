@@ -175,7 +175,7 @@ describe('ProfilePage portal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit headline' }));
     expect(screen.getByLabelText('Headline')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Done editing headline' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit learning goal' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit learning goal' })[0]);
     fireEvent.change(screen.getByLabelText('Learning goal'), { target: { value: 'Speak daily.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done editing learning goal' }));
     expect(await screen.findByText('Speak daily.')).toBeTruthy();

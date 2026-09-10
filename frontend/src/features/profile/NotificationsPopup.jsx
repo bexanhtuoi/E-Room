@@ -4,7 +4,7 @@ import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
 
-const TYPE_LABEL = { match: 'MATCH', session: 'SESSION', review: 'REVIEW', system: 'SYSTEM' };
+const TYPE_LABEL = { match: 'MATCH', session: 'SESSION', review: 'REVIEW', system: 'SYSTEM', invite: 'INVITE' };
 
 export function NotificationsPopup({ onClose }) {
   const notifQuery = useQuery({

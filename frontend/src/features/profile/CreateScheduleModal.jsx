@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { HiPlus, HiXMark } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
+import { SeatSlider } from '../rooms/SeatSlider';
 import { TopicPicker } from '../rooms/TopicPicker';
 
 function toLocalInputValue(date) {
@@ -12,6 +13,7 @@ function toLocalInputValue(date) {
 export function CreateScheduleModal({ onClose, onCreated }) {
   const [name, setName] = useState('');
   const [topics, setTopics] = useState([]);
+  const [seats, setSeats] = useState(4);
   const [isPrivate, setIsPrivate] = useState(false);
   const [emails, setEmails] = useState([]);
   const [draft, setDraft] = useState('');
@@ -43,6 +45,7 @@ export function CreateScheduleModal({ onClose, onCreated }) {
         body: JSON.stringify({
           name: name.trim(),
           topics,
+          max_participants: seats,
           is_private: emails.length > 0 ? true : isPrivate,
           allowed_emails: emails,
           scheduled_at: scheduled && !Number.isNaN(scheduled.getTime()) ? scheduled.toISOString() : null,
@@ -78,6 +81,7 @@ export function CreateScheduleModal({ onClose, onCreated }) {
             <span className="er-label">Topics</span>
             <TopicPicker topics={topics} onChange={setTopics} />
           </div>
+          <SeatSlider value={seats} onChange={setSeats} id="sched-seats" />
           <div>
             <label className="er-label" htmlFor="sched-when">Date & time</label>
             <input id="sched-when" className="er-input" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />

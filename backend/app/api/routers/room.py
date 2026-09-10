@@ -10,7 +10,7 @@ from app.database import get_session
 from app.integration.livekit import create_token, verify_webhook
 from app.integration.redis import delete as redis_delete
 from app.integration.redis import sadd, scard, smembers, srem
-from app.models import DocumentKind, Room, RoomStatus
+from app.models import DocumentKind, NotificationType, Room, RoomStatus
 from app.schemas import (
     DocumentResponse,
     RoomCreateSchema,
@@ -22,8 +22,8 @@ from app.schemas import (
     RoomTokenResponse,
     RoomUpdateSchema,
 )
-from app.schemas.room import emails_to_json, topics_to_json
-from app.services import document_crud, message_crud, room_crud
+from app.schemas.room import emails_from_json, emails_to_json, topics_to_json
+from app.services import document_crud, message_crud, notification_crud, room_crud, user_crud
 
 router = APIRouter()
 
@@ -101,8 +101,38 @@ def create_room(
     obj_in_data["topics"] = topics_to_json(obj_in_data.get("topics"))
     obj_in_data["allowed_emails"] = emails_to_json(obj_in_data.get("allowed_emails"))
     new_room = room_crud.create(db, obj_in=obj_in_data)
+    notify_room_invites(db, new_room, emails_from_json(new_room.allowed_emails))
 
     return new_room
+
+
+def notify_room_invites(db: Session, room, emails: list) -> int:
+    # Bao cho user co email duoc moi vao phong (chi gui 1 lan cho moi phong).
+    host_name = ""
+    if room.host_id:
+        host = user_crud.get_one(db, id=room.host_id)
+        host_name = (host.full_name if host else "") or ""
+
+    sent = 0
+    for email in emails or []:
+        invited = user_crud.get_one(db, email=email)
+        if not invited or invited.id == room.host_id:
+            continue
+        existing = notification_crud.get_many(db, user_id=invited.id)
+        if any(n.notification_type == NotificationType.INVITE and f"room:{room.id}" in (n.body or "") for n in existing):
+            continue
+        notification_crud.create(
+            db,
+            obj_in={
+                "user_id": invited.id,
+                "title": f"You're invited to '{room.name}'",
+                "body": f"{host_name + ' invited you to ' if host_name else 'You are invited to '}room:{room.id}. Open Schedule to join on time.",
+                "notification_type": NotificationType.INVITE,
+            },
+        )
+        sent += 1
+
+    return sent
 
 
 @router.post("/match", response_model=RoomMatchResponse)
@@ -161,6 +191,8 @@ def update_room(
     if "allowed_emails" in obj_in_data:
         obj_in_data["allowed_emails"] = emails_to_json(obj_in_data.get("allowed_emails"))
     updated_room = room_crud.update(db, db_obj=db_room, obj_in=obj_in_data)
+    if "allowed_emails" in obj_in_data:
+        notify_room_invites(db, updated_room, emails_from_json(updated_room.allowed_emails))
     return updated_room
 
 
