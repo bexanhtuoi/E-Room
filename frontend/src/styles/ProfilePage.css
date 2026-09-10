@@ -2110,7 +2110,12 @@ a.portal-row:hover .portal-row__go {
 
 .portal-app--page .portal-main {
   overflow: visible;
-  max-width: none;
+}
+
+.portal-app--page .portal-main.pf-center {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .portal-app--page .portal-main::-webkit-scrollbar {
