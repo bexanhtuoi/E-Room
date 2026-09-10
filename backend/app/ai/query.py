@@ -36,9 +36,9 @@ def tool_thinking_lines(update: Any) -> List[str]:
     return lines
 
 
-async def stream_agent_events(query: str, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
-    agent = get_agent(system_extra)
-
+async def stream_langchain_agent_events(agent: Any, query: str) -> AsyncIterable[Dict[str, str]]:
+    # Vong stream dung chung: thinking (reasoning + tool call) + token.
+    # @ai trong phong va Session AI deu chay qua day.
     stream = agent.astream(
         {"messages": [{"role": "user", "content": query}]},
         stream_mode=["messages", "updates"],
@@ -107,6 +107,13 @@ async def stream_agent_events(query: str, system_extra: str = "") -> AsyncIterab
                             "kind": "thinking",
                             "text": f"Got {done_count} result(s) — composing answer…",
                         }
+
+
+async def stream_agent_events(query: str, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
+    agent = get_agent(system_extra)
+
+    async for event in stream_langchain_agent_events(agent, query):
+        yield event
 
 
 async def stream_agent_response(query: str) -> AsyncIterable[str]:

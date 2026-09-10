@@ -2579,6 +2579,89 @@ a.portal-row:hover .portal-row__go {
   font-weight: 700;
 }
 
+.pf-momentum .portal-panel__head h2 .portal-muted {
+  font-weight: 400;
+}
+
+.pf-momentum__facts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  padding-top: 8px;
+}
+
+.pf-momentum__facts .portal-topic {
+  font-size: 11px;
+}
+
+.pf-momentum__facts .portal-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pf-momentum__facts .is-up {
+  color: var(--pf-up, #1a7f37);
+  font-weight: 700;
+}
+
+.pf-momentum__facts .is-down {
+  color: var(--pf-down, #b42318);
+  font-weight: 700;
+}
+
+.pf-sesscard__top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pf-sesscard__title h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.pf-sesscard__title .portal-topics {
+  margin-top: 8px;
+}
+
+.pf-sesscard__facts {
+  margin-top: 14px;
+}
+
+.portal-block__value {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.pf-sesscard__desc {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.pf-chatlog__turn .pf-chattext.portal-muted {
+  font-size: 12px;
+  font-style: italic;
+}
+
+.pf-caret {
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: currentColor;
+  animation: pf-caret-blink 0.9s steps(2) infinite;
+}
+
+@keyframes pf-caret-blink {
+  50% { opacity: 0; }
+}
+
 .pf-today__facts {
   display: flex;
   align-items: center;

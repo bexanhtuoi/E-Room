@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.ai import session_agent
@@ -142,3 +145,43 @@ async def chat_session(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI could not answer right now")
 
     return SessionAnswerResponse(answer=answer, message_count=len(lines))
+
+
+@router.post("/{session_id}/chat/stream")
+async def chat_session_stream(
+    session_id: int,
+    ask_in: SessionAskRequest,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+):
+    # Stream thinking + tool call + token giong @ai trong phong (SSE).
+    question = (ask_in.question or "").strip()
+    db_session = get_my_session(db, session_id, request)
+    lines = build_session_lines(db, db_session)
+
+    async def event_source():
+        if not question:
+            yield f"data: {json.dumps({'kind': 'error', 'text': 'Question must not be empty'})}\n\n"
+            return
+        if not lines:
+            yield f"data: {json.dumps({'kind': 'error', 'text': 'No messages in this session yet'})}\n\n"
+            return
+
+        saw_token = False
+        try:
+            async for event in session_agent.stream_session_agent(question, lines):
+                if event.get("kind") == "token":
+                    saw_token = True
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception:
+            yield f"data: {json.dumps({'kind': 'error', 'text': 'AI could not answer right now'})}\n\n"
+            return
+
+        if not saw_token:
+            yield f"data: {json.dumps({'kind': 'error', 'text': 'AI could not answer right now'})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'kind': 'done', 'message_count': len(lines)})}\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")

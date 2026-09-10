@@ -126,7 +126,8 @@ def stream_ai_response(
     except Exception:
         log.exception("Room context failed | room_id=%s", room_id)
 
-    # Them 20 transcript user moi nhat lam ngu canh cho @ai
+    # Them 20 tin user moi nhat lam ngu canh cho @ai — gom CA voice transcript
+    # (meta.source=speech_to_text) LAN text chat tay (meta=None), deu luu role=USER.
     if job_type != "heartbeat":
         try:
             with Session(engine) as db:
@@ -142,7 +143,12 @@ def stream_ai_response(
                             ) or f"User {message.user_id}"
                         else:
                             speaker = cache[message.user_id]
-                        context_lines.append(f"{speaker}: {message.text}")
+                        try:
+                            source = (json.loads(message.meta_data or "{}") or {}).get("source", "")
+                        except (TypeError, ValueError):
+                            source = ""
+                        channel = "voice" if source == "speech_to_text" else "chat"
+                        context_lines.append(f"{speaker} [{channel}]: {message.text}")
                     query = (
                         "Recent room context (newest last):\n"
                         + "\n".join(context_lines)
@@ -221,8 +227,6 @@ def transcribe_room_audio(room_id: int) -> None:
 
 def delete_expired_scheduled_rooms(db: Session, now: float) -> int:
     # Phong co lich hen da qua hon 24h → xoa han (coi nhu da ket thuc).
-    from app.models import DocumentKind
-
     deleted_count = 0
     rooms = room_crud.get_many(db, limit=500)
 

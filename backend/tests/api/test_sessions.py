@@ -86,6 +86,66 @@ class TestSessionAI:
         assert "line 59" not in out
         assert get_more_messages.invoke({"start_index": 9999}).startswith("No more lines")
 
+    def test_agent_tool_reports_index_range(self):
+        from app.ai.session_agent import build_transcript_info_tool
+
+        lines = [{"speaker": "Ann", "text": "hi"}, {"speaker": "Bob", "text": "hello"}]
+        transcript_info = build_transcript_info_tool(lines)
+
+        assert transcript_info.name == "transcript_info"
+        out = transcript_info.invoke({})
+        assert "2 lines" in out and "0-1" in out
+        assert "Ann" in out and "Bob" in out
+
+    def test_agent_tool_searches_transcript(self):
+        from app.ai.session_agent import build_search_transcript_tool
+
+        lines = [
+            {"speaker": "Ann", "text": "I love rainy days"},
+            {"speaker": "Bob", "text": "Sunny days are best"},
+            {"speaker": "Ann", "text": "Rainy mood again"},
+        ]
+        search_transcript = build_search_transcript_tool(lines)
+
+        assert search_transcript.name == "search_transcript"
+        out = search_transcript.invoke({"keyword": "rainy"})
+        assert "[0]" in out and "[2]" in out and "[1]" not in out
+        assert search_transcript.invoke({"keyword": "xyz"}).startswith("No line")
+        assert "at least 2" in search_transcript.invoke({"keyword": "x"})
+
+    def test_chat_stream_emits_sse_events(self, client: TestClient, alice: dict):
+        room = make_room_with_message(client, f"sess-stream-{alice['id']}")
+        client.post(f"/api/v1/rooms/{room['id']}/join")
+        session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
+
+        async def fake_stream(question, all_lines):
+            yield {"kind": "thinking", "text": "Reading transcript…"}
+            yield {"kind": "token", "text": "They said hello."}
+
+        with patch("app.ai.session_agent.stream_session_agent", side_effect=fake_stream):
+            with client.stream("POST", f"/api/v1/sessions/{session_id}/chat/stream", json={"question": "What was said?"}) as response:
+                assert response.status_code == 200, response.text
+                body = response.read().decode()
+
+        assert "Reading transcript" in body
+        assert "They said hello." in body
+        assert '"kind": "done"' in body
+
+        client.post(f"/api/v1/rooms/{room['id']}/leave")
+
+    def test_chat_stream_empty_session_errors(self, client: TestClient, alice: dict):
+        room = client.post("/api/v1/rooms/", json={"name": f"sess-nostream-{alice['id']}"}).json()
+        client.post(f"/api/v1/rooms/{room['id']}/join")
+        session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
+
+        with client.stream("POST", f"/api/v1/sessions/{session_id}/chat/stream", json={"question": "Hi?"}) as response:
+            assert response.status_code == 200
+            body = response.read().decode()
+
+        assert '"kind": "error"' in body and "No messages" in body
+
+        client.post(f"/api/v1/rooms/{room['id']}/leave")
+
     def test_empty_question_rejected(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-empty-{alice['id']}")
         client.post(f"/api/v1/rooms/{room['id']}/join")

@@ -106,14 +106,13 @@ describe('ProfilePage portal', () => {
     await waitFor(() => {
       expect(screen.getByText(/4-day streak/)).toBeTruthy();
     });
-    expect(screen.getByText(/Peak day 2026-09-07/)).toBeTruthy();
     expect(screen.getByText(/Level journey/)).toBeTruthy();
     expect(screen.queryByText(/Up next/)).toBeNull();
     for (const label of ['24H', '3D', '7D', '30D']) {
       expect(screen.getByRole('tab', { name: label })).toBeTruthy();
     }
     fireEvent.click(screen.getByRole('tab', { name: '30D' }));
-    expect(await screen.findByText(/lines in the last 30 days/)).toBeTruthy();
+    expect(await screen.findByText(/Momentum/)).toBeTruthy();
   });
 
   it('links avatar and name to the profile page', async () => {

@@ -61,17 +61,8 @@ export function SessionsSection() {
           <div className="pf-events">
             {filtered.map(({ session, room, message_count }) => {
               const topics = Array.isArray(room?.topics) ? room.topics : [];
-              const joined = session.joined_at ? new Date(session.joined_at) : null;
-              const validDate = joined && !Number.isNaN(joined.getTime()) ? joined : null;
               return (
                 <article key={session.id} className="pf-event">
-                  {validDate && (
-                    <span className="pf-event__date" title={validDate.toLocaleString()}>
-                      <strong>{validDate.toLocaleDateString(undefined, { day: '2-digit' })}</strong>
-                      <span>{validDate.toLocaleDateString(undefined, { month: 'short' })}</span>
-                      <span className="pf-event__time">{validDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
-                    </span>
-                  )}
                   <div className="pf-event__body">
                     <div className="pf-room__title">
                       <strong>{room?.name || `Room ${session.room_id}`}</strong>

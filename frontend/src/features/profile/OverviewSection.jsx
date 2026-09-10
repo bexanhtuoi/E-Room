@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { HiArrowRight, HiCalendarDays, HiFire, HiSignal, HiSparkles } from 'react-icons/hi2';
+import { HiArrowRight, HiFire, HiSignal } from 'react-icons/hi2';
 import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
 import { ActivitySection } from './ActivitySection';
@@ -95,7 +95,6 @@ export function OverviewSection({
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [hostedRooms, joinedRooms]);
-  const topMax = Math.max(1, ...topTopics.map(([, c]) => c));
   const levelIndex = Math.max(0, LEVELS.indexOf(englishLevel || ''));
   const peak = peakHourOf(messages);
 
@@ -151,9 +150,9 @@ export function OverviewSection({
         </section>
       )}
 
-      <section className="portal-panel">
+      <section className="portal-panel pf-momentum">
         <div className="portal-panel__head">
-          <h2>Momentum</h2>
+          <h2>Momentum <span className="portal-muted">· {rhythmTotal} lines</span></h2>
           <div className="portal-tabs" role="tablist" aria-label="Rhythm range">
             {RHYTHM_RANGES.map((range) => (
               <button
@@ -169,53 +168,20 @@ export function OverviewSection({
             ))}
           </div>
         </div>
-        <div className="portal-panel__sub">
-          <span className="portal-muted">{rhythmTotal} lines in the last {rhythmRange === '24h' ? '24 hours' : rhythmRange === '3d' ? '3 days' : rhythmRange === '7d' ? '7 days' : '30 days'}</span>
-        </div>
-        <div className="portal-block">
-          <LineChart data={rhythm} height={96} />
-        </div>
-        <div className="portal-grid2" style={{ marginTop: 4 }}>
-          <div className="portal-block">
-            <div className="portal-block__label">Consistency · {consistencyCount}/14 days</div>
-            <div className="pf-dots" role="img" aria-label={`${consistencyCount} active days out of 14`}>
-              {consistencyDays.map((day) => (
-                <span key={day.key} title={`${day.label}${day.active ? ' — spoke' : ''}`} className={`pf-dot${day.active ? ' is-on' : ''}`} />
-              ))}
-            </div>
-          </div>
-          <div className="portal-block">
-            <div className="portal-block__label">Top topics</div>
-            {topTopics.length === 0 ? (
-              <span className="portal-muted">Join rooms to grow your taste.</span>
-            ) : (
-              <div className="portal-meters">
-                {topTopics.map(([topic, count]) => (
-                  <div key={topic} className="portal-meter">
-                    <span className="portal-meter__label">{topic}</span>
-                    <span className="portal-meter__track"><span className="portal-meter__fill" style={{ width: `${Math.round((count / topMax) * 100)}%` }} /></span>
-                    <span className="portal-meter__num">{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="pf-weekfacts">
-          <span>
-            <HiSparkles size={14} />
-            {peak.count > 0
-              ? `Your prime time is around ${String(peak.hour).padStart(2, '0')}:00 — book rooms then`
-              : 'Speak once and I’ll learn your prime time'}
+        <LineChart data={rhythm} height={64} />
+        <div className="pf-momentum__facts">
+          <span className="pf-dots" role="img" aria-label={`${consistencyCount} active days out of 14`}>
+            {consistencyDays.map((day) => (
+              <span key={day.key} title={`${day.label}${day.active ? ' — spoke' : ''}`} className={`pf-dot${day.active ? ' is-on' : ''}`} />
+            ))}
           </span>
-          <span>
-            <HiCalendarDays size={14} />
-            {stats?.most_active_day
-              ? `Peak day ${stats.most_active_day} with ${stats.most_active_day_count} lines`
-              : 'Your peak day will show up here'}
+          <span className="portal-muted">{consistencyCount}/14</span>
+          {topTopics.length > 0 && <span className="portal-topic">{topTopics[0][0]}</span>}
+          <span className="portal-muted">
+            <HiFire size={12} /> {peak.count > 0 ? `${String(peak.hour).padStart(2, '0')}:00` : '—'}
           </span>
-          <span className={delta > 0 ? 'is-up' : delta < 0 ? 'is-down' : ''}>
-            {delta > 0 ? `▲ ${delta} lines vs last week` : delta < 0 ? `▼ ${Math.abs(delta)} lines vs last week` : 'Same pace as last week'}
+          <span className={`portal-muted${delta > 0 ? ' is-up' : ''}${delta < 0 ? ' is-down' : ''}`}>
+            {delta > 0 ? `▲${delta}` : delta < 0 ? `▼${Math.abs(delta)}` : '±0'}
           </span>
         </div>
       </section>
