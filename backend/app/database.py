@@ -69,11 +69,12 @@ def ensure_schema_columns() -> None:
             "bio": "TEXT NULL",
             "location": "VARCHAR(120) NULL",
             "website": "VARCHAR(255) NULL",
-            "skills": "TEXT NULL",
-            "experience": "TEXT NULL",
-            "education": "TEXT NULL",
             "learning_goal": "TEXT NULL",
         },
+    }
+
+    dropped: dict[str, list[str]] = {
+        "users": ["skills", "experience", "education"],
     }
 
     backfill: dict[str, list[str]] = {
@@ -102,3 +103,11 @@ def ensure_schema_columns() -> None:
             for stmt in backfill.get(table, []):
                 conn.execute(text(stmt))
                 conn.commit()
+
+            if table in dropped:
+                existing = {col["name"] for col in inspector.get_columns(table)}
+                for name in dropped[table]:
+                    if name not in existing:
+                        continue
+                    conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {name}"))
+                    conn.commit()

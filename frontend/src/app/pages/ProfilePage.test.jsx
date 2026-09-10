@@ -32,6 +32,7 @@ const ROOMS = [
   { id: 1, name: 'Hosted Room', host_id: 9, status: 'idle', topics: ['Cinema'], created_at: '2026-09-01T10:00:00Z' },
   { id: 2, name: 'Joined Room', host_id: 5, status: 'active', topics: ['Music'], created_at: '2026-09-02T10:00:00Z' },
   { id: 3, name: 'Old Session', host_id: 5, status: 'ended', topics: ['Travel'], created_at: '2026-08-20T10:00:00Z' },
+  { id: 4, name: 'Sunday Club', host_id: 5, status: 'idle', topics: ['Music'], created_at: '2026-09-02T10:00:00Z', scheduled_at: '2099-01-04T10:00:00Z', allowed_emails: ['an@example.com'] },
 ];
 
 const MESSAGES = [
@@ -96,8 +97,7 @@ describe('ProfilePage portal', () => {
     });
     expect(screen.getByText(/Peak day 2026-09-07/)).toBeTruthy();
     expect(screen.getByText(/Level journey/)).toBeTruthy();
-    expect(screen.getByText(/Up next/)).toBeTruthy();
-    expect(screen.getByText(/Your top topic is Cinema/)).toBeTruthy();
+    expect(screen.queryByText(/Up next/)).toBeNull();
   });
 
   it('links avatar and name to the profile page', async () => {
@@ -137,11 +137,13 @@ describe('ProfilePage portal', () => {
     expect(screen.getByText(/it was great/)).toBeTruthy();
   });
 
-  it('shows schedule with live and open rooms', async () => {
+  it('shows only scheduled rooms with guests and countdown', async () => {
     renderPortal('schedule');
     expect(await screen.findByRole('heading', { level: 1, name: 'Schedule' })).toBeTruthy();
-    expect(await screen.findByText('Joined Room')).toBeTruthy();
-    expect(screen.getByText('Hosted Room')).toBeTruthy();
+    expect(await screen.findByText('Sunday Club')).toBeTruthy();
+    expect(screen.queryByText('Joined Room')).toBeNull();
+    expect(screen.queryByText('Hosted Room')).toBeNull();
+    expect(screen.getByText(/1 invited/)).toBeTruthy();
   });
 
   it('shows assessment review list from joined rooms', async () => {
@@ -177,6 +179,16 @@ describe('ProfilePage portal', () => {
     fireEvent.change(screen.getByLabelText('Learning goal'), { target: { value: 'Speak daily.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done editing learning goal' }));
     expect(await screen.findByText('Speak daily.')).toBeTruthy();
+  });
+
+  it('shows top hosted rooms and plan on profile', async () => {
+    renderPortal('me');
+    expect(await screen.findByRole('heading', { name: 'Top rooms' })).toBeTruthy();
+    expect(screen.getByText('Hosted Room')).toBeTruthy();
+    expect(screen.queryByText('Joined Room')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Plan' })).toBeTruthy();
+    const main = screen.getByRole('main');
+    expect(within(main).getByRole('link', { name: /Upgrade/ }).getAttribute('href')).toBe('/pricing');
   });
 
   it('collapses the sidebar to an icon rail', async () => {

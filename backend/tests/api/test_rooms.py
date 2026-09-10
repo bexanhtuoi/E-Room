@@ -33,6 +33,28 @@ class TestRoomCrud:
         assert updated.status_code == 200
         assert updated.json()["scheduled_at"] is None
 
+    def test_expired_scheduled_rooms_are_deleted(self, client: TestClient, alice: dict):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from sqlmodel import Session
+
+        from app.ai.tasks import delete_expired_scheduled_rooms
+        from app.database import engine
+        from app.utils.datetime_utils import now_utc
+
+        past = (now_utc() - timedelta(hours=25)).isoformat()
+        future = (now_utc() + timedelta(hours=25)).isoformat()
+        old = client.post("/api/v1/rooms/", json={"name": f"old-sched-{alice['id']}", "scheduled_at": past}).json()
+        fresh = client.post("/api/v1/rooms/", json={"name": f"new-sched-{alice['id']}", "scheduled_at": future}).json()
+
+        with Session(engine) as db, patch("app.ai.tasks.delete"):
+            removed = delete_expired_scheduled_rooms(db, now_utc().timestamp())
+
+        assert removed >= 1
+        assert client.get(f"/api/v1/rooms/{old['id']}").status_code == 404
+        assert client.get(f"/api/v1/rooms/{fresh['id']}").status_code == 200
+
     def test_create_duplicate_name_returns_400(self, client: TestClient, alice: dict):
         name = f"dup-room-{alice['id']}"
         create_room(client, name)

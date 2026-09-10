@@ -85,6 +85,15 @@ export function ProfilePage({ section = 'overview' }) {
   const joinedRooms = rooms.filter((r) => String(r.host_id) !== String(user?.id) && messagesByRoom.has(r.id));
   const myRooms = [...hostedRooms, ...joinedRooms];
   const liveRooms = myRooms.filter((r) => r.status === 'active');
+  const liveIds = new Set(liveRooms.map((r) => r.id));
+  const topRooms = [...hostedRooms]
+    .map((room) => ({
+      room,
+      lines: (messagesByRoom.get(room.id) || []).length,
+      live: liveIds.has(room.id),
+    }))
+    .sort((a, b) => Number(b.live) - Number(a.live) || b.lines - a.lines)
+    .slice(0, 3);
   const pastSessions = rooms.filter((r) => r.status === 'ended' && (String(r.host_id) === String(user?.id) || messagesByRoom.has(r.id)));
 
   function handleRoomCreated(room) {
@@ -230,7 +239,7 @@ export function ProfilePage({ section = 'overview' }) {
           <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
         )}
         {section === 'schedule' && (
-          <ScheduleSection rooms={rooms} hostedRooms={hostedRooms} />
+          <ScheduleSection rooms={rooms} messagesByRoom={messagesByRoom} />
         )}
         {section === 'assessment' && (
           <AssessmentSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user.id} />
@@ -241,6 +250,7 @@ export function ProfilePage({ section = 'overview' }) {
             tierLabel={tierLabel(tier)}
             onSaved={handleProfileSaved}
             onSignOut={handleSignOut}
+            topRooms={topRooms}
           />
         )}
       </main>

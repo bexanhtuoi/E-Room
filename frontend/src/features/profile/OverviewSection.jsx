@@ -45,21 +45,6 @@ function peakHourOf(messages) {
   return { hour: best, count: hours[best] };
 }
 
-function topTopicOf(rooms) {
-  const counts = new Map();
-  for (const room of rooms) {
-    for (const topic of Array.isArray(room.topics) ? room.topics : []) {
-      const key = String(topic).trim();
-      if (key) counts.set(key, (counts.get(key) || 0) + 1);
-    }
-  }
-  let best = null;
-  for (const [topic, count] of counts) {
-    if (!best || count > best.count) best = { topic, count };
-  }
-  return best;
-}
-
 export function OverviewSection({
   userName,
   englishLevel,
@@ -76,13 +61,8 @@ export function OverviewSection({
 }) {
   const week = bucketByDay(messages, 7);
   const weekTotal = week.reduce((s, b) => s + b.count, 0);
-  const myRooms = [...hostedRooms, ...joinedRooms];
   const levelIndex = Math.max(0, LEVELS.indexOf(englishLevel || ''));
   const peak = peakHourOf(messages);
-  const top = topTopicOf(myRooms);
-  const upNext = (top && myRooms.find((r) => r.status === 'idle' && (r.topics || []).includes(top.topic)))
-    || [...myRooms].reverse().find((r) => r.status === 'idle')
-    || null;
 
   const today = new Date();
   const dateLine = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -162,25 +142,6 @@ export function OverviewSection({
           </span>
         </div>
       </section>
-
-      {upNext && (
-        <section className="portal-panel">
-          <div className="portal-panel__head">
-            <h2>Up next{top ? ` — more ${top.topic}` : ''}</h2>
-          </div>
-          <div className="portal-block">
-            <div className="portal-resume">
-              <div>
-                <strong>{upNext.name}</strong>
-                <span className="portal-muted">
-                  {top ? `Your top topic is ${top.topic} — this open room fits right in.` : 'An open room from your list.'}
-                </span>
-              </div>
-              <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to={`/rooms/${upNext.id}`}>Open</Link>
-            </div>
-          </div>
-        </section>
-      )}
 
       <ActivitySection messages={messages} rooms={rooms} isLoading={activityLoading} isError={activityError} onRetry={activityRetry} />
     </div>

@@ -195,6 +195,56 @@ def transcribe_room_audio(room_id: int) -> None:
             enqueue_room_transcriber(room_id)
 
 
+def delete_expired_scheduled_rooms(db: Session, now: float) -> int:
+    # Phong co lich hen da qua hon 24h → xoa han (coi nhu da ket thuc).
+    from app.models import DocumentKind
+    from app.services import document_crud
+
+    deleted_count = 0
+    rooms = room_crud.get_many(db, limit=500)
+
+    for room in rooms:
+        scheduled_at = getattr(room, "scheduled_at", None)
+        if scheduled_at is None:
+            continue
+
+        if getattr(scheduled_at, "tzinfo", None) is not None:
+            scheduled_at = scheduled_at.replace(tzinfo=None)
+        if now - scheduled_at.timestamp() < 24 * 3600:
+            continue
+
+        for message in message_crud.get_many(db, room_id=room.id):
+            message_crud.delete(db, db_obj=message)
+
+        room_docs = document_crud.get_many(db, room_id=room.id)
+        for doc in room_docs:
+            document_crud.delete(db, db_obj=doc)
+
+        if room_docs:
+            try:
+                from app.ai.vector_store import delete_document_vectors
+                from app.integration.minio import delete_object
+
+                for doc in room_docs:
+                    if doc.kind == DocumentKind.FILE and doc.file_path:
+                        try:
+                            delete_object(doc.file_path)
+                        except Exception:
+                            pass
+                        try:
+                            delete_document_vectors(doc.id)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        delete(f"room:{room.id}:participants")
+        room_crud.delete(db, db_obj=room)
+        deleted_count += 1
+
+    return deleted_count
+
+
 def end_stale_empty_rooms(db: Session, now: float) -> int:
     ended_count = 0
     rooms = room_crud.get_many(db, limit=500)
@@ -244,6 +294,7 @@ def check_room_heartbeats() -> int:
 
     with Session(engine) as db:
         end_stale_empty_rooms(db, now)
+        delete_expired_scheduled_rooms(db, now)
         rooms = room_crud.get_many(db, status=RoomStatus.ACTIVE)
         for room in rooms:
             if not room.enable_heartbeat:

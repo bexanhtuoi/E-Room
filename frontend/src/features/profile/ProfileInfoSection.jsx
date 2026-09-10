@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { HiCheck, HiPencil, HiFlag } from 'react-icons/hi2';
+import { HiArrowRight, HiCheck, HiPencil, HiFlag } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
@@ -25,7 +26,7 @@ function Done({ label, onClick }) {
   );
 }
 
-export function ProfileInfoSection({ user, tierLabel, onSaved }) {
+export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) {
   const [name, setName] = useState(user?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [level, setLevel] = useState(user?.english_level || '');
@@ -221,6 +222,54 @@ export function ProfileInfoSection({ user, tierLabel, onSaved }) {
             <HiFlag size={13} /> Pinned to the top of your learning week.
           </div>
         )}
+      </section>
+
+      {topRooms.length > 0 && (
+        <section className="portal-panel">
+          <div className="portal-panel__head">
+            <h2>Top rooms</h2>
+            <Link className="portal-linkbtn" style={{ textDecoration: 'none' }} to="/my-rooms">
+              All rooms <HiArrowRight size={13} />
+            </Link>
+          </div>
+          <div className="portal-list">
+            {topRooms.map(({ room, lines, live }) => (
+              <div key={room.id} className="portal-row">
+                <span className={`portal-room__tile${live ? ' is-live' : ''}`} style={{ width: 36, height: 36, fontSize: 15 }}>
+                  {(room.name || '?').trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="portal-row__main">
+                  <span className="portal-row__text">{room.name}</span>
+                  <span className="portal-row__sub">
+                    {live ? 'Live now' : room.status === 'idle' ? 'Open' : 'Ended'} · {lines} your lines
+                  </span>
+                </span>
+                <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to={`/rooms/${room.id}`}>
+                  {live ? 'Join' : 'Open'}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="portal-panel">
+        <div className="portal-panel__head"><h2>Plan</h2><span className="portal-flag is-solid">{tierLabel}</span></div>
+        <div className="portal-block">
+          <div className="portal-resume">
+            <div>
+              <strong>You are on {tierLabel}</strong>
+              <span className="portal-muted">
+                {tierLabel === 'Free'
+                  ? 'Create public rooms, join any open room, meet the community.'
+                  : 'Thanks for supporting E-Room — enjoy the extra rooms and voice.'}
+              </span>
+            </div>
+            <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to="/pricing">
+              {tierLabel === 'Free' ? 'Upgrade' : 'Manage plan'}
+            </Link>
+          </div>
+        </div>
       </section>
 
       <div className="pf-savebar">

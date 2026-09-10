@@ -165,27 +165,20 @@ class TestUserResume:
                 "bio": "I love speaking English.",
                 "location": "Hue",
                 "website": "https://example.com",
-                "skills": ["React", "English", "React"],
-                "experience": [{"title": "Dev", "company": "Acme", "time": "2023-now", "desc": "Build things"}],
-                "education": [{"school": "HUEUni", "degree": "BA", "time": "2020-2024"}],
+                "learning_goal": "Speak 15 minutes daily.",
             },
         )
 
         assert response.status_code == 200, response.text
         data = response.json()
         assert data["headline"] == "Frontend Developer"
-        assert data["skills"] == ["React", "English"]
-        assert data["experience"][0]["company"] == "Acme"
-        assert data["education"][0]["school"] == "HUEUni"
-
-    def test_resume_limits(self, client: TestClient, alice: dict):
-        response = client.patch(
-            f"/api/v1/users/{alice['id']}",
-            json={"skills": [f"s{i}" for i in range(50)]},
-        )
-
-        assert response.status_code == 200
-        assert len(response.json()["skills"]) == 20
+        assert data["bio"] == "I love speaking English."
+        assert data["location"] == "Hue"
+        assert data["website"] == "https://example.com"
+        assert data["learning_goal"] == "Speak 15 minutes daily."
+        assert "skills" not in data
+        assert "experience" not in data
+        assert "education" not in data
 
 
 class TestLearningGoal:
