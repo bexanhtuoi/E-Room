@@ -44,6 +44,7 @@ export function ProfilePage({ section = 'overview' }) {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [sideOpen, setSideOpen] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const tier = useSubscriptionStore((state) => state.tier);
@@ -117,7 +118,8 @@ export function ProfilePage({ section = 'overview' }) {
   const head = PAGEHEAD[section] || PAGEHEAD.overview;
 
   return (
-    <div className={`portal-app${collapsed ? ' is-collapsed' : ''}`}>
+    <div className={`portal-app${collapsed ? ' is-collapsed' : ''}${sideOpen ? ' side-open' : ''}`}>
+      {sideOpen && <div className="pf-backdrop" onClick={() => setSideOpen(false)} aria-hidden="true" />}
       <aside className="portal-side" aria-label="Profile sections">
         <div className="portal-side__id">
           <span className="portal-side__logo" aria-hidden="true">E</span>
@@ -136,6 +138,7 @@ export function ProfilePage({ section = 'overview' }) {
               key={s.key}
               to={s.to}
               title={s.label}
+              onClick={() => setSideOpen(false)}
               className={({ isActive }) => `portal-side__btn${isActive ? ' is-active' : ''}`}
             >
               <s.icon size={18} /> <span className="portal-side__label">{s.label}</span>
@@ -174,6 +177,12 @@ export function ProfilePage({ section = 'overview' }) {
       </aside>
 
       <main className="portal-main">
+        <button
+          type="button" className="pf-drawerbtn" aria-label="Open menu"
+          onClick={() => setSideOpen(true)}
+        >
+          ☰ Menu
+        </button>
         <div className="portal-pagehead">
           <div>
             <div className="portal-pagehead__crumb">{head.crumb} / {head.title}</div>
@@ -223,7 +232,15 @@ export function ProfilePage({ section = 'overview' }) {
           <AssessmentSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user.id} />
         )}
         {section === 'me' && (
-          <ProfileInfoSection user={user} tierLabel={tierLabel(tier)} onSaved={handleProfileSaved} onSignOut={handleSignOut} />
+          <ProfileInfoSection
+            user={user}
+            tierLabel={tierLabel(tier)}
+            onSaved={handleProfileSaved}
+            onSignOut={handleSignOut}
+            stats={stats}
+            hostedCount={hostedRooms.length}
+            sessionsCount={pastSessions.length}
+          />
         )}
       </main>
 

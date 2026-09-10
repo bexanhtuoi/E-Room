@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { HiCheck, HiPencil, HiXMark } from 'react-icons/hi2';
+import { HiCalendarDays, HiChatBubbleLeftRight, HiCheck, HiFire, HiPencil, HiUserGroup } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
@@ -9,30 +9,22 @@ import { AvatarPopup } from './AvatarPopup';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
-function EditableRow({ label, value, editing, onEdit, onDone, children }) {
+function Pencil({ label, onClick }) {
   return (
-    <div className="pf-field">
-      <span className="er-label">{label}</span>
-      {editing ? (
-        <span className="pf-field__edit">
-          {children}
-          <button type="button" className="portal-tool" title="Done" aria-label={`Done editing ${label}`} onClick={onDone}>
-            <HiCheck size={15} />
-          </button>
-        </span>
-      ) : (
-        <span className="pf-field__view">
-          <span className="pf-field__value">{value || <span className="portal-muted">Not set</span>}</span>
-          <button type="button" className="portal-tool" title={`Edit ${label}`} aria-label={`Edit ${label}`} onClick={onEdit}>
-            <HiPencil size={14} />
-          </button>
-        </span>
-      )}
-    </div>
+    <button type="button" className="portal-tool" title={`Edit ${label}`} aria-label={`Edit ${label}`} onClick={onClick}>
+      <HiPencil size={14} />
+    </button>
   );
 }
 
-export function ProfileInfoSection({ user, tierLabel, onSaved, onSignOut }) {
+export function ProfileInfoSection({ user, tierLabel, onSaved, stats, hostedCount = 0, sessionsCount = 0 }) {
+  const snapshot = [
+    { icon: HiUserGroup, value: hostedCount, label: 'Rooms hosted' },
+    { icon: HiCalendarDays, value: sessionsCount, label: 'Sessions done' },
+    { icon: HiChatBubbleLeftRight, value: stats?.messages_total ?? 0, label: 'Messages' },
+    { icon: HiFire, value: stats?.streak_days ?? 0, label: 'Day streak' },
+  ];
+
   const [name, setName] = useState(user?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [level, setLevel] = useState(user?.english_level || '');
@@ -77,55 +69,94 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, onSignOut }) {
 
   return (
     <div className="portal-stack pf-center pf-wide">
-      <section className="portal-panel">
-        <div className="pf-profile__head">
+      <section className="portal-panel pf-resume-card">
+        <div className="pf-resume__head">
           <button
             type="button" className="pf-avatarbtn" title="Change avatar" aria-label="Change avatar"
             onClick={() => setShowAvatar(true)}
           >
-            <Face {...avatarFaceProps(avatar, name || user?.email)} size={96} />
+            <Face {...avatarFaceProps(avatar, name || user?.email)} size={104} />
             <span className="pf-avatarbtn__edit" aria-hidden="true"><HiPencil size={14} /></span>
           </button>
-          <div className="pf-profile__id">
-            <div className="pf-profile__name">
-              <h2>{name || user?.full_name || 'E-Room learner'}</h2>
-              <span className="portal-flag is-solid">{tierLabel} plan</span>
+          <div className="pf-resume__id">
+            <div className="pf-resume__line">
+              {editing === 'name' ? (
+                <span className="pf-field__edit">
+                  <input className="er-input" value={name} autoFocus onChange={(e) => setName(e.target.value)} aria-label="Full name" />
+                  <button type="button" className="portal-tool" title="Done" aria-label="Done editing name" onClick={() => setEditing(null)}>
+                    <HiCheck size={15} />
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <h1>{name || user?.full_name || 'E-Room learner'}</h1>
+                  <Pencil label="name" onClick={() => setEditing('name')} />
+                </>
+              )}
             </div>
-            <div className="portal-muted">{email || user?.email}</div>
-            <div className="portal-muted">
-              Level {level || user?.english_level || 'not set'} · Member since {user?.created_at ? formatDateTime(user.created_at) : '—'}
+            <div className="pf-resume__line">
+              {editing === 'email' ? (
+                <span className="pf-field__edit">
+                  <input className="er-input" type="email" value={email} autoFocus onChange={(e) => setEmail(e.target.value)} aria-label="Email" />
+                  <button type="button" className="portal-tool" title="Done" aria-label="Done editing email" onClick={() => setEditing(null)}>
+                    <HiCheck size={15} />
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <span className="portal-muted">{email || user?.email}</span>
+                  <Pencil label="email" onClick={() => setEditing('email')} />
+                </>
+              )}
+            </div>
+            <div className="pf-resume__line">
+              {editing === 'level' ? (
+                <span className="pf-field__edit">
+                  <select className="er-input" value={level} autoFocus onChange={(e) => setLevel(e.target.value)} aria-label="English level">
+                    <option value="">Not set yet</option>
+                    {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <button type="button" className="portal-tool" title="Done" aria-label="Done editing level" onClick={() => setEditing(null)}>
+                    <HiCheck size={15} />
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <span>
+                    <span className="portal-flag is-solid">{tierLabel} plan</span>
+                    {' '}
+                    <span className="portal-muted">Level {level || user?.english_level || 'not set'}</span>
+                  </span>
+                  <Pencil label="English level" onClick={() => setEditing('level')} />
+                </>
+              )}
+            </div>
+            <div className="portal-muted pf-resume__foot">
+              Member since {user?.created_at ? formatDateTime(user.created_at) : '—'} · #{user?.id}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Details</h2></div>
-        {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
-        <EditableRow label="Full name" value={name || user?.full_name} editing={editing === 'name'} onEdit={() => setEditing('name')} onDone={() => setEditing(null)}>
-          <input className="er-input" value={name} autoFocus onChange={(e) => setName(e.target.value)} aria-label="Full name" />
-        </EditableRow>
-        <EditableRow label="Email" value={email || user?.email} editing={editing === 'email'} onEdit={() => setEditing('email')} onDone={() => setEditing(null)}>
-          <input className="er-input" type="email" value={email} autoFocus onChange={(e) => setEmail(e.target.value)} aria-label="Email" />
-        </EditableRow>
-        <EditableRow label="English level" value={level || user?.english_level} editing={editing === 'level'} onEdit={() => setEditing('level')} onDone={() => setEditing(null)}>
-          <select className="er-input" value={level} autoFocus onChange={(e) => setLevel(e.target.value)} aria-label="English level">
-            <option value="">Not set yet</option>
-            {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </EditableRow>
-        <div className="pf-field">
-          <span className="er-label">User ID</span>
-          <span className="pf-field__view"><span className="pf-field__value portal-muted">#{user?.id}</span></span>
-        </div>
-      </section>
+      <div className="pf-kpis pf-kpis--4">
+        {snapshot.map((k) => (
+          <div key={k.label} className="pf-kpi">
+            <span className="pf-kpi__tile"><k.icon size={20} /></span>
+            <span className="pf-kpi__body">
+              <span className="pf-kpi__value">{k.value}</span>
+              <span className="pf-kpi__label">{k.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
 
       <div className="pf-savebar">
+        {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
         <button className="er-btn er-btn--ghost pf-savebar__btn" disabled={!dirty || saveMutation.isPending} onClick={handleReset}>
-          <HiXMark size={15} /> Reset
+          Reset
         </button>
         <button className="er-btn pf-savebar__btn" disabled={saveMutation.isPending || !name.trim() || !email.trim() || !dirty} onClick={handleSave}>
-          <HiCheck size={15} /> {saveMutation.isPending ? 'Saving…' : 'Save changes'}
+          {saveMutation.isPending ? 'Saving…' : 'Save changes'}
         </button>
       </div>
 

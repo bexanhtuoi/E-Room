@@ -18,8 +18,13 @@ export function PublicLayout({ children }) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const displayName = user?.full_name || user?.display_name || user?.email || 'Profile';
-  // Portal profile tu quan ly full-height: an footer de sidebar cham day man hinh
-  const bare = location.pathname.startsWith('/profile');
+  // Cac trang portal tu co sidebar rieng: an header navbar + footer cua web
+  const BARE_PREFIXES = ['/profile', '/overview', '/my-rooms', '/session', '/schedule', '/assessment'];
+  const bare = BARE_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
+
+  if (bare) {
+    return <main>{children}</main>;
+  }
 
   return (
     <div className="er">
@@ -79,7 +84,7 @@ export function PublicLayout({ children }) {
         )}
       </header>
       <main>{children}</main>
-      {!bare && <footer style={{ background: '#111', color: '#fff' }}>
+      <footer style={{ background: '#111', color: '#fff' }}>
         <div className="er-container" style={{ paddingTop: 72, paddingBottom: 28 }}>
           <div className="er-grid er-grid--4">
             <div>
@@ -116,7 +121,7 @@ export function PublicLayout({ children }) {
             <span>Privacy • Terms • Hotline {SITE.hotline}</span>
           </div>
         </div>
-      </footer>}
+      </footer>
     </div>
   );
 }
