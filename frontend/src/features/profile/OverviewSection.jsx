@@ -55,6 +55,7 @@ export function OverviewSection({
   messages,
   stats,
   rooms,
+  sessions = [],
   activityLoading,
   activityError,
   activityRetry,
@@ -120,7 +121,7 @@ export function OverviewSection({
 
       <section className="portal-panel">
         <div className="portal-panel__head">
-          <h2>Your rhythm</h2>
+          <h2>Momentum</h2>
           <div className="portal-tabs" role="tablist" aria-label="Rhythm range">
             {RHYTHM_RANGES.map((range) => (
               <button
@@ -161,7 +162,7 @@ export function OverviewSection({
         </div>
       </section>
 
-      <ActivitySection messages={messages} rooms={rooms} isLoading={activityLoading} isError={activityError} onRetry={activityRetry} />
+      <ActivitySection messages={messages} rooms={rooms} sessions={sessions} isLoading={activityLoading} isError={activityError} onRetry={activityRetry} />
     </div>
   );
 }

@@ -7,8 +7,26 @@ import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
 import { Face, avatarFaceProps } from '../../components/common/Faces';
 import { AvatarPopup } from './AvatarPopup';
+import { PLANS } from '../../data/site';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+const PLAN_ROWS = (() => {
+  const rows = [];
+  const [starter, pro, plus] = PLANS;
+  for (const feature of starter.features) rows.push({ feature, minTier: 0 });
+  for (const feature of pro.features) rows.push({ feature, minTier: 1 });
+  for (const feature of plus.features.filter((f) => !f.startsWith('Everything in'))) {
+    rows.push({ feature, minTier: 2 });
+  }
+  return rows;
+})();
+
+function tierRank(tierLabel) {
+  if (tierLabel === 'Pro+') return 2;
+  if (tierLabel === 'Pro') return 1;
+  return 0;
+}
 
 function Pencil({ label, onClick }) {
   return (
@@ -315,19 +333,30 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
         <div className="pf-divider" />
 
         <div className="pf-section">
-          <div className="pf-section__head"><h2>Plan</h2></div>
+          <div className="pf-section__head">
+            <h2>Plan</h2>
+            <Link className="portal-linkbtn" style={{ textDecoration: 'none' }} to="/pricing">
+              {tierLabel === 'Free' ? 'Upgrade' : 'Manage plan'} <HiArrowRight size={13} />
+            </Link>
+          </div>
           <div className="pf-plan">
             <div>
-              <strong className="pf-plan__tier">{tierLabel}</strong>
-              <span className="portal-muted">
-                {tierLabel === 'Free'
-                  ? 'Create public rooms, join any open room, meet the community.'
-                  : 'Thanks for supporting E-Room — enjoy the extra rooms and voice.'}
-              </span>
+              <strong className="pf-plan__tier">You are on {tierLabel}</strong>
+              <span className="portal-muted">Ticked features are unlocked for you right now.</span>
             </div>
-            <Link className="er-btn portal-mini-btn" style={{ textDecoration: 'none' }} to="/pricing">
-              {tierLabel === 'Free' ? 'Upgrade' : 'Manage plan'}
-            </Link>
+          </div>
+          <div className="pf-planrows">
+            {PLAN_ROWS.map(({ feature, minTier }) => {
+              const unlocked = tierRank(tierLabel) >= minTier;
+              return (
+                <div key={feature} className={`pf-planrow${unlocked ? '' : ' is-off'}`}>
+                  <span className={`pf-planrow__tick${unlocked ? ' is-on' : ' is-off'}`} aria-hidden="true">
+                    {unlocked ? '✓' : '✕'}
+                  </span>
+                  <span>{feature}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

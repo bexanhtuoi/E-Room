@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { HiArrowLeft, HiChatBubbleLeftRight, HiSparkles } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
-import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
 import '../../styles/ProfilePage.css';
 
@@ -33,6 +32,7 @@ export function SessionDetailPage() {
   const { sessionId } = useParams();
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState([]);
+  const [recap, setRecap] = useState(null);
 
   const detailQuery = useQuery({
     queryKey: ['session', sessionId],
@@ -53,9 +53,8 @@ export function SessionDetailPage() {
 
   const summarizeMutation = useMutation({
     mutationFn: () => fetchJson(`/sessions/${sessionId}/summarize`, { method: 'POST' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['sessions', 'mine'] });
+    onSuccess: (data) => {
+      setRecap(data.summary);
     },
   });
 
@@ -121,14 +120,14 @@ export function SessionDetailPage() {
                 disabled={summarizeMutation.isPending || detail.message_count === 0}
                 onClick={() => summarizeMutation.mutate()}
               >
-                {summarizeMutation.isPending ? 'Summarizing…' : session.summary ? 'Re-summarize' : 'Summarize this session'}
+                {summarizeMutation.isPending ? 'Summarizing…' : 'Summarize this session'}
               </button>
             </div>
             {summarizeMutation.isError && (
               <div className="er-alert er-alert--err">Could not summarize. Try again later.</div>
             )}
-            {session.summary ? (
-              <div className="portal-block pf-markdown">{session.summary}</div>
+            {recap ? (
+              <div className="portal-block pf-markdown">{recap}</div>
             ) : (
               <div className="portal-empty">
                 <HiSparkles size={28} />

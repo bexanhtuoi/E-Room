@@ -69,19 +69,32 @@ export function LineChart({ data, height = 160 }) {
   const gridLevels = [0, 1, 2, 3].map((g) => Math.min(max, g * step));
   const labelEvery = Math.max(1, Math.ceil(data.length / 8));
 
+  const peakIndex = data.reduce((best, b, i) => (b.count > data[best].count ? i : best), 0);
+  const gradientId = `pf-area-${data.length}-${max}`;
+
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="pf-linechart" role="img" aria-label="Messages over time chart">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#111" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#111" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
       {gridLevels.map((level) => (
         <g key={level}>
           <line x1={padLeft} x2={width - 8} y1={y(level)} y2={y(level)} className="pf-linechart__grid" />
           <text x={padLeft - 6} y={y(level) + 4} textAnchor="end" className="pf-linechart__tick">{level}</text>
         </g>
       ))}
-      <path d={area} className="pf-linechart__area" />
+      <path d={area} fill={`url(#${gradientId})`} />
       <path d={line} className="pf-linechart__line" fill="none" />
       {data.map((b, i) => (
         <g key={b.key}>
-          {b.count > 0 && <circle cx={x(i)} cy={y(b.count)} r={3.5} className="pf-linechart__dot"><title>{`${b.label}: ${b.count}`}</title></circle>}
+          {b.count > 0 && (
+            <circle cx={x(i)} cy={y(b.count)} r={i === peakIndex ? 5 : 3} className="pf-linechart__dot">
+              <title>{`${b.label}: ${b.count}`}</title>
+            </circle>
+          )}
           {i % labelEvery === 0 && (
             <text x={x(i)} y={height - 6} textAnchor="middle" className="pf-linechart__tick">{b.label}</text>
           )}

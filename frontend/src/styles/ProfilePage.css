@@ -2335,7 +2335,52 @@ a.portal-row:hover .portal-row__go {
 }
 
 .pf-wide {
-  max-width: 760px;
+  max-width: 960px;
+}
+
+.pf-planrows {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 12px;
+}
+
+.pf-planrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+.pf-planrow:last-child {
+  border-bottom: none;
+}
+
+.pf-planrow__tick {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.pf-planrow__tick.is-on {
+  background: var(--pf-ink, #1a1a1a);
+  color: #fff;
+}
+
+.pf-planrow__tick.is-off {
+  background: #f0f0f0;
+  color: #aaa;
+}
+
+.pf-planrow.is-off span:last-child {
+  color: var(--pf-faint, #9a9a9a);
 }
 
 .pf-profile__head {
@@ -2800,6 +2845,54 @@ a.portal-row:hover .portal-row__go {
 
 .pf-chattext {
   white-space: pre-wrap;
+}
+
+.pf-sessions {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.pf-session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.pf-session:hover {
+  background: #fafafa;
+}
+
+.pf-session__main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pf-session__name {
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-session__meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .pf-session {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
 }
 
 .portal-row--btn {

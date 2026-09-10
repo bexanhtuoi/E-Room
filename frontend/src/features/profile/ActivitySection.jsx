@@ -3,18 +3,26 @@ import { Link } from 'react-router-dom';
 import { HiMagnifyingGlass } from 'react-icons/hi2';
 import { formatDateTime } from '../../lib/formatters';
 
-export function ActivitySection({ messages, rooms, isLoading, isError, onRetry }) {
+export function ActivitySection({ messages, rooms, sessions = [], isLoading, isError, onRetry }) {
   const [search, setSearch] = useState('');
   const [roomId, setRoomId] = useState('all');
 
   const roomName = new Map((rooms || []).map((r) => [r.id, r.name]));
-  const roomOptions = [...new Set(messages.map((m) => m.room_id))].map((id) => ({ id, name: roomName.get(id) || `Room ${id}` }));
+  const roomOptions = [...new Set([...messages.map((m) => m.room_id), ...sessions.map((s) => s?.room?.id).filter(Boolean)])]
+    .map((id) => ({ id, name: roomName.get(id) || `Room ${id}` }));
 
   const q = search.trim().toLowerCase();
-  const filtered = messages.filter((m) => {
-    if (roomId !== 'all' && String(m.room_id) !== String(roomId)) return false;
-    if (q && !(m.text || '').toLowerCase().includes(q)) return false;
-    return true;
+  const messageRows = messages.map((m) => ({ kind: 'message', id: `m-${m.id}`, room_id: m.room_id, time: m.created_at, message: m }));
+  const joinRows = sessions
+    .filter((s) => s?.session?.joined_at)
+    .map((s) => ({ kind: 'join', id: `j-${s.session.id}`, room_id: s.session.room_id, time: s.session.joined_at, session: s.session, room: s.room }));
+  const rows = [...messageRows, ...joinRows].sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
+
+  const filtered = rows.filter((row) => {
+    if (roomId !== 'all' && String(row.room_id) !== String(roomId)) return false;
+    if (!q) return true;
+    if (row.kind === 'message') return (row.message.text || '').toLowerCase().includes(q);
+    return (row.room?.name || '').toLowerCase().includes(q);
   });
 
   return (
@@ -47,12 +55,21 @@ export function ActivitySection({ messages, rooms, isLoading, isError, onRetry }
       )}
       {!isLoading && !isError && filtered.length > 0 && (
         <div className="portal-list">
-          {filtered.map((m) => (
-            <Link key={m.id} to={`/rooms/${m.room_id}`} className="portal-row">
-              <span className={`portal-badge${m.role === 'ai' ? ' is-ai' : ''}`}>{m.role === 'ai' ? 'AI' : 'YOU'}</span>
+          {filtered.map((row) => row.kind === 'join' ? (
+            <Link key={row.id} to={`/session/${row.session.id}`} className="portal-row">
+              <span className="portal-badge">JOINED</span>
               <span className="portal-row__main">
-                <span className="portal-row__text">{m.text}</span>
-                <span className="portal-row__sub">{roomName.get(m.room_id) || `Room ${m.room_id}`}{m.created_at ? ` · ${formatDateTime(m.created_at)}` : ''}</span>
+                <span className="portal-row__text">Joined {row.room?.name || `Room ${row.room_id}`}</span>
+                <span className="portal-row__sub">{row.time ? formatDateTime(row.time) : ''}</span>
+              </span>
+              <span className="portal-row__go" aria-hidden="true">→</span>
+            </Link>
+          ) : (
+            <Link key={row.id} to={`/rooms/${row.message.room_id}`} className="portal-row">
+              <span className={`portal-badge${row.message.role === 'ai' ? ' is-ai' : ''}`}>{row.message.role === 'ai' ? 'AI' : 'YOU'}</span>
+              <span className="portal-row__main">
+                <span className="portal-row__text">{row.message.text}</span>
+                <span className="portal-row__sub">{roomName.get(row.message.room_id) || `Room ${row.message.room_id}`}{row.message.created_at ? ` · ${formatDateTime(row.message.created_at)}` : ''}</span>
               </span>
               <span className="portal-row__go" aria-hidden="true">→</span>
             </Link>

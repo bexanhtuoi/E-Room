@@ -15,8 +15,6 @@ class SessionResponse(BaseModel):
     joined_at: datetime
     left_at: Optional[datetime] = None
     duration_seconds: Optional[int] = None
-    summary: Optional[str] = None
-    summarized_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
 

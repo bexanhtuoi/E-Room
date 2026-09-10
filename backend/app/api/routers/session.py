@@ -15,7 +15,6 @@ from app.schemas import (
     SessionWithRoom,
 )
 from app.services import message_crud, room_crud, session_crud, user_crud
-from app.utils.datetime_utils import now_utc
 
 router = APIRouter()
 
@@ -169,11 +168,6 @@ async def summarize_session(
     summary = await ask_llm(
         SUMMARY_SYSTEM_PROMPT,
         f"Room: {room.name if room else db_session.room_id}\nSession transcript:\n{transcript[:12000]}",
-    )
-    session_crud.update(
-        db,
-        db_obj=db_session,
-        obj_in={"summary": summary, "summarized_at": now_utc()},
     )
 
     return SessionSummaryResponse(summary=summary, message_count=count)

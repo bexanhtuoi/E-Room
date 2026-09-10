@@ -100,12 +100,21 @@ function EventCard({ room, myLines }) {
   );
 }
 
-export function ScheduleSection({ rooms, messagesByRoom }) {
+export function ScheduleSection({ rooms, messagesByRoom, userId, userEmail }) {
   const [showSchedule, setShowSchedule] = useState(false);
   const now = Date.now();
   const dayAgo = now - 24 * 3600 * 1000;
+  const myEmail = String(userEmail || '').trim().toLowerCase();
 
-  const scheduled = rooms
+  const related = rooms.filter((r) => {
+    // Chi phong lien quan toi minh: public, minh host, hoac duoc moi.
+    // Ke ca admin cung khong thay private cua nguoi khac o day.
+    if (!r.is_private) return true;
+    if (String(r.host_id) === String(userId)) return true;
+    return myEmail && (r.allowed_emails || []).some((e) => String(e).toLowerCase() === myEmail);
+  });
+
+  const scheduled = related
     .filter((r) => {
       if (!r.scheduled_at) return false;
       const time = new Date(r.scheduled_at).getTime();

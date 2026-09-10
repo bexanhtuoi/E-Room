@@ -62,6 +62,13 @@ export function ProfilePage({ section = 'overview' }) {
   });
   const messages = Array.isArray(activityQuery.data) ? activityQuery.data : [];
 
+  const sessionsQuery = useQuery({
+    queryKey: ['sessions', 'mine'],
+    queryFn: () => fetchJson('/sessions/mine').then((r) => r?.sessions ?? []),
+    enabled: Boolean(user?.id),
+  });
+  const mySessions = Array.isArray(sessionsQuery.data) ? sessionsQuery.data : [];
+
   const statsQuery = useQuery({
     queryKey: ['users', 'me', 'stats'],
     queryFn: () => fetchJson('/users/me/stats'),
@@ -220,6 +227,7 @@ export function ProfilePage({ section = 'overview' }) {
             messages={messages}
             stats={stats}
             rooms={rooms}
+            sessions={mySessions}
             activityLoading={activityQuery.isLoading}
             activityError={activityQuery.isError}
             activityRetry={activityQuery.refetch}
@@ -239,7 +247,7 @@ export function ProfilePage({ section = 'overview' }) {
           <SessionsSection />
         )}
         {section === 'schedule' && (
-          <ScheduleSection rooms={rooms} messagesByRoom={messagesByRoom} />
+          <ScheduleSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user?.id} userEmail={user?.email} />
         )}
         {section === 'assessment' && (
           <AssessmentSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user.id} />

@@ -44,9 +44,7 @@ class UserResponse(BaseModel):
     role: Optional[RoleEnum] = "user"
     profile_completed: bool = False
     headline: Optional[str] = None
-    bio: Optional[str] = None
     location: Optional[str] = None
-    website: Optional[str] = None
     learning_goal: Optional[str] = None
     career_field: Optional[str] = None
     interests: List[str] = []
@@ -88,9 +86,7 @@ class UserUpdateSchema(BaseModel):
     role: Optional[Union[str, RoleEnum]] = None
     profile_completed: Optional[bool] = None
     headline: Optional[str] = None
-    bio: Optional[str] = None
     location: Optional[str] = None
-    website: Optional[str] = None
     learning_goal: Optional[str] = None
     career_field: Optional[str] = None
     interests: Optional[List[str]] = None
@@ -125,22 +121,6 @@ class UserUpdateSchema(BaseModel):
             return None
         text = v.strip()
         return text[:120] if text else None
-
-    @field_validator("bio")
-    @classmethod
-    def validate_bio(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        text = v.strip()
-        return text[:2000] if text else None
-
-    @field_validator("website")
-    @classmethod
-    def validate_website(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        text = v.strip()
-        return text[:255] if text else None
 
     @field_validator("role")
     @classmethod

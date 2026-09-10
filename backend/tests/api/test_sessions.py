@@ -57,7 +57,7 @@ class TestSessionTracking:
 
 
 class TestSessionAI:
-    def test_summarize_saves_summary(self, client: TestClient, alice: dict):
+    def test_summarize_returns_without_saving(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-sum-{alice['id']}")
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
@@ -72,7 +72,7 @@ class TestSessionAI:
         assert "Great chat" in response.json()["summary"]
 
         detail = client.get(f"/api/v1/sessions/{session_id}").json()
-        assert "Great chat" in (detail["session"]["summary"] or "")
+        assert "summary" not in detail["session"]
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")
 

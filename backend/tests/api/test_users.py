@@ -162,9 +162,7 @@ class TestUserResume:
             f"/api/v1/users/{alice['id']}",
             json={
                 "headline": "Frontend Developer",
-                "bio": "I love speaking English.",
                 "location": "Hue",
-                "website": "https://example.com",
                 "learning_goal": "Speak 15 minutes daily.",
             },
         )
@@ -172,10 +170,10 @@ class TestUserResume:
         assert response.status_code == 200, response.text
         data = response.json()
         assert data["headline"] == "Frontend Developer"
-        assert data["bio"] == "I love speaking English."
         assert data["location"] == "Hue"
-        assert data["website"] == "https://example.com"
         assert data["learning_goal"] == "Speak 15 minutes daily."
+        assert "bio" not in data
+        assert "website" not in data
         assert "skills" not in data
         assert "experience" not in data
         assert "education" not in data

@@ -76,7 +76,8 @@ def ensure_schema_columns() -> None:
     }
 
     dropped: dict[str, list[str]] = {
-        "users": ["skills", "experience", "education"],
+        "users": ["skills", "experience", "education", "bio", "website"],
+        "sessions": ["summary", "summarized_at"],
     }
 
     # Cot ENUM cu khong nhan gia tri moi (vd invite) → noi thanh VARCHAR.
