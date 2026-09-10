@@ -33,10 +33,5 @@ class SessionAnswerResponse(BaseModel):
     message_count: int = 0
 
 
-class SessionSummaryResponse(BaseModel):
-    summary: str
-    message_count: int = 0
-
-
 class MySessionsResponse(BaseModel):
     sessions: List[SessionWithRoom] = []

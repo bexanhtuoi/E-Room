@@ -23,8 +23,8 @@ from app.integration.redis import (
     set_if_absent,
 )
 from app.log import get_logger
-from app.models import MessageRole, RoomStatus
-from app.services import message_crud, room_crud
+from app.models import DocumentKind, MessageRole, RoomStatus
+from app.services import document_crud, message_crud, room_crud, user_crud
 from app.utils.datetime_utils import now_utc
 
 log = get_logger("app.ai", level="INFO")
@@ -118,7 +118,6 @@ def stream_ai_response(
     system_extra = ""
     try:
         from app.ai.room_context import build_room_context
-        from app.services import document_crud
 
         with Session(engine) as db:
             context_room = room_crud.get_one(db, id=room_id)
@@ -126,6 +125,31 @@ def stream_ai_response(
             system_extra = build_room_context(context_room, context_docs)
     except Exception:
         log.exception("Room context failed | room_id=%s", room_id)
+
+    # Them 20 transcript user moi nhat lam ngu canh cho @ai
+    if job_type != "heartbeat":
+        try:
+            with Session(engine) as db:
+                recent = message_crud.get_many(db, room_id=room_id, role=MessageRole.USER, order_by="id", desc=True, limit=20)
+                recent = list(reversed(recent))
+                if recent:
+                    cache: dict = {}
+                    context_lines = []
+                    for message in recent:
+                        if message.user_id not in cache:
+                            speaker = cache[message.user_id] = (
+                                user_crud.get_one(db, id=message.user_id).full_name if message.user_id else "Someone"
+                            ) or f"User {message.user_id}"
+                        else:
+                            speaker = cache[message.user_id]
+                        context_lines.append(f"{speaker}: {message.text}")
+                    query = (
+                        "Recent room context (newest last):\n"
+                        + "\n".join(context_lines)
+                        + f"\n\nCurrent question:\n{query}"
+                    )
+        except Exception:
+            log.exception("Room transcript context failed | room_id=%s", room_id)
 
     try:
         response_text = asyncio.run(stream_to_room(room_id, stream_agent_events(query, system_extra)))
@@ -198,7 +222,6 @@ def transcribe_room_audio(room_id: int) -> None:
 def delete_expired_scheduled_rooms(db: Session, now: float) -> int:
     # Phong co lich hen da qua hon 24h → xoa han (coi nhu da ket thuc).
     from app.models import DocumentKind
-    from app.services import document_crud
 
     deleted_count = 0
     rooms = room_crud.get_many(db, limit=500)

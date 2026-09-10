@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -22,11 +22,8 @@ fetchJson.mockImplementation(async (path, options) => {
   if (path === '/sessions/101/messages') {
     return { session_id: 101, message_count: 2, transcript: 'An Nguyen: hello there\nAn Nguyen: it was great' };
   }
-  if (path === '/sessions/101/ask') {
+  if (path === '/sessions/101/chat') {
     return { answer: 'They greeted and praised.', message_count: 2 };
-  }
-  if (path === '/sessions/101/summarize') {
-    return { summary: '## Summary\nNice chat.', message_count: 2 };
   }
   return {};
 });
@@ -54,14 +51,12 @@ describe('SessionDetailPage', () => {
     fireEvent.change(screen.getByLabelText('Ask about this session'), { target: { value: 'What was said?' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
     expect(await screen.findByText('They greeted and praised.')).toBeTruthy();
-    expect(fetchJson).toHaveBeenCalledWith('/sessions/101/ask', expect.objectContaining({ method: 'POST' }));
+    expect(fetchJson).toHaveBeenCalledWith('/sessions/101/chat', expect.objectContaining({ method: 'POST' }));
   });
 
-  it('summarizes on demand', async () => {
+  it('asks via quick prompt chips', async () => {
     renderDetail();
-    fireEvent.click(await screen.findByRole('button', { name: /Recap for Notion/ }));
-    await waitFor(() => {
-      expect(fetchJson).toHaveBeenCalledWith('/sessions/101/summarize', expect.objectContaining({ method: 'POST' }));
-    });
+    fireEvent.click(await screen.findByRole('button', { name: 'What did we decide?' }));
+    expect(await screen.findByText('They greeted and praised.')).toBeTruthy();
   });
 });

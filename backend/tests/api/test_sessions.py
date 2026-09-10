@@ -57,51 +57,40 @@ class TestSessionTracking:
 
 
 class TestSessionAI:
-    def test_summarize_returns_without_saving(self, client: TestClient, alice: dict):
-        room = make_room_with_message(client, f"sess-sum-{alice['id']}")
+    def test_chat_answers_from_transcript(self, client: TestClient, alice: dict):
+        room = make_room_with_message(client, f"sess-chat-{alice['id']}")
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        fake_llm = AsyncMock()
-        fake_llm.ainvoke.return_value = type("Msg", (), {"content": "## Summary\nGreat chat."})()
-
-        with patch("app.api.routers.session.get_llm", return_value=fake_llm):
-            response = client.post(f"/api/v1/sessions/{session_id}/summarize")
-
-        assert response.status_code == 200, response.text
-        assert "Great chat" in response.json()["summary"]
-
-        detail = client.get(f"/api/v1/sessions/{session_id}").json()
-        assert "summary" not in detail["session"]
-
-        client.post(f"/api/v1/rooms/{room['id']}/leave")
-
-    def test_ask_uses_transcript(self, client: TestClient, alice: dict):
-        room = make_room_with_message(client, f"sess-ask-{alice['id']}")
-        client.post(f"/api/v1/rooms/{room['id']}/join")
-        session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
-
-        fake_llm = AsyncMock()
-        fake_llm.ainvoke.return_value = type("Msg", (), {"content": "They said hello."})()
-
-        with patch("app.api.routers.session.get_llm", return_value=fake_llm):
-            response = client.post(f"/api/v1/sessions/{session_id}/ask", json={"question": "What was said?"})
+        with patch("app.ai.session_agent.run_session_agent", new=AsyncMock(return_value="They said hello.")) as mock_run:
+            response = client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "What was said?"})
 
         assert response.status_code == 200, response.text
         assert "hello" in response.json()["answer"]
 
-        sent = fake_llm.ainvoke.call_args[0][0]
-        assert "SESSION.md" in sent[0].content
-        assert "Q&A mode" in sent[1].content
-        assert "hello session world" in sent[1].content
+        asked_question, sent_lines = mock_run.call_args[0]
+        assert asked_question == "What was said?"
+        assert any("hello session world" in line["text"] for line in sent_lines)
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")
+
+    def test_agent_tool_reads_older_lines(self):
+        from app.ai.session_agent import build_get_more_messages_tool
+
+        lines = [{"speaker": "Ann", "text": f"line {i}"} for i in range(60)]
+        get_more_messages = build_get_more_messages_tool(lines)
+
+        assert get_more_messages.name == "get_more_messages"
+        out = get_more_messages.invoke({"start_index": 0, "count": 2})
+        assert "line 0" in out and "line 1" in out
+        assert "line 59" not in out
+        assert get_more_messages.invoke({"start_index": 9999}).startswith("No more lines")
 
     def test_empty_question_rejected(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-empty-{alice['id']}")
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        assert client.post(f"/api/v1/sessions/{session_id}/ask", json={"question": "  "}).status_code == 400
+        assert client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "  "}).status_code == 400
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")

@@ -1,9 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from langchain_core.messages import HumanMessage, SystemMessage
 from sqlmodel import Session
 
-from app.ai import get_llm
-from app.ai.prompt import load_prompt_from_file
+from app.ai import session_agent
 from app.api.dependencies import require_auth
 from app.database import get_session
 from app.models import MessageRole
@@ -11,18 +9,11 @@ from app.schemas import (
     MySessionsResponse,
     SessionAnswerResponse,
     SessionAskRequest,
-    SessionResponse,
-    SessionSummaryResponse,
     SessionWithRoom,
 )
 from app.services import message_crud, room_crud, session_crud, user_crud
 
 router = APIRouter()
-
-SESSION_SYSTEM_PROMPT = load_prompt_from_file("session")
-
-SUMMARY_TASK = "Now do Recap mode on the session below."
-ASK_TASK_PREFIX = "Now do Q&A mode on the session below. Question:"
 
 
 def get_my_session(db: Session, session_id: int, request: Request):
@@ -39,7 +30,7 @@ def get_my_session(db: Session, session_id: int, request: Request):
     return db_session
 
 
-def build_transcript(db: Session, db_session) -> tuple[str, int]:
+def build_session_lines(db: Session, db_session) -> list:
     messages = message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=500)
     start = db_session.joined_at.replace(tzinfo=None) if getattr(db_session.joined_at, "tzinfo", None) else db_session.joined_at
     end = db_session.left_at
@@ -62,16 +53,14 @@ def build_transcript(db: Session, db_session) -> tuple[str, int]:
             speaker = cache[message.user_id]
         if message.role == MessageRole.AI:
             speaker = "AI"
-        lines.append(f"{speaker}: {message.text}")
+        lines.append({"speaker": speaker, "text": message.text})
 
-    return "\n".join(lines), len(lines)
+    return lines
 
 
-async def ask_llm(system: str, user_content: str) -> str:
-    llm = get_llm()
-    answer = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user_content)])
-    text = answer.content if isinstance(answer.content, str) else str(answer.content)
-    return text.strip()
+def build_transcript(db: Session, db_session) -> tuple[str, int]:
+    lines = build_session_lines(db, db_session)
+    return "\n".join(f"{line['speaker']}: {line['text']}" for line in lines), len(lines)
 
 
 @router.get("/count")
@@ -131,29 +120,8 @@ def get_session_messages(
     return {"session_id": session_id, "message_count": count, "transcript": transcript}
 
 
-@router.post("/{session_id}/summarize", response_model=SessionSummaryResponse)
-async def summarize_session(
-    session_id: int,
-    request: Request,
-    db: Session = Depends(get_session),
-    _: str = Depends(require_auth),
-) -> SessionSummaryResponse:
-    db_session = get_my_session(db, session_id, request)
-    transcript, count = build_transcript(db, db_session)
-    if not transcript.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No messages in this session yet")
-
-    room = room_crud.get_one(db, id=db_session.room_id)
-    summary = await ask_llm(
-        SESSION_SYSTEM_PROMPT,
-        f"{SUMMARY_TASK}\nRoom: {room.name if room else db_session.room_id}\nSession transcript:\n{transcript[:12000]}",
-    )
-
-    return SessionSummaryResponse(summary=summary, message_count=count)
-
-
-@router.post("/{session_id}/ask", response_model=SessionAnswerResponse)
-async def ask_session(
+@router.post("/{session_id}/chat", response_model=SessionAnswerResponse)
+async def chat_session(
     session_id: int,
     ask_in: SessionAskRequest,
     request: Request,
@@ -165,13 +133,12 @@ async def ask_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question must not be empty")
 
     db_session = get_my_session(db, session_id, request)
-    transcript, count = build_transcript(db, db_session)
-    if not transcript.strip():
+    lines = build_session_lines(db, db_session)
+    if not lines:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No messages in this session yet")
 
-    answer = await ask_llm(
-        SESSION_SYSTEM_PROMPT,
-        f"{ASK_TASK_PREFIX} {question}\nSession transcript:\n{transcript[:12000]}",
-    )
+    answer = await session_agent.run_session_agent(question, lines)
+    if not answer:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI could not answer right now")
 
-    return SessionAnswerResponse(answer=answer, message_count=count)
+    return SessionAnswerResponse(answer=answer, message_count=len(lines))

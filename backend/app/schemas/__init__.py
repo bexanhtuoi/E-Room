@@ -30,7 +30,6 @@ from app.schemas.session import (
     SessionAnswerResponse,
     SessionAskRequest,
     SessionResponse,
-    SessionSummaryResponse,
     SessionWithRoom,
 )
 from app.schemas.user import Token, UserBaseSchema, UserCreateSchema, UserResponse, UserStatsResponse, UserUpdateSchema
@@ -63,7 +62,6 @@ __all__ = [
     "SessionAnswerResponse",
     "SessionAskRequest",
     "SessionResponse",
-    "SessionSummaryResponse",
     "SessionWithRoom",
     "ShortTermMemoryMessage",
     "Token",

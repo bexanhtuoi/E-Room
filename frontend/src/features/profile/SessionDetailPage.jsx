@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { HiArrowLeft, HiChatBubbleLeftRight, HiCheck, HiClock, HiSparkles } from 'react-icons/hi2';
+import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiSparkles } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { formatDateTime } from '../../lib/formatters';
 import { Face } from '../../components/common/Faces';
@@ -43,8 +43,6 @@ export function SessionDetailPage() {
   const { sessionId } = useParams();
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState([]);
-  const [recap, setRecap] = useState(null);
-  const [copied, setCopied] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ['session', sessionId],
@@ -67,15 +65,8 @@ export function SessionDetailPage() {
   const joinedDate = session?.joined_at ? new Date(session.joined_at) : null;
   const validDate = joinedDate && !Number.isNaN(joinedDate.getTime()) ? joinedDate : null;
 
-  const summarizeMutation = useMutation({
-    mutationFn: () => fetchJson(`/sessions/${sessionId}/summarize`, { method: 'POST' }),
-    onSuccess: (data) => {
-      setRecap(data.summary);
-    },
-  });
-
   const askMutation = useMutation({
-    mutationFn: (text) => fetchJson(`/sessions/${sessionId}/ask`, {
+    mutationFn: (text) => fetchJson(`/sessions/${sessionId}/chat`, {
       method: 'POST',
       body: JSON.stringify({ question: text }),
     }),
@@ -89,17 +80,6 @@ export function SessionDetailPage() {
     const clean = String(text || '').trim();
     if (!clean || askMutation.isPending) return;
     askMutation.mutate(clean);
-  }
-
-  async function copyRecap() {
-    if (!recap) return;
-    try {
-      await navigator.clipboard.writeText(recap);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard unavailable — user can still select the text
-    }
   }
 
   if (detailQuery.isLoading || messagesQuery.isLoading) {
@@ -131,16 +111,19 @@ export function SessionDetailPage() {
           </div>
         </div>
 
-        <header className="pf-resume__head">
+        <header className="pf-sesshero">
           {validDate && (
-            <span className="pf-event__date" title={validDate.toLocaleString()}>
+            <span className="pf-event__date pf-sesshero__date" title={validDate.toLocaleString()}>
               <strong>{validDate.toLocaleDateString(undefined, { day: '2-digit' })}</strong>
               <span>{validDate.toLocaleDateString(undefined, { month: 'short' })}</span>
               <span className="pf-event__time">{validDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
             </span>
           )}
-          <div className="pf-resume__id">
-            <div className="pf-resume__name"><h1>{room?.name || `Room ${session.room_id}`}</h1></div>
+          <div className="pf-sesshero__id">
+            <h1>{room?.name || `Room ${session.room_id}`}</h1>
+            {Array.isArray(room?.topics) && room.topics.length > 0 && (
+              <div className="portal-topics">{room.topics.slice(0, 5).map((t) => <span key={t} className="portal-topic">{t}</span>)}</div>
+            )}
             <div className="pf-resume__facts">
               <span><HiClock size={13} /> {formatDuration(session.duration_seconds)}</span>
               <span><HiChatBubbleLeftRight size={13} /> {detail.message_count} lines</span>
@@ -149,32 +132,35 @@ export function SessionDetailPage() {
                 {formatShortDateTime(session.joined_at)} - {session.left_at ? formatShortDateTime(session.left_at) : 'now'}
               </span>
             </div>
+            {room?.description && <p className="pf-sesshero__desc">{room.description}</p>}
           </div>
         </header>
 
         <div className="portal-stack" style={{ marginTop: 16 }}>
-          <section className="portal-panel pf-copilot">
+          <section className="portal-panel pf-aichat">
             <div className="portal-panel__head">
-              <h2><HiSparkles size={15} /> AI copilot</h2>
-              {recap && (
-                <button type="button" className="er-btn er-btn--ghost portal-mini-btn" onClick={copyRecap}>
-                  {copied ? <><HiCheck size={14} /> Copied</> : 'Copy recap'}
-                </button>
+              <h2><HiSparkles size={15} /> Ask AI about this session</h2>
+            </div>
+            <div className="pf-chatlog pf-chatlog--roomy">
+              {chat.length === 0 && (
+                <div className="pf-chatlog__turn is-ai">
+                  <span className="portal-badge">AI</span>
+                  <span className="pf-chattext">I’ve read every line of this session. Ask me to recap it, explain a decision, or pull out new words.</span>
+                </div>
+              )}
+              {chat.map((turn, i) => (
+                <div key={i} className={`pf-chatlog__turn is-${turn.role}`}>
+                  <span className="portal-badge">{turn.role === 'ai' ? 'AI' : 'YOU'}</span>
+                  <span className="pf-chattext">{turn.text}</span>
+                </div>
+              ))}
+              {askMutation.isPending && (
+                <div className="pf-chatlog__turn is-ai">
+                  <span className="portal-badge">AI</span>
+                  <span className="pf-chattext"><span className="pf-typing" aria-label="AI is typing"><span /><span /><span /></span></span>
+                </div>
               )}
             </div>
-            {!recap && (
-              <button
-                type="button" className="er-btn pf-copilot__recap"
-                disabled={summarizeMutation.isPending || detail.message_count === 0}
-                onClick={() => summarizeMutation.mutate()}
-              >
-                {summarizeMutation.isPending ? 'Summarizing…' : '✨ Recap for Notion'}
-              </button>
-            )}
-            {summarizeMutation.isError && (
-              <div className="er-alert er-alert--err">Could not summarize. Try again later.</div>
-            )}
-            {recap && <div className="pf-markdown pf-copilot__recaptext">{recap}</div>}
             <div className="pf-chips">
               {QUICK_PROMPTS.map((prompt) => (
                 <button key={prompt} type="button" className="portal-topic pf-chipbtn" onClick={() => ask(prompt)}>
@@ -182,16 +168,6 @@ export function SessionDetailPage() {
                 </button>
               ))}
             </div>
-            {chat.length > 0 && (
-              <div className="pf-chatlog">
-                {chat.map((turn, i) => (
-                  <div key={i} className={`pf-chatlog__turn is-${turn.role}`}>
-                    <span className="portal-badge">{turn.role === 'ai' ? 'AI' : 'YOU'}</span>
-                    <span className="pf-chattext">{turn.text}</span>
-                  </div>
-                ))}
-              </div>
-            )}
             <form onSubmit={(e) => { e.preventDefault(); ask(question); }} className="pf-askrow">
               <input
                 className="er-input" value={question}
@@ -214,14 +190,14 @@ export function SessionDetailPage() {
             {lines.length === 0 ? (
               <div className="portal-empty">No messages were said while you were inside.</div>
             ) : (
-              <div className="pf-talk">
+              <div className="portal-list">
                 {lines.map((line) => (
-                  <div key={line.id} className="pf-talk__line">
+                  <div key={line.id} className="portal-row">
                     <Face name={line.speaker || '?'} size={30} />
-                    <div className="pf-talk__bubble">
-                      {line.speaker && <strong>{line.speaker}</strong>}
-                      <span>{line.body}</span>
-                    </div>
+                    <span className="portal-row__main">
+                      {line.speaker && <span className="portal-row__text">{line.speaker}</span>}
+                      <span className={line.speaker ? 'portal-row__sub pf-chattext' : 'portal-row__text pf-chattext'}>{line.body}</span>
+                    </span>
                   </div>
                 ))}
               </div>
