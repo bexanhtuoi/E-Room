@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -48,7 +48,25 @@ class UserResponse(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     learning_goal: Optional[str] = None
+    career_field: Optional[str] = None
+    interests: List[str] = []
     created_at: Optional[datetime] = None
+
+    @field_validator("interests", mode="before")
+    @classmethod
+    def parse_interests(cls, raw) -> List[str]:
+        import json
+
+        if isinstance(raw, list):
+            return [str(item).strip()[:60] for item in raw if str(item).strip()][:20]
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+            except (ValueError, TypeError):
+                return []
+            if isinstance(parsed, list):
+                return [str(item).strip()[:60] for item in parsed if str(item).strip()][:20]
+        return []
 
 
 class UserStatsResponse(BaseModel):
@@ -74,6 +92,23 @@ class UserUpdateSchema(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     learning_goal: Optional[str] = None
+    career_field: Optional[str] = None
+    interests: Optional[List[str]] = None
+
+    @field_validator("career_field")
+    @classmethod
+    def validate_career_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        text = v.strip()
+        return text[:120] if text else None
+
+    @field_validator("interests")
+    @classmethod
+    def validate_interests(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        return [str(item).strip()[:60] for item in v if str(item).strip()][:20]
 
     @field_validator("learning_goal")
     @classmethod

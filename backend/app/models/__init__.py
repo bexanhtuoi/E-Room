@@ -2,6 +2,7 @@ from app.models.document import Document, DocumentKind
 from app.models.message import Message, MessageRole
 from app.models.notification import Notification, NotificationType
 from app.models.room import Room, RoomStatus
+from app.models.room_session import RoomSession
 from app.models.user import EnglishLevel, RoleEnum, User
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "NotificationType",
     "RoleEnum",
     "Room",
+    "RoomSession",
     "RoomStatus",
     "User",
 ]

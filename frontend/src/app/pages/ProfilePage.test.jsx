@@ -56,6 +56,17 @@ beforeEach(() => {
     }
     if (path.startsWith('/messages/')) return MESSAGES;
     if (path.startsWith('/notifications/')) return NOTIFS;
+    if (path.startsWith('/sessions/mine')) {
+      return {
+        sessions: [
+          {
+            session: { id: 101, user_id: 9, room_id: 3, joined_at: '2026-08-20T11:00:00Z', left_at: '2026-08-20T11:30:00Z', duration_seconds: 1800, summary: null },
+            room: ROOMS[2],
+            message_count: 1,
+          },
+        ],
+      };
+    }
     return [];
   });
 });
@@ -98,6 +109,11 @@ describe('ProfilePage portal', () => {
     expect(screen.getByText(/Peak day 2026-09-07/)).toBeTruthy();
     expect(screen.getByText(/Level journey/)).toBeTruthy();
     expect(screen.queryByText(/Up next/)).toBeNull();
+    for (const label of ['24H', '3D', '7D', '30D']) {
+      expect(screen.getByRole('tab', { name: label })).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole('tab', { name: '30D' }));
+    expect(await screen.findByText(/lines in the last 30 days/)).toBeTruthy();
   });
 
   it('links avatar and name to the profile page', async () => {
@@ -131,10 +147,10 @@ describe('ProfilePage portal', () => {
     });
   });
 
-  it('lists past sessions with quote preview', async () => {
+  it('lists tracked sessions with room info and detail links', async () => {
     renderPortal('sessions');
     expect(await screen.findByText('Old Session')).toBeTruthy();
-    expect(screen.getByText(/it was great/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Old Session/ }).getAttribute('href')).toBe('/session/101');
   });
 
   it('shows only scheduled rooms with guests and countdown', async () => {
@@ -165,16 +181,19 @@ describe('ProfilePage portal', () => {
     expect(screen.getByRole('button', { name: 'Reset' })).toBeTruthy();
   });
 
-  it('shows resume sections with editable bio and learning goal', async () => {
+  it('shows unified resume with work, interests, goal, top rooms and plan', async () => {
     renderPortal('me');
-    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'My learning goal' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'My learning goal' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Overview' })).toBeNull();
     expect(screen.queryByRole('heading', { name: /Skills/ })).toBeNull();
-    expect(screen.queryByRole('heading', { name: /Experience/ })).toBeNull();
-    expect(screen.queryByRole('heading', { name: /Education/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit headline' }));
-    expect(screen.getByLabelText('Headline')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Done editing headline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit work' }));
+    expect(screen.getByLabelText('Job title')).toBeTruthy();
+    expect(screen.getByLabelText('Career field')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done editing work' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit interests' })[0]);
+    fireEvent.change(screen.getByLabelText('New interest'), { target: { value: 'Music' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add interest' }));
+    expect(await screen.findByText('Music')).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit learning goal' })[0]);
     fireEvent.change(screen.getByLabelText('Learning goal'), { target: { value: 'Speak daily.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done editing learning goal' }));
@@ -183,7 +202,7 @@ describe('ProfilePage portal', () => {
 
   it('shows top hosted rooms and plan on profile', async () => {
     renderPortal('me');
-    expect(await screen.findByRole('heading', { name: 'Top rooms' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'My top rooms' })).toBeTruthy();
     expect(screen.getByText('Hosted Room')).toBeTruthy();
     expect(screen.queryByText('Joined Room')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Plan' })).toBeTruthy();

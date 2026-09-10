@@ -2711,12 +2711,95 @@ a.portal-row:hover .portal-row__go {
   border-color: var(--pf-ink, #1a1a1a);
 }
 
+.pf-resume__id--cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-resume__line--span {
+  grid-column: 1 / -1;
+}
+
+.pf-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pf-plan > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pf-plan__tier {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+@media (max-width: 991.98px) {
+  .pf-resume__id--cols {
+    grid-template-columns: 1fr;
+  }
+}
+
 .pf-goal__text {
   font-size: 16px;
   font-weight: 600;
   line-height: 1.6;
   border-left: 6px solid var(--pf-ink, #1a1a1a);
   padding-left: 14px;
+}
+
+.pf-linechart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.pf-linechart__grid {
+  stroke: #e4e4e4;
+  stroke-width: 1;
+}
+
+.pf-linechart__tick {
+  font-size: 11px;
+  fill: var(--pf-faint, #9a9a9a);
+}
+
+.pf-linechart__area {
+  fill: #111;
+  opacity: 0.07;
+}
+
+.pf-linechart__line {
+  stroke: #111;
+  stroke-width: 2.5;
+  stroke-linejoin: miter;
+  stroke-linecap: square;
+}
+
+.pf-linechart__dot {
+  fill: #111;
+}
+
+.portal-panel__sub {
+  padding: 0 20px;
+  margin-top: -4px;
+}
+
+.pf-markdown {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.pf-chattext {
+  white-space: pre-wrap;
 }
 
 .portal-row--btn {

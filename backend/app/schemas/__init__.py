@@ -25,6 +25,14 @@ from app.schemas.room import (
     RoomTokenResponse,
     RoomUpdateSchema,
 )
+from app.schemas.session import (
+    MySessionsResponse,
+    SessionAnswerResponse,
+    SessionAskRequest,
+    SessionResponse,
+    SessionSummaryResponse,
+    SessionWithRoom,
+)
 from app.schemas.user import Token, UserBaseSchema, UserCreateSchema, UserResponse, UserStatsResponse, UserUpdateSchema
 
 __all__ = [
@@ -51,6 +59,12 @@ __all__ = [
     "RoomResponse",
     "RoomTokenResponse",
     "RoomUpdateSchema",
+    "MySessionsResponse",
+    "SessionAnswerResponse",
+    "SessionAskRequest",
+    "SessionResponse",
+    "SessionSummaryResponse",
+    "SessionWithRoom",
     "ShortTermMemoryMessage",
     "Token",
     "UserBaseSchema",

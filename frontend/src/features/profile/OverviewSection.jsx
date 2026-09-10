@@ -1,9 +1,10 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HiArrowRight, HiCalendarDays, HiFire, HiSignal, HiSparkles } from 'react-icons/hi2';
 import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
 import { ActivitySection } from './ActivitySection';
-import { bucketByDay, WeekBars } from './WeekBars';
+import { LineChart, RHYTHM_RANGES, bucketByRange } from './LineChart';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
@@ -59,8 +60,9 @@ export function OverviewSection({
   activityRetry,
   onGo,
 }) {
-  const week = bucketByDay(messages, 7);
-  const weekTotal = week.reduce((s, b) => s + b.count, 0);
+  const [rhythmRange, setRhythmRange] = useState('7d');
+  const rhythm = useMemo(() => bucketByRange(messages, rhythmRange), [messages, rhythmRange]);
+  const rhythmTotal = rhythm.reduce((s, b) => s + b.count, 0);
   const levelIndex = Math.max(0, LEVELS.indexOf(englishLevel || ''));
   const peak = peakHourOf(messages);
 
@@ -119,10 +121,26 @@ export function OverviewSection({
       <section className="portal-panel">
         <div className="portal-panel__head">
           <h2>Your rhythm</h2>
-          <span className="portal-muted">{weekTotal} lines this week</span>
+          <div className="portal-tabs" role="tablist" aria-label="Rhythm range">
+            {RHYTHM_RANGES.map((range) => (
+              <button
+                key={range.key}
+                type="button"
+                role="tab"
+                aria-selected={rhythmRange === range.key}
+                onClick={() => setRhythmRange(range.key)}
+                className={`portal-tab${rhythmRange === range.key ? ' is-active' : ''}`}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="portal-panel__sub">
+          <span className="portal-muted">{rhythmTotal} lines in the last {rhythmRange === '24h' ? '24 hours' : rhythmRange === '3d' ? '3 days' : rhythmRange === '7d' ? '7 days' : '30 days'}</span>
         </div>
         <div className="portal-block">
-          <WeekBars data={week} height={140} />
+          <LineChart data={rhythm} height={170} />
         </div>
         <div className="pf-weekfacts">
           <span>

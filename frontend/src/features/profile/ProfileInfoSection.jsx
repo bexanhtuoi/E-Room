@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { HiArrowRight, HiCheck, HiPencil, HiFlag } from 'react-icons/hi2';
+import { HiArrowRight, HiCheck, HiPencil, HiFlag, HiPlus, HiXMark } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
@@ -40,23 +40,27 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
   const [level, setLevel] = useState(user?.english_level || '');
   const [avatar, setAvatar] = useState(user?.avatar_url || null);
   const [headline, setHeadline] = useState(user?.headline || '');
-  const [bio, setBio] = useState(user?.bio || '');
+  const [career, setCareer] = useState(user?.career_field || '');
   const [location, setLocation] = useState(user?.location || '');
   const [website, setWebsite] = useState(user?.website || '');
   const [goal, setGoal] = useState(user?.learning_goal || '');
+  const [interests, setInterests] = useState(Array.isArray(user?.interests) ? user.interests : []);
+  const [interestDraft, setInterestDraft] = useState('');
   const [editing, setEditing] = useState(null);
   const [showAvatar, setShowAvatar] = useState(false);
   const [notice, setNotice] = useState(null);
 
+  const sameList = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
   const dirty = name.trim() !== (user?.full_name || '')
     || email.trim() !== (user?.email || '')
     || (level || null) !== (user?.english_level || null)
     || (avatar || null) !== (user?.avatar_url || null)
     || headline.trim() !== (user?.headline || '')
-    || bio.trim() !== (user?.bio || '')
+    || career.trim() !== (user?.career_field || '')
     || location.trim() !== (user?.location || '')
     || website.trim() !== (user?.website || '')
-    || goal.trim() !== (user?.learning_goal || '');
+    || goal.trim() !== (user?.learning_goal || '')
+    || !sameList(interests, user?.interests);
 
   const saveMutation = useMutation({
     mutationFn: (data) => fetchJson(`/users/${user.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -77,10 +81,11 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
       english_level: level || null,
       avatar_url: avatar || null,
       headline: headline.trim() || null,
-      bio: bio.trim() || null,
+      career_field: career.trim() || null,
       location: location.trim() || null,
       website: website.trim() || null,
       learning_goal: goal.trim() || null,
+      interests,
     });
   }
 
@@ -90,14 +95,22 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
     setLevel(user?.english_level || '');
     setAvatar(user?.avatar_url || null);
     setHeadline(user?.headline || '');
-    setBio(user?.bio || '');
+    setCareer(user?.career_field || '');
     setLocation(user?.location || '');
     setWebsite(user?.website || '');
     setGoal(user?.learning_goal || '');
+    setInterests(Array.isArray(user?.interests) ? user.interests : []);
     setEditing(null);
   }
 
-  const shownBio = bio || user?.bio || '';
+  function addInterest() {
+    const interest = interestDraft.trim();
+    if (!interest || interests.some((s) => s.toLowerCase() === interest.toLowerCase())) return;
+    setInterests((list) => [...list, interest].slice(0, 20));
+    setInterestDraft('');
+  }
+
+  const shownWork = [headline || user?.headline, career || user?.career_field].filter(Boolean).join(' · ');
   const shownGoal = goal || user?.learning_goal || '';
 
   return (
@@ -111,8 +124,8 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
             <Face {...avatarFaceProps(avatar, name || user?.email)} size={104} />
             <span className="pf-avatarbtn__edit" aria-hidden="true"><HiPencil size={14} /></span>
           </button>
-          <div className="pf-resume__id">
-            <div className="pf-resume__line">
+          <div className="pf-resume__id pf-resume__id--cols">
+            <div className="pf-resume__line pf-resume__line--span">
               {editing === 'name' ? (
                 <span className="pf-field__edit">
                   <input className="er-input" value={name} autoFocus onChange={(e) => setName(e.target.value)} aria-label="Full name" />
@@ -126,18 +139,19 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
               )}
             </div>
             <div className="pf-resume__line">
-              {editing === 'headline' ? (
+              {editing === 'work' ? (
                 <span className="pf-field__edit">
-                  <input className="er-input" value={headline} autoFocus placeholder="e.g. Frontend Developer" onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
-                  <Done label="headline" onClick={() => setEditing(null)} />
+                  <input className="er-input" value={headline} autoFocus placeholder="Job title" onChange={(e) => setHeadline(e.target.value)} aria-label="Job title" />
+                  <input className="er-input" value={career} placeholder="Career field" onChange={(e) => setCareer(e.target.value)} aria-label="Career field" />
+                  <Done label="work" onClick={() => setEditing(null)} />
                 </span>
-              ) : (headline || user?.headline) ? (
+              ) : shownWork ? (
                 <>
-                  <strong>{headline || user?.headline}</strong>
-                  <Pencil label="headline" onClick={() => setEditing('headline')} />
+                  <strong>{shownWork}</strong>
+                  <Pencil label="work" onClick={() => setEditing('work')} />
                 </>
               ) : (
-                <AddLine label="Edit headline" hint="Add your headline" onClick={() => setEditing('headline')} />
+                <AddLine label="Edit work" hint="Add job title & field" onClick={() => setEditing('work')} />
               )}
             </div>
             <div className="pf-resume__line">
@@ -164,11 +178,7 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
                 </span>
               ) : (
                 <>
-                  <span>
-                    <span className="portal-flag is-solid">{tierLabel} plan</span>
-                    {' '}
-                    <span className="portal-muted">Level {level || user?.english_level || 'not set'}</span>
-                  </span>
+                  <span className="portal-muted">Level {level || user?.english_level || 'not set'}</span>
                   <Pencil label="English level" onClick={() => setEditing('level')} />
                 </>
               )}
@@ -191,7 +201,7 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
                 <AddLine label="Edit contact" hint="Add location & website" onClick={() => setEditing('contact')} />
               )}
             </div>
-            <div className="portal-muted pf-resume__foot">
+            <div className="portal-muted pf-resume__foot pf-resume__line--span">
               Member since {user?.created_at ? formatDateTime(user.created_at) : '—'} · #{user?.id}
             </div>
           </div>
@@ -201,18 +211,49 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
 
         <div className="pf-section">
           <div className="pf-section__head">
-            <h2>Overview</h2>
-            {editing !== 'bio' && <Pencil label="bio" onClick={() => setEditing('bio')} />}
+            <h2>Interested in</h2>
+            {editing !== 'interests' && <Pencil label="interests" onClick={() => setEditing('interests')} />}
           </div>
-          {editing === 'bio' ? (
+          {editing === 'interests' ? (
             <div style={{ display: 'grid', gap: 8 }}>
-              <textarea className="er-textarea" rows={4} value={bio} autoFocus placeholder="A few lines about you…" onChange={(e) => setBio(e.target.value)} aria-label="Bio" />
-              <div className="portal-actions"><Done label="bio" onClick={() => setEditing(null)} /></div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="er-input" value={interestDraft} autoFocus placeholder="Add a topic and press Enter…"
+                  onChange={(e) => setInterestDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addInterest(); } }}
+                  aria-label="New interest"
+                />
+                <button
+                  type="button" className="er-btn er-btn--ghost" title="Add interest" aria-label="Add interest"
+                  onClick={addInterest} style={{ padding: '8px 12px', flexShrink: 0 }}
+                >
+                  <HiPlus size={16} />
+                </button>
+              </div>
+              {interests.length > 0 && (
+                <div className="portal-topics">
+                  {interests.map((interest) => (
+                    <span key={interest} className="portal-topic">
+                      {interest}
+                      <button
+                        type="button" aria-label={`Remove interest ${interest}`}
+                        onClick={() => setInterests((list) => list.filter((s) => s !== interest))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, font: 'inherit', display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        <HiXMark size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="portal-actions"><Done label="interests" onClick={() => setEditing(null)} /></div>
             </div>
-          ) : shownBio ? (
-            <p className="pf-section__text">{shownBio}</p>
+          ) : interests.length > 0 ? (
+            <div className="portal-topics">
+              {interests.map((interest) => <span key={interest} className="portal-topic">{interest}</span>)}
+            </div>
           ) : (
-            <AddLine label="Edit bio" hint="Write a short intro about yourself" onClick={() => setEditing('bio')} />
+            <AddLine label="Edit interests" hint="Pick topics you love talking about" onClick={() => setEditing('interests')} />
           )}
         </div>
 
@@ -237,11 +278,6 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
           ) : (
             <AddLine label="Edit learning goal" hint="Set one clear goal to stay honest" onClick={() => setEditing('goal')} />
           )}
-          {shownGoal && editing !== 'goal' && (
-            <div className="portal-muted" style={{ marginTop: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <HiFlag size={13} /> Pinned to the top of your learning week.
-            </div>
-          )}
         </div>
 
         {topRooms.length > 0 && (
@@ -249,7 +285,7 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
             <div className="pf-divider" />
             <div className="pf-section">
               <div className="pf-section__head">
-                <h2>Top rooms</h2>
+                <h2>My top rooms</h2>
                 <Link className="portal-linkbtn" style={{ textDecoration: 'none' }} to="/my-rooms">
                   All rooms <HiArrowRight size={13} />
                 </Link>
@@ -279,10 +315,10 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
         <div className="pf-divider" />
 
         <div className="pf-section">
-          <div className="pf-section__head"><h2>Plan</h2><span className="portal-flag is-solid">{tierLabel}</span></div>
-          <div className="portal-resume">
+          <div className="pf-section__head"><h2>Plan</h2></div>
+          <div className="pf-plan">
             <div>
-              <strong>You are on {tierLabel}</strong>
+              <strong className="pf-plan__tier">{tierLabel}</strong>
               <span className="portal-muted">
                 {tierLabel === 'Free'
                   ? 'Create public rooms, join any open room, meet the community.'

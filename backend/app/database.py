@@ -70,11 +70,21 @@ def ensure_schema_columns() -> None:
             "location": "VARCHAR(120) NULL",
             "website": "VARCHAR(255) NULL",
             "learning_goal": "TEXT NULL",
+            "career_field": "VARCHAR(120) NULL",
+            "interests": "TEXT NULL",
         },
     }
 
     dropped: dict[str, list[str]] = {
         "users": ["skills", "experience", "education"],
+    }
+
+    # Cot ENUM cu khong nhan gia tri moi (vd invite) → noi thanh VARCHAR.
+    # Chi MySQL/TiDB can MODIFY; SQLite bo qua.
+    modified: dict[str, dict[str, str]] = {
+        "notifications": {
+            "notification_type": "VARCHAR(16) NULL",
+        },
     }
 
     backfill: dict[str, list[str]] = {
@@ -110,4 +120,17 @@ def ensure_schema_columns() -> None:
                     if name not in existing:
                         continue
                     conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {name}"))
+                    conn.commit()
+
+        if engine.dialect.name != "sqlite":
+            for table, columns in modified.items():
+                if table not in existing_tables:
+                    continue
+                for name, ddl in columns.items():
+                    conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {name} {ddl}"))
+                    conn.commit()
+
+            if table in modified and engine.dialect.name != "sqlite":
+                for name, ddl in modified[table].items():
+                    conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {name} {ddl}"))
                     conn.commit()

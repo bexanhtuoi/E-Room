@@ -92,7 +92,7 @@ export function ProfilePage({ section = 'overview' }) {
       lines: (messagesByRoom.get(room.id) || []).length,
       live: liveIds.has(room.id),
     }))
-    .sort((a, b) => Number(b.live) - Number(a.live) || b.lines - a.lines)
+    .sort((a, b) => b.lines - a.lines)
     .slice(0, 3);
   const pastSessions = rooms.filter((r) => r.status === 'ended' && (String(r.host_id) === String(user?.id) || messagesByRoom.has(r.id)));
 
@@ -114,9 +114,9 @@ export function ProfilePage({ section = 'overview' }) {
       bio: updated.bio ?? user.bio,
       location: updated.location ?? user.location,
       website: updated.website ?? user.website,
-      skills: updated.skills ?? user.skills,
-      experience: updated.experience ?? user.experience,
-      education: updated.education ?? user.education,
+      learning_goal: updated.learning_goal ?? user.learning_goal,
+      career_field: updated.career_field ?? user.career_field,
+      interests: updated.interests ?? user.interests,
     });
   }
 
@@ -236,7 +236,7 @@ export function ProfilePage({ section = 'overview' }) {
           />
         )}
         {section === 'sessions' && (
-          <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
+          <SessionsSection />
         )}
         {section === 'schedule' && (
           <ScheduleSection rooms={rooms} messagesByRoom={messagesByRoom} />

@@ -71,6 +71,12 @@ export function OnboardingWizard() {
       if (user?.id) {
         const payload = { profile_completed: true };
         if (form.english_level) payload.english_level = form.english_level;
+        if (form.job_title?.trim()) payload.headline = form.job_title.trim();
+        if (form.career_field?.trim()) payload.career_field = form.career_field.trim();
+        if (form.learning_goal?.trim()) payload.learning_goal = form.learning_goal.trim();
+        if (Array.isArray(form.tagIds) && form.tagIds.length > 0) {
+          payload.interests = form.tagIds.map((t) => String(typeof t === 'string' ? t : t.name || t.id || t)).filter(Boolean);
+        }
         await fetchJson(`/users/${user.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       }
 
@@ -85,7 +91,15 @@ export function OnboardingWizard() {
       }
 
       localStorage.removeItem(STORAGE_KEY);
-      setUser({ ...user, profile_completed: true, english_level: form.english_level || user?.english_level });
+      setUser({
+        ...user,
+        profile_completed: true,
+        english_level: form.english_level || user?.english_level,
+        headline: form.job_title?.trim() || user?.headline,
+        career_field: form.career_field?.trim() || user?.career_field,
+        learning_goal: form.learning_goal?.trim() || user?.learning_goal,
+        interests: Array.isArray(form.tagIds) && form.tagIds.length > 0 ? form.tagIds : user?.interests,
+      });
       navigate('/rooms', { replace: true });
     } catch (err) {
       setError(err?.message || 'Failed to save profile. Please try again.');

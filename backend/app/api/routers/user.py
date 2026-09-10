@@ -1,4 +1,5 @@
-﻿from datetime import date, datetime, timedelta
+﻿import json
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -220,6 +221,8 @@ def update_user(
     obj_in_data = user_in.model_dump(exclude_unset=True)
     if "password" in obj_in_data:
         obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
+    if "interests" in obj_in_data and obj_in_data["interests"] is not None:
+        obj_in_data["interests"] = json.dumps(obj_in_data["interests"])
     obj_in_data["updated_at"] = now_utc()
 
     updated_user = user_crud.update(db, db_obj=db_user, obj_in=obj_in_data)
