@@ -3,6 +3,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from sqlmodel import Session
 
 from app.ai import get_llm
+from app.ai.prompt import load_prompt_from_file
 from app.api.dependencies import require_auth
 from app.database import get_session
 from app.models import MessageRole
@@ -18,32 +19,8 @@ from app.services import message_crud, room_crud, session_crud, user_crud
 
 router = APIRouter()
 
-SUMMARY_SYSTEM_PROMPT = """Role: You are the E-Room session analyst. You turn raw voice-room transcripts into crisp meeting recaps.
-
-Context: The user hands you a transcript of one speaking session inside an English practice room. Each line starts with the speaker name. Lines from "AI" are the room assistant.
-
-Constraints:
-- Only use what the transcript actually says. Never invent names, facts, or decisions.
-- Keep the whole answer under 250 words.
-- Write in the same language the speakers mostly used.
-- If the transcript is empty or meaningless, say so in one sentence.
-
-Response format (markdown, exactly these sections, skip empty ones):
-## Summary
-## Key points
-## New words & phrases
-## Action items"""
-
-ASK_SYSTEM_PROMPT = """Role: You are the E-Room session analyst answering questions about one recorded speaking session.
-
-Context: The user gives you the full transcript of their session plus one question. Each transcript line starts with the speaker name.
-
-Constraints:
-- Answer only from the transcript. If the answer is not there, say "Not mentioned in this session."
-- Be concise: max 150 words unless the user asks for detail.
-- Reply in the same language as the question.
-
-Response format: plain markdown, no extra sections."""
+SUMMARY_SYSTEM_PROMPT = load_prompt_from_file("session_summary")
+ASK_SYSTEM_PROMPT = load_prompt_from_file("session_ask")
 
 
 def get_my_session(db: Session, session_id: int, request: Request):

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiClock, HiMagnifyingGlass } from 'react-icons/hi2';
+import { HiChatBubbleLeftRight, HiClock, HiMagnifyingGlass } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { formatDateTime } from '../../lib/formatters';
 
@@ -52,27 +52,38 @@ export function SessionsSection() {
           </div>
         )}
         {!sessionsQuery.isLoading && !sessionsQuery.isError && filtered.length > 0 && (
-          <div className="pf-sessions">
+          <div className="pf-events">
             {filtered.map(({ session, room, message_count }) => {
               const topics = Array.isArray(room?.topics) ? room.topics : [];
+              const joined = session.joined_at ? new Date(session.joined_at) : null;
+              const validDate = joined && !Number.isNaN(joined.getTime()) ? joined : null;
               return (
-                <Link key={session.id} to={`/session/${session.id}`} className="pf-session" style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <span className="pf-session__main">
-                    <span className="pf-session__name">{room?.name || `Room ${session.room_id}`}</span>
-                    {topics.length > 0 && <span className="portal-table__tags">{topics.slice(0, 3).join(' · ')}</span>}
-                    <span className="portal-muted">
-                      {session.joined_at ? formatDateTime(session.joined_at) : '—'}
-                      {session.left_at ? ` → ${formatDateTime(session.left_at)}` : ' · ongoing'}
+                <article key={session.id} className="pf-event">
+                  {validDate && (
+                    <span className="pf-event__date" title={validDate.toLocaleString()}>
+                      <strong>{validDate.toLocaleDateString(undefined, { day: '2-digit' })}</strong>
+                      <span>{validDate.toLocaleDateString(undefined, { month: 'short' })}</span>
+                      <span className="pf-event__time">{validDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
                     </span>
-                  </span>
-                  <span className="pf-session__meta">
-                    <span className="portal-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <HiClock size={13} /> {formatDuration(session.duration_seconds)}
-                    </span>
-                    <span className="portal-table__num">{message_count} lines</span>
-                    <span aria-hidden="true">▸</span>
-                  </span>
-                </Link>
+                  )}
+                  <div className="pf-event__body">
+                    <div className="pf-room__title">
+                      <strong>{room?.name || `Room ${session.room_id}`}</strong>
+                      {!session.left_at && <span className="portal-badge is-live">ONGOING</span>}
+                    </div>
+                    {topics.length > 0 && (
+                      <div className="portal-topics">{topics.slice(0, 5).map((t) => <span key={t} className="portal-topic">{t}</span>)}</div>
+                    )}
+                    <div className="pf-room__meta">
+                      <span><HiClock size={13} /> {formatDuration(session.duration_seconds)}</span>
+                      <span><HiChatBubbleLeftRight size={13} /> {message_count} lines</span>
+                      {session.left_at && <span>left {formatDateTime(session.left_at)}</span>}
+                    </div>
+                  </div>
+                  <Link className="er-btn portal-mini-btn pf-event__go" style={{ textDecoration: 'none' }} to={`/session/${session.id}`}>
+                    Open
+                  </Link>
+                </article>
               );
             })}
           </div>

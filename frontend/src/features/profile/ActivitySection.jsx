@@ -66,7 +66,7 @@ export function ActivitySection({ messages, rooms, sessions = [], isLoading, isE
             </Link>
           ) : (
             <Link key={row.id} to={`/rooms/${row.message.room_id}`} className="portal-row">
-              <span className={`portal-badge${row.message.role === 'ai' ? ' is-ai' : ''}`}>{row.message.role === 'ai' ? 'AI' : 'YOU'}</span>
+              <span className={`portal-badge${row.message.role === 'ai' ? ' is-ai' : ''}`}>{row.message.role === 'ai' ? 'AI' : 'CHAT'}</span>
               <span className="portal-row__main">
                 <span className="portal-row__text">{row.message.text}</span>
                 <span className="portal-row__sub">{roomName.get(row.message.room_id) || `Room ${row.message.room_id}`}{row.message.created_at ? ` · ${formatDateTime(row.message.created_at)}` : ''}</span>

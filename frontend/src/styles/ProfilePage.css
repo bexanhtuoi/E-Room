@@ -2197,29 +2197,34 @@ a.portal-row:hover .portal-row__go {
     font-size: 14px;
     padding: 10px 14px;
     cursor: pointer;
-    margin-bottom: 12px;
+    margin-bottom: 0;
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 80;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   }
 
   .portal-app .portal-side {
     position: fixed;
     top: 0;
-    left: 0;
+    right: 0;
     bottom: 0;
     width: 264px;
     max-width: 84vw;
     z-index: 95;
-    border-right: 1px solid #111;
+    border-left: 1px solid #111;
     border-bottom: none;
     background: #fff;
     flex-direction: column;
-    transform: translateX(-105%);
+    transform: translateX(105%);
     transition: transform 0.2s ease;
     overflow-y: auto;
   }
 
   .portal-app.side-open .portal-side {
     transform: none;
-    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.25);
   }
 
   .portal-app.side-open.is-collapsed .portal-side__id-text,
@@ -2272,7 +2277,7 @@ a.portal-row:hover .portal-row__go {
   }
 
   .portal-app .portal-side__collapse {
-    display: inline-flex;
+    display: none;
   }
 
   .pf-backdrop {
@@ -2892,6 +2897,122 @@ a.portal-row:hover .portal-row__go {
   .pf-session {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+  }
+}
+
+.pf-sessgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--pf-gap, 16px);
+  align-items: start;
+}
+
+.pf-copilot {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.pf-copilot__recap {
+  justify-content: center;
+}
+
+.pf-copilot__recaptext {
+  background: #fafafa;
+  border: 1px solid #eee;
+  padding: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.pf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pf-chipbtn {
+  cursor: pointer;
+  font: inherit;
+}
+
+.pf-chipbtn:hover {
+  background: var(--pf-ink, #1a1a1a);
+  color: #fff;
+}
+
+.pf-chatlog {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.pf-chatlog__turn {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.pf-chatlog__turn.is-user {
+  justify-items: end;
+}
+
+.pf-chatlog__turn .pf-chattext {
+  background: #f4f4f4;
+  padding: 10px 12px;
+  max-width: 100%;
+}
+
+.pf-chatlog__turn.is-ai .pf-chattext {
+  background: #111;
+  color: #fff;
+}
+
+.pf-askrow {
+  display: flex;
+  gap: 8px;
+}
+
+.pf-askrow .er-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-talk {
+  display: grid;
+  gap: 12px;
+}
+
+.pf-talk__line {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.pf-talk__bubble {
+  background: #f7f7f7;
+  border: 1px solid #eee;
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.pf-talk__bubble strong {
+  font-size: 12px;
+}
+
+@media (max-width: 991.98px) {
+  .pf-sessgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-copilot {
+    position: static;
   }
 }
 

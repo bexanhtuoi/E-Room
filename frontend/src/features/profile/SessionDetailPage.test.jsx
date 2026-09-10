@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/api', () => ({ fetchJson: vi.fn() }));
-vi.mock('../AuthContext', () => ({
+vi.mock('../../app/AuthContext', () => ({
   useAuth: () => ({ user: { id: 9, email: 'an@example.com', full_name: 'An Nguyen' } }),
 }));
 
@@ -59,7 +59,7 @@ describe('SessionDetailPage', () => {
 
   it('summarizes on demand', async () => {
     renderDetail();
-    fireEvent.click(await screen.findByRole('button', { name: 'Summarize this session' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Recap for Notion/ }));
     await waitFor(() => {
       expect(fetchJson).toHaveBeenCalledWith('/sessions/101/summarize', expect.objectContaining({ method: 'POST' }));
     });

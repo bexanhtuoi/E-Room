@@ -60,7 +60,6 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
   const [headline, setHeadline] = useState(user?.headline || '');
   const [career, setCareer] = useState(user?.career_field || '');
   const [location, setLocation] = useState(user?.location || '');
-  const [website, setWebsite] = useState(user?.website || '');
   const [goal, setGoal] = useState(user?.learning_goal || '');
   const [interests, setInterests] = useState(Array.isArray(user?.interests) ? user.interests : []);
   const [interestDraft, setInterestDraft] = useState('');
@@ -76,7 +75,6 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
     || headline.trim() !== (user?.headline || '')
     || career.trim() !== (user?.career_field || '')
     || location.trim() !== (user?.location || '')
-    || website.trim() !== (user?.website || '')
     || goal.trim() !== (user?.learning_goal || '')
     || !sameList(interests, user?.interests);
 
@@ -101,7 +99,6 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
       headline: headline.trim() || null,
       career_field: career.trim() || null,
       location: location.trim() || null,
-      website: website.trim() || null,
       learning_goal: goal.trim() || null,
       interests,
     });
@@ -115,7 +112,6 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
     setHeadline(user?.headline || '');
     setCareer(user?.career_field || '');
     setLocation(user?.location || '');
-    setWebsite(user?.website || '');
     setGoal(user?.learning_goal || '');
     setInterests(Array.isArray(user?.interests) ? user.interests : []);
     setEditing(null);
@@ -205,18 +201,15 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, topRooms = [] }) 
               {editing === 'contact' ? (
                 <span className="pf-field__edit">
                   <input className="er-input" value={location} autoFocus placeholder="City, Country" onChange={(e) => setLocation(e.target.value)} aria-label="Location" />
-                  <input className="er-input" value={website} placeholder="https://…" onChange={(e) => setWebsite(e.target.value)} aria-label="Website" />
                   <Done label="contact" onClick={() => setEditing(null)} />
                 </span>
-              ) : (location || user?.location || website || user?.website) ? (
+              ) : (location || user?.location) ? (
                 <>
-                  <span className="portal-muted">
-                    {[location || user?.location, website || user?.website].filter(Boolean).join(' · ')}
-                  </span>
+                  <span className="portal-muted">{location || user?.location}</span>
                   <Pencil label="contact" onClick={() => setEditing('contact')} />
                 </>
               ) : (
-                <AddLine label="Edit contact" hint="Add location & website" onClick={() => setEditing('contact')} />
+                <AddLine label="Edit contact" hint="Add your location" onClick={() => setEditing('contact')} />
               )}
             </div>
             <div className="portal-muted pf-resume__foot pf-resume__line--span">

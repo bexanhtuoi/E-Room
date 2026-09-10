@@ -150,7 +150,7 @@ describe('ProfilePage portal', () => {
   it('lists tracked sessions with room info and detail links', async () => {
     renderPortal('sessions');
     expect(await screen.findByText('Old Session')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Old Session/ }).getAttribute('href')).toBe('/session/101');
+    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/session/101');
   });
 
   it('shows only scheduled rooms with guests and countdown', async () => {
