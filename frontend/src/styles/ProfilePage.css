@@ -2155,7 +2155,15 @@ a.portal-row:hover .portal-row__go {
   font-size: 13px;
   line-height: 1.6;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 991.98px) {
+  .pf-wraphead h2 {
+    flex: 1 1 100%;
+  }
 }
 
 .pf-savebar {

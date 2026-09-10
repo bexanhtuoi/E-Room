@@ -38,7 +38,6 @@ function ResumeHeader({ room, messagesTotal }) {
           <span className="portal-muted">#{room.id}</span>
         </div>
       </div>
-      <Link className="er-btn" style={{ textDecoration: 'none', flexShrink: 0 }} to={`/rooms/${room.id}`}>Enter room</Link>
     </header>
   );
 }
@@ -233,7 +232,12 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmail(); } }}
               />
-              <button type="button" className="er-btn er-btn--ghost" onClick={addEmail}><HiPlus size={14} /> Add</button>
+              <button
+              type="button" className="er-btn er-btn--ghost" title="Add email" aria-label="Add email"
+              onClick={addEmail} style={{ padding: '8px 12px', flexShrink: 0 }}
+            >
+              <HiPlus size={16} />
+            </button>
             </div>
             {emails.length > 0 && (
               <div className="portal-topics" style={{ marginTop: 8 }}>
@@ -256,7 +260,7 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
       </section>
 
       <section className="portal-panel">
-        <div className="portal-panel__head">
+        <div className="portal-panel__head pf-wraphead">
           <h2>AI prompt</h2>
           {prompt.trim() !== (defaultPrompt || '').trim()
             ? <span className="portal-flag is-solid">CUSTOM</span>
