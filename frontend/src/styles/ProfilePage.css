@@ -292,7 +292,6 @@
 .portal-stack {
   display: grid;
   gap: 16px;
-  max-width: 1280px;
 }
 
 /* Grid blowout: item nao cung duoc phep co lai, chart rong thi tu cuon */
@@ -308,7 +307,6 @@
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  max-width: 1280px;
   padding-bottom: 16px;
   margin-bottom: 20px;
   border-bottom: 1px solid #e0e0e0;
@@ -2463,6 +2461,72 @@ a.portal-row:hover .portal-row__go {
   .pf-profile__head {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+.pf-today {
+  background: #fff;
+  border: 1px solid var(--pf-line, #e7e7e7);
+  border-left: 6px solid var(--pf-ink, #1a1a1a);
+  padding: 20px 22px;
+  display: grid;
+  gap: 4px;
+}
+
+.pf-today__date {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pf-muted, #6f6f6f);
+}
+
+.pf-today__title {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.pf-today__sub {
+  font-size: 14px;
+  color: #444;
+}
+
+.pf-today__cta {
+  justify-self: start;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-weekfacts {
+  display: flex;
+  gap: 8px 28px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #444;
+  padding: 4px 0 2px;
+}
+
+.pf-weekfacts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pf-weekfacts .is-up {
+  color: var(--pf-up, #1a7f37);
+  font-weight: 700;
+}
+
+.pf-weekfacts .is-down {
+  color: var(--pf-down, #b42318);
+  font-weight: 700;
+}
+
+@media (max-width: 991.98px) {
+  .pf-today__title {
+    font-size: 21px;
   }
 }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiAcademicCap, HiArrowRightOnRectangle, HiBell, HiCalendarDays, HiClock, HiHome, HiPlusCircle, HiUserGroup } from 'react-icons/hi2';
+import { HiAcademicCap, HiArrowRightOnRectangle, HiBell, HiCalendarDays, HiClock, HiHome, HiUserGroup } from 'react-icons/hi2';
 import { useAuth } from '../AuthContext';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
@@ -101,6 +101,13 @@ export function ProfilePage({ section = 'overview' }) {
       full_name: updated.full_name ?? user.full_name,
       english_level: updated.english_level ?? user.english_level,
       avatar_url: updated.avatar_url ?? user.avatar_url,
+      headline: updated.headline ?? user.headline,
+      bio: updated.bio ?? user.bio,
+      location: updated.location ?? user.location,
+      website: updated.website ?? user.website,
+      skills: updated.skills ?? user.skills,
+      experience: updated.experience ?? user.experience,
+      education: updated.education ?? user.education,
     });
   }
 
@@ -189,11 +196,7 @@ export function ProfilePage({ section = 'overview' }) {
             <h1>{head.title}</h1>
             <p>{head.desc}</p>
           </div>
-          <div className="portal-pagehead__actions">
-            {section === 'overview' && (
-              <button className="er-btn" onClick={() => setShowCreateRoom(true)}><HiPlusCircle size={16} /> New room</button>
-            )}
-          </div>
+          <div className="portal-pagehead__actions" />
         </div>
 
         <div style={{ height: 16 }} />
@@ -237,9 +240,6 @@ export function ProfilePage({ section = 'overview' }) {
             tierLabel={tierLabel(tier)}
             onSaved={handleProfileSaved}
             onSignOut={handleSignOut}
-            stats={stats}
-            hostedCount={hostedRooms.length}
-            sessionsCount={pastSessions.length}
           />
         )}
       </main>

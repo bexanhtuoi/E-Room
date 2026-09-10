@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import Optional
 
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Column, Field, Relationship, SQLModel, String, Text
 
 from app.utils.datetime_utils import now_utc
 
@@ -33,6 +33,13 @@ class User(SQLModel, table=True):
     english_level: Optional[EnglishLevel] = Field(default=None)
     role: Optional[RoleEnum] = Field(default=RoleEnum.user)
     profile_completed: bool = Field(default=False)
+    headline: Optional[str] = Field(default=None, sa_column=Column(String(120)))
+    bio: Optional[str] = Field(default=None, sa_column=Column(Text))
+    location: Optional[str] = Field(default=None, sa_column=Column(String(120)))
+    website: Optional[str] = Field(default=None, sa_column=Column(String(255)))
+    skills: str = Field(default="[]", sa_column=Column(Text, nullable=False))
+    experience: str = Field(default="[]", sa_column=Column(Text, nullable=False))
+    education: str = Field(default="[]", sa_column=Column(Text, nullable=False))
     created_at: datetime = Field(default_factory=now_utc, nullable=False)
     updated_at: datetime = Field(default_factory=now_utc, nullable=False)
 

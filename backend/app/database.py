@@ -63,6 +63,15 @@ def ensure_schema_columns() -> None:
             "content": "TEXT NULL",
             "enabled": "BOOLEAN NOT NULL DEFAULT 1",
         },
+        "users": {
+            "headline": "VARCHAR(120) NULL",
+            "bio": "TEXT NULL",
+            "location": "VARCHAR(120) NULL",
+            "website": "VARCHAR(255) NULL",
+            "skills": "TEXT NULL",
+            "experience": "TEXT NULL",
+            "education": "TEXT NULL",
+        },
     }
 
     backfill: dict[str, list[str]] = {

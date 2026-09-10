@@ -7,6 +7,7 @@ from sqlmodel import Session
 from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import UserCreateSchema, UserResponse, UserStatsResponse, UserUpdateSchema
+from app.schemas.user import list_to_json
 from app.security import hash_password
 from app.services import (
     document_crud,
@@ -220,6 +221,9 @@ def update_user(
     obj_in_data = user_in.model_dump(exclude_unset=True)
     if "password" in obj_in_data:
         obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
+    for field in ("skills", "experience", "education"):
+        if field in obj_in_data:
+            obj_in_data[field] = list_to_json(obj_in_data[field])
     obj_in_data["updated_at"] = now_utc()
 
     updated_user = user_crud.update(db, db_obj=db_user, obj_in=obj_in_data)
