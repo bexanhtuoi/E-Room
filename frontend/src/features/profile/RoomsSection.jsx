@@ -42,11 +42,8 @@ function RoomCard({ room, myMessages, onDeleted }) {
         <div className="pf-room__body">
           <div className="pf-room__title">
             <strong>{room.name}</strong>
-            {room.is_private && <span className="portal-flag" title="Only you and allowed emails can see this"><HiLockClosed size={11} /> PRIVATE</span>}
-          </div>
-          <div className="pf-room__badges">
             <span className={`portal-status is-${room.status}`}>{STATUS_LABEL[room.status] || room.status}</span>
-            <span className="portal-flag is-solid">HOST</span>
+            {room.is_private && <span className="portal-flag" title="Only you and allowed emails can see this"><HiLockClosed size={11} /><span>PRIVATE</span></span>}
             {live && <LiveFaces roomId={room.id} />}
           </div>
           {room.description && <p className="pf-room__desc">{room.description}</p>}
@@ -87,6 +84,8 @@ export function RoomsSection({ hostedRooms, liveRooms, messagesByRoom, onRoomDel
   const filtered = hostedRooms
     .filter((r) => {
       if (tab === 'live' && r.status !== 'active') return false;
+      if (tab === 'open' && r.status !== 'idle') return false;
+      if (tab === 'ended' && r.status !== 'ended') return false;
       if (!q) return true;
       const topics = Array.isArray(r.topics) ? r.topics.join(' ') : '';
       return `${r.name || ''} ${r.description || ''} ${topics}`.toLowerCase().includes(q);
@@ -104,7 +103,7 @@ export function RoomsSection({ hostedRooms, liveRooms, messagesByRoom, onRoomDel
       </div>
       <div className="portal-toolbar">
         <div className="portal-tabs" role="tablist" aria-label="Room filter">
-          {[{ key: 'all', label: 'All' }, { key: 'live', label: 'Live' }].map((t) => (
+          {[{ key: 'all', label: 'All' }, { key: 'live', label: 'Live' }, { key: 'open', label: 'Open' }, { key: 'ended', label: 'Ended' }].map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)} className={`portal-tab${tab === t.key ? ' is-active' : ''}`}>
               {t.label}{t.key === 'live' && liveRooms.length > 0 ? ` (${liveRooms.length})` : ''}
             </button>

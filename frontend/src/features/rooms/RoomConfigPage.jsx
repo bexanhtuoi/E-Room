@@ -278,7 +278,7 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
       </section>
 
       <section className="portal-panel">
-        <div className="portal-panel__head">
+        <div className="portal-panel__head pf-nowrap">
           <h2>AI prompt</h2>
           {prompt.trim() !== (defaultPrompt || '').trim()
             ? <span className="portal-flag is-solid">CUSTOM</span>

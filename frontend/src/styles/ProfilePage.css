@@ -825,6 +825,9 @@
 }
 
 .portal-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -832,6 +835,7 @@
   padding: 2px 8px;
   color: #333;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .portal-flag.is-solid {
@@ -2207,9 +2211,13 @@ a.portal-row:hover .portal-row__go {
   color: #111;
 }
 
-.portal-flag {
-  white-space: nowrap;
-  flex-shrink: 0;
+.portal-panel__head.pf-nowrap {
+  flex-wrap: nowrap;
+}
+
+.portal-panel__head.pf-nowrap h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .portal-row--btn {
