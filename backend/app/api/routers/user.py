@@ -1,7 +1,7 @@
 ﻿from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlmodel import Session
 
 from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
@@ -31,6 +31,72 @@ def get_me(
 @router.get("/count")
 def count_users(db: Session = Depends(get_session)) -> dict:
     return {"count": user_crud.count(db)}
+
+
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
+AVATAR_TYPES = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+
+
+def avatar_marker(user_id: int) -> str:
+    return f"avatar:{user_id}"
+
+
+@router.post("/me/avatar", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def upload_my_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> UserResponse:
+    current_user = request.state.current_user
+
+    suffix = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+    if suffix not in AVATAR_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only jpg, png, webp images are supported")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    if len(raw) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Avatar must be at most 2MB")
+
+    from app.integration.minio import put_avatar
+
+    put_avatar(raw, current_user.id)
+
+    updated_user = user_crud.update(
+        db,
+        db_obj=current_user,
+        obj_in={"avatar_url": avatar_marker(current_user.id), "updated_at": now_utc()},
+    )
+    return updated_user
+
+
+@router.get("/{user_id}/avatar/file")
+def download_avatar(user_id: int, db: Session = Depends(get_session)):
+    from fastapi.responses import Response
+
+    db_user = user_crud.get_one(db, id=user_id)
+    if not db_user or db_user.avatar_url != avatar_marker(user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+
+    from app.integration.minio import get_object
+
+    try:
+        data = get_object(f"avatars/{user_id}")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found in storage")
+
+    if data[:2] == b"\xff\xd8":
+        media_type = "image/jpeg"
+    elif data[:8] == b"\x89PNG\r\n\x1a\n":
+        media_type = "image/png"
+    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        media_type = "image/webp"
+    else:
+        media_type = "application/octet-stream"
+
+    return Response(content=data, media_type=media_type)
 
 
 def as_naive_utc(value: datetime) -> datetime:

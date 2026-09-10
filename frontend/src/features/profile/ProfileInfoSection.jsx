@@ -1,42 +1,67 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { HiArrowRightOnRectangle } from 'react-icons/hi2';
+import { HiCheck, HiPencil, HiXMark } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
 import { Face, avatarFaceProps } from '../../components/common/Faces';
-import { AvatarPicker } from './AvatarPicker';
+import { AvatarPopup } from './AvatarPopup';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
+function EditableRow({ label, value, editing, onEdit, onDone, children }) {
+  return (
+    <div className="pf-field">
+      <span className="er-label">{label}</span>
+      {editing ? (
+        <span className="pf-field__edit">
+          {children}
+          <button type="button" className="portal-tool" title="Done" aria-label={`Done editing ${label}`} onClick={onDone}>
+            <HiCheck size={15} />
+          </button>
+        </span>
+      ) : (
+        <span className="pf-field__view">
+          <span className="pf-field__value">{value || <span className="portal-muted">Not set</span>}</span>
+          <button type="button" className="portal-tool" title={`Edit ${label}`} aria-label={`Edit ${label}`} onClick={onEdit}>
+            <HiPencil size={14} />
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ProfileInfoSection({ user, tierLabel, onSaved, onSignOut }) {
   const [name, setName] = useState(user?.full_name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [level, setLevel] = useState(user?.english_level || '');
   const [avatar, setAvatar] = useState(user?.avatar_url || null);
+  const [editing, setEditing] = useState(null);
+  const [showAvatar, setShowAvatar] = useState(false);
   const [notice, setNotice] = useState(null);
+
+  const dirty = name.trim() !== (user?.full_name || '')
+    || email.trim() !== (user?.email || '')
+    || (level || null) !== (user?.english_level || null)
+    || (avatar || null) !== (user?.avatar_url || null);
 
   const saveMutation = useMutation({
     mutationFn: (data) => fetchJson(`/users/${user.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['room-host'] });
       onSaved?.(updated);
-      setNotice({ ok: true, text: 'Profile updated.' });
+      setEditing(null);
+      setNotice({ ok: true, text: 'Profile saved.' });
       setTimeout(() => setNotice(null), 3000);
     },
-    onError: (err) => setNotice({ ok: false, text: err?.message || 'Failed to update profile.' }),
+    onError: (err) => setNotice({ ok: false, text: err?.message || 'Could not save profile.' }),
   });
-
-  const delMutation = useMutation({
-    mutationFn: () => fetchJson(`/users/${user.id}`, { method: 'DELETE' }),
-    onSuccess: () => onSignOut?.(),
-    onError: (err) => setNotice({ ok: false, text: err?.message || 'Could not delete account.' }),
-  });
-
-  const dirty = name.trim() !== (user?.full_name || '') || (level || null) !== (user?.english_level || null) || (avatar || null) !== (user?.avatar_url || null);
 
   function handleSave() {
     saveMutation.mutate({
       full_name: name.trim(),
+      email: email.trim(),
       english_level: level || null,
       avatar_url: avatar || null,
     });
@@ -44,81 +69,74 @@ export function ProfileInfoSection({ user, tierLabel, onSaved, onSignOut }) {
 
   function handleReset() {
     setName(user?.full_name || '');
+    setEmail(user?.email || '');
     setLevel(user?.english_level || '');
     setAvatar(user?.avatar_url || null);
-  }
-
-  function handleDelete() {
-    if (!window.confirm('Delete your account and everything in it (rooms, messages, documents)?')) return;
-    if (!window.confirm('This cannot be undone. Delete for real?')) return;
-    delMutation.mutate();
+    setEditing(null);
   }
 
   return (
-    <div className="portal-stack">
+    <div className="portal-stack pf-center pf-wide">
       <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Identity</h2><span className="portal-flag is-solid">{tierLabel} plan</span></div>
-        <div className="portal-profilecard">
-          <Face {...avatarFaceProps(avatar, name || user?.email)} size={88} />
-          <div className="portal-profilecard__info">
-            <strong>{name || user?.full_name || 'E-Room learner'}</strong>
-            <span className="portal-muted">{user?.email}</span>
-            <span className="portal-muted">Level {level || user?.english_level || 'not set'} · Member since {user?.created_at ? formatDateTime(user.created_at) : '—'}</span>
+        <div className="pf-profile__head">
+          <button
+            type="button" className="pf-avatarbtn" title="Change avatar" aria-label="Change avatar"
+            onClick={() => setShowAvatar(true)}
+          >
+            <Face {...avatarFaceProps(avatar, name || user?.email)} size={96} />
+            <span className="pf-avatarbtn__edit" aria-hidden="true"><HiPencil size={14} /></span>
+          </button>
+          <div className="pf-profile__id">
+            <div className="pf-profile__name">
+              <h2>{name || user?.full_name || 'E-Room learner'}</h2>
+              <span className="portal-flag is-solid">{tierLabel} plan</span>
+            </div>
+            <div className="portal-muted">{email || user?.email}</div>
+            <div className="portal-muted">
+              Level {level || user?.english_level || 'not set'} · Member since {user?.created_at ? formatDateTime(user.created_at) : '—'}
+            </div>
           </div>
         </div>
+      </section>
+
+      <section className="portal-panel">
+        <div className="portal-panel__head"><h2>Details</h2></div>
         {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
-        <div className="er-grid er-grid--2 portal-formgrid">
-          <div>
-            <label className="er-label" htmlFor="portal-name">Full name</label>
-            <input id="portal-name" className="er-input" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <label className="er-label" htmlFor="portal-level">English level</label>
-            <select id="portal-level" className="er-input" value={level} onChange={(e) => setLevel(e.target.value)}>
-              <option value="">Not set yet</option>
-              {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="er-label">Email</label>
-          <input className="er-input" value={user?.email || ''} disabled />
-        </div>
-        <div style={{ marginTop: 18 }}>
-          <AvatarPicker value={avatar} name={name || user?.email} onPick={setAvatar} />
-        </div>
-        <div className="portal-actions">
-          <button className="er-btn" disabled={saveMutation.isPending || !name.trim() || !dirty} onClick={handleSave}>
-            {saveMutation.isPending ? 'Saving…' : 'Save changes'}
-          </button>
-          <button className="er-btn er-btn--ghost" disabled={!dirty} onClick={handleReset}>Reset</button>
+        <EditableRow label="Full name" value={name || user?.full_name} editing={editing === 'name'} onEdit={() => setEditing('name')} onDone={() => setEditing(null)}>
+          <input className="er-input" value={name} autoFocus onChange={(e) => setName(e.target.value)} aria-label="Full name" />
+        </EditableRow>
+        <EditableRow label="Email" value={email || user?.email} editing={editing === 'email'} onEdit={() => setEditing('email')} onDone={() => setEditing(null)}>
+          <input className="er-input" type="email" value={email} autoFocus onChange={(e) => setEmail(e.target.value)} aria-label="Email" />
+        </EditableRow>
+        <EditableRow label="English level" value={level || user?.english_level} editing={editing === 'level'} onEdit={() => setEditing('level')} onDone={() => setEditing(null)}>
+          <select className="er-input" value={level} autoFocus onChange={(e) => setLevel(e.target.value)} aria-label="English level">
+            <option value="">Not set yet</option>
+            {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </EditableRow>
+        <div className="pf-field">
+          <span className="er-label">User ID</span>
+          <span className="pf-field__view"><span className="pf-field__value portal-muted">#{user?.id}</span></span>
         </div>
       </section>
 
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Account</h2></div>
-        <div className="portal-kv">
-          <div><span>User ID</span><strong>#{user?.id}</strong></div>
-          <div><span>Plan</span><strong>{tierLabel}</strong></div>
-        </div>
-        <div className="portal-actions">
-          <button className="er-btn er-btn--ghost" onClick={onSignOut}>
-            <HiArrowRightOnRectangle size={15} /> Sign out
-          </button>
-        </div>
-      </section>
+      <div className="pf-savebar">
+        <button className="er-btn er-btn--ghost pf-savebar__btn" disabled={!dirty || saveMutation.isPending} onClick={handleReset}>
+          <HiXMark size={15} /> Reset
+        </button>
+        <button className="er-btn pf-savebar__btn" disabled={saveMutation.isPending || !name.trim() || !email.trim() || !dirty} onClick={handleSave}>
+          <HiCheck size={15} /> {saveMutation.isPending ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
 
-      <section className="portal-panel is-danger">
-        <div className="portal-panel__head"><h2>Danger zone</h2></div>
-        <div className="portal-danger">
-          <span className="portal-muted">Delete your account with all rooms, messages and documents. This cannot be undone.</span>
-          <span>
-            <button className="er-btn er-btn--ghost portal-mini-btn" disabled={delMutation.isPending} onClick={handleDelete}>
-              {delMutation.isPending ? 'Deleting…' : 'Delete account'}
-            </button>
-          </span>
-        </div>
-      </section>
+      {showAvatar && (
+        <AvatarPopup
+          name={name || user?.email}
+          value={avatar}
+          onPick={(picked) => { setAvatar(picked); }}
+          onClose={() => setShowAvatar(false)}
+        />
+      )}
     </div>
   );
 }

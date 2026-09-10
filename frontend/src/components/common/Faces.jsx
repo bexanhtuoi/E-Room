@@ -10,12 +10,19 @@ const VARIANTS = [
 
 export const FACE_VARIANT_COUNT = VARIANTS.length;
 
-// Avatar luu duoi dang "face:N" (preset user chon) de render giong nhau moi noi.
+// Avatar luu duoi dang "face:N" (preset) hoac "avatar:{userId}" (anh upload).
 // Tra ve props cho <Face/>. avatarUrl la/null → hash theo ten nhu cu.
-export function avatarFaceProps(avatarUrl, fallbackName = '?') {
-  const match = /^face:(\d+)$/.exec(String(avatarUrl || ''));
-  if (match) {
-    return { variant: Number(match[1]) % VARIANTS.length, name: fallbackName };
+export function avatarFaceProps(avatarUrl, fallbackName = '?', userId = null) {
+  const face = /^face:(\d+)$/.exec(String(avatarUrl || ''));
+  if (face) {
+    return { variant: Number(face[1]) % VARIANTS.length, name: fallbackName };
+  }
+  const photo = /^avatar:(\d+)$/.exec(String(avatarUrl || ''));
+  if (photo) {
+    return { variant: undefined, name: fallbackName, src: `/api/v1/users/${photo[1]}/avatar/file` };
+  }
+  if (userId != null && String(avatarUrl || '').startsWith('avatar:')) {
+    return { variant: undefined, name: fallbackName, src: `/api/v1/users/${userId}/avatar/file` };
   }
   return { variant: undefined, name: fallbackName };
 }
@@ -60,7 +67,15 @@ function HairFront({ v }) {
   return <path d="M29 42 Q30 28 48 28 Q66 28 67 42 Q60 34 48 35 Q36 34 29 42 Z" fill={v.hair} />;
 }
 
-export function Face({ name = '?', size = 40, variant }) {
+export function Face({ name = '?', size = 40, variant, src }) {
+  if (src) {
+    return (
+      <img
+        src={src} alt={name} width={size} height={size}
+        style={{ display: 'block', flexShrink: 0, objectFit: 'cover' }}
+      />
+    );
+  }
   const v = VARIANTS[variant ?? hashName(name)];
   const eyes = v.style === 'glassesMale' ? (
     <>

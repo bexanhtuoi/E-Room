@@ -143,11 +143,17 @@ describe('ProfilePage portal', () => {
     expect(await screen.findByText('Old Session')).toBeTruthy();
   });
 
-  it('opens profile info with identity card and danger zone', async () => {
+  it('opens profile resume with pencil edits, avatar popup and save bar', async () => {
     renderPortal('me');
     expect(await screen.findByRole('heading', { level: 1, name: 'Profile' })).toBeTruthy();
+    expect(screen.queryByText('Danger zone')).toBeNull();
+    expect(screen.queryByText('Account')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit English level' }));
     expect(screen.getByDisplayValue('B1')).toBeTruthy();
-    expect(screen.getByText('Danger zone')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Change avatar' }));
+    expect(await screen.findByRole('dialog', { name: 'Choose avatar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeTruthy();
   });
 
   it('collapses the sidebar to an icon rail', async () => {

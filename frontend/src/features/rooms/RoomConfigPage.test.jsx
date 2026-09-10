@@ -47,7 +47,7 @@ describe('RoomConfigPage', () => {
   it('shows all config cards for the host', async () => {
     currentUserId = 9;
     renderConfig();
-    for (const title of ['Basics', 'Who can enter', 'AI prompt', /Documents for AI/]) {
+    for (const title of ['Basics', 'Who can enter', /AI prompt/, /Documents for AI/]) {
       expect(await screen.findByRole('heading', { name: title })).toBeTruthy();
     }
     expect(await screen.findByDisplayValue('Hosted Room')).toBeTruthy();

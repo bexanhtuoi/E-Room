@@ -31,7 +31,7 @@ const PAGEHEAD = {
   sessions: { crumb: 'Workspace', title: 'Session', desc: 'Every finished room, with what you said in each.' },
   schedule: { crumb: 'Workspace', title: 'Schedule', desc: 'Live now and open rooms waiting for you.' },
   assessment: { crumb: 'Workspace', title: 'Assessment', desc: 'Replay what you said and level up your English.' },
-  me: { crumb: 'Workspace', title: 'Profile', desc: 'Your identity and account.' },
+  me: { crumb: 'Workspace', title: 'Profile', desc: 'Your public profile — click the pencil to edit anything.' },
 };
 
 function tierLabel(tier) {

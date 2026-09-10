@@ -278,11 +278,12 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
       </section>
 
       <section className="portal-panel">
-        <div className="portal-panel__head pf-nowrap">
-          <h2>AI prompt</h2>
-          {prompt.trim() !== (defaultPrompt || '').trim()
-            ? <span className="portal-flag is-solid">CUSTOM</span>
-            : <span className="portal-flag">DEFAULT</span>}
+        <div className="portal-panel__head">
+          <h2>AI prompt&nbsp;
+            {prompt.trim() !== (defaultPrompt || '').trim()
+              ? <span className="portal-flag is-solid">CUSTOM</span>
+              : <span className="portal-flag">DEFAULT</span>}
+          </h2>
         </div>
         <p className="portal-muted" style={{ margin: '0 20px 12px' }}>Edit the prompt directly — @ai follows this in your room.</p>
         <textarea

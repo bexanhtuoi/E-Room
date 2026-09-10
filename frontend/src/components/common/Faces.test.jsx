@@ -22,4 +22,8 @@ describe('avatar presets', () => {
   it('builds the saved value for a variant', () => {
     expect(avatarValue(0)).toBe('face:0');
   });
+
+  it('maps an uploaded avatar marker to its file URL', () => {
+    expect(avatarFaceProps('avatar:9', 'An')).toEqual({ variant: undefined, name: 'An', src: '/api/v1/users/9/avatar/file' });
+  });
 });

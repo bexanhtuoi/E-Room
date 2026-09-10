@@ -154,3 +154,36 @@ class TestUserStats:
         from app.main import app
 
         assert TestClient(app).get("/api/v1/users/me/stats").status_code in (401, 403)
+
+
+class TestUserAvatar:
+    def test_upload_and_download_avatar(self, client: TestClient, alice: dict):
+        from unittest.mock import patch
+
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+        with (
+            patch("app.integration.minio.put_avatar", return_value="avatars/9"),
+            patch("app.integration.minio.get_object", return_value=png),
+        ):
+            uploaded = client.post(
+                "/api/v1/users/me/avatar",
+                files={"file": ("me.png", png, "image/png")},
+            )
+
+            assert uploaded.status_code == 201, uploaded.text
+            assert uploaded.json()["avatar_url"] == f"avatar:{alice['id']}"
+
+            downloaded = client.get(f"/api/v1/users/{alice['id']}/avatar/file")
+            assert downloaded.status_code == 200
+            assert downloaded.content == png
+
+    def test_rejects_non_image(self, client: TestClient, alice: dict):
+        rejected = client.post(
+            "/api/v1/users/me/avatar",
+            files={"file": ("evil.exe", b"MZ", "application/octet-stream")},
+        )
+        assert rejected.status_code == 400
+
+    def test_missing_avatar_returns_404(self, client: TestClient, alice: dict):
+        assert client.get(f"/api/v1/users/{alice['id']}/avatar/file").status_code == 404
