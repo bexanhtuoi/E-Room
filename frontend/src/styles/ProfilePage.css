@@ -2148,7 +2148,12 @@ a.portal-row:hover .portal-row__go {
   gap: 5px;
 }
 
+.portal-panel > textarea.pf-prompt {
+  width: calc(100% - 40px);
+}
+
 .pf-prompt {
+  display: block;
   min-height: 280px;
   resize: none;
   overflow: hidden;
@@ -2156,6 +2161,7 @@ a.portal-row:hover .portal-row__go {
   line-height: 1.6;
   width: 100%;
   max-width: 100%;
+  margin: 0;
   box-sizing: border-box;
   overflow-wrap: break-word;
 }
