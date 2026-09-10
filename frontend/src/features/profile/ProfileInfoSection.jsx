@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { HiCheck, HiPencil, HiPlus, HiTrash, HiXMark } from 'react-icons/hi2';
+import { HiCheck, HiPencil, HiFlag } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { formatDateTime } from '../../lib/formatters';
@@ -25,13 +25,6 @@ function Done({ label, onClick }) {
   );
 }
 
-function sameList(a, b) {
-  return JSON.stringify(a || []) === JSON.stringify(b || []);
-}
-
-const emptyExp = { title: '', company: '', time: '', desc: '' };
-const emptyEdu = { school: '', degree: '', time: '' };
-
 export function ProfileInfoSection({ user, tierLabel, onSaved }) {
   const [name, setName] = useState(user?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -41,15 +34,8 @@ export function ProfileInfoSection({ user, tierLabel, onSaved }) {
   const [bio, setBio] = useState(user?.bio || '');
   const [location, setLocation] = useState(user?.location || '');
   const [website, setWebsite] = useState(user?.website || '');
-  const [skills, setSkills] = useState(Array.isArray(user?.skills) ? user.skills : []);
-  const [experience, setExperience] = useState(Array.isArray(user?.experience) ? user.experience : []);
-  const [education, setEducation] = useState(Array.isArray(user?.education) ? user.education : []);
+  const [goal, setGoal] = useState(user?.learning_goal || '');
   const [editing, setEditing] = useState(null);
-  const [skillDraft, setSkillDraft] = useState('');
-  const [expDraft, setExpDraft] = useState(emptyExp);
-  const [expEdit, setExpEdit] = useState(null);
-  const [eduDraft, setEduDraft] = useState(emptyEdu);
-  const [eduEdit, setEduEdit] = useState(null);
   const [showAvatar, setShowAvatar] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -61,9 +47,7 @@ export function ProfileInfoSection({ user, tierLabel, onSaved }) {
     || bio.trim() !== (user?.bio || '')
     || location.trim() !== (user?.location || '')
     || website.trim() !== (user?.website || '')
-    || !sameList(skills, user?.skills)
-    || !sameList(experience, user?.experience)
-    || !sameList(education, user?.education);
+    || goal.trim() !== (user?.learning_goal || '');
 
   const saveMutation = useMutation({
     mutationFn: (data) => fetchJson(`/users/${user.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -87,9 +71,7 @@ export function ProfileInfoSection({ user, tierLabel, onSaved }) {
       bio: bio.trim() || null,
       location: location.trim() || null,
       website: website.trim() || null,
-      skills,
-      experience,
-      education,
+      learning_goal: goal.trim() || null,
     });
   }
 
@@ -102,41 +84,8 @@ export function ProfileInfoSection({ user, tierLabel, onSaved }) {
     setBio(user?.bio || '');
     setLocation(user?.location || '');
     setWebsite(user?.website || '');
-    setSkills(Array.isArray(user?.skills) ? user.skills : []);
-    setExperience(Array.isArray(user?.experience) ? user.experience : []);
-    setEducation(Array.isArray(user?.education) ? user.education : []);
+    setGoal(user?.learning_goal || '');
     setEditing(null);
-    setExpEdit(null);
-    setEduEdit(null);
-  }
-
-  function addSkill() {
-    const skill = skillDraft.trim();
-    if (!skill || skills.some((s) => s.toLowerCase() === skill.toLowerCase())) return;
-    setSkills((list) => [...list, skill].slice(0, 20));
-    setSkillDraft('');
-  }
-
-  function saveExp() {
-    if (!expDraft.title.trim() && !expDraft.company.trim()) return;
-    if (expEdit == null) {
-      setExperience((list) => [...list, { ...expDraft }].slice(0, 10));
-    } else {
-      setExperience((list) => list.map((item, i) => (i === expEdit ? { ...expDraft } : item)));
-    }
-    setExpDraft(emptyExp);
-    setExpEdit(null);
-  }
-
-  function saveEdu() {
-    if (!eduDraft.school.trim() && !eduDraft.degree.trim()) return;
-    if (eduEdit == null) {
-      setEducation((list) => [...list, { ...eduDraft }].slice(0, 5));
-    } else {
-      setEducation((list) => list.map((item, i) => (i === eduEdit ? { ...eduDraft } : item)));
-    }
-    setEduDraft(emptyEdu);
-    setEduEdit(null);
   }
 
   return (
@@ -248,126 +197,30 @@ export function ProfileInfoSection({ user, tierLabel, onSaved }) {
         )}
       </section>
 
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Skills <span className="portal-count">{skills.length}</span></h2></div>
-        {skills.length > 0 && (
-          <div className="portal-topics" style={{ marginBottom: 12 }}>
-            {skills.map((skill) => (
-              <span key={skill} className="portal-topic">
-                {skill}
-                <button
-                  type="button" aria-label={`Remove skill ${skill}`} title={`Remove ${skill}`}
-                  onClick={() => setSkills((list) => list.filter((s) => s !== skill))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, font: 'inherit', display: 'inline-flex', alignItems: 'center' }}
-                >
-                  <HiXMark size={10} />
-                </button>
-              </span>
-            ))}
+      <section className="portal-panel pf-goal">
+        <div className="portal-panel__head">
+          <h2>My learning goal</h2>
+          {editing !== 'goal' && <Pencil label="learning goal" onClick={() => setEditing('goal')} />}
+        </div>
+        {editing === 'goal' ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <textarea
+              className="er-textarea" rows={2} value={goal} autoFocus
+              placeholder="e.g. Speak 15 minutes every evening for the next 30 days."
+              onChange={(e) => setGoal(e.target.value)} aria-label="Learning goal"
+            />
+            <div className="portal-actions"><Done label="learning goal" onClick={() => setEditing(null)} /></div>
+          </div>
+        ) : (
+          <p className={goal || user?.learning_goal ? 'pf-goal__text' : 'portal-muted'} style={{ margin: 0 }}>
+            {goal || user?.learning_goal || 'Set one clear goal — it shows up here to keep you honest.'}
+          </p>
+        )}
+        {(goal || user?.learning_goal) && (
+          <div className="portal-muted" style={{ marginTop: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <HiFlag size={13} /> Pinned to the top of your learning week.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            className="er-input" value={skillDraft} placeholder="Add a skill and press Enter…"
-            onChange={(e) => setSkillDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(); } }}
-            aria-label="New skill"
-          />
-          <button type="button" className="er-btn er-btn--ghost" title="Add skill" aria-label="Add skill" onClick={addSkill} style={{ padding: '8px 12px', flexShrink: 0 }}>
-            <HiPlus size={16} />
-          </button>
-        </div>
-      </section>
-
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Experience <span className="portal-count">{experience.length}</span></h2></div>
-        {experience.length > 0 && (
-          <div className="portal-list" style={{ marginBottom: 12 }}>
-            {experience.map((item, i) => (
-              <div key={i} className="portal-row">
-                <span className="portal-row__main">
-                  <span className="portal-row__text">{item.title || 'Untitled'}{item.company ? ` · ${item.company}` : ''}</span>
-                  {(item.time || item.desc) && <span className="portal-row__sub">{[item.time, item.desc].filter(Boolean).join(' — ')}</span>}
-                </span>
-                <button
-                  type="button" className="portal-tool" title="Edit entry" aria-label={`Edit experience ${i + 1}`}
-                  onClick={() => { setExpDraft({ ...emptyExp, ...item }); setExpEdit(i); }}
-                >
-                  <HiPencil size={14} />
-                </button>
-                <button
-                  type="button" className="portal-tool is-danger" title="Delete entry" aria-label={`Delete experience ${i + 1}`}
-                  onClick={() => setExperience((list) => list.filter((_, j) => j !== i))}
-                >
-                  <HiTrash size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="er-input" value={expDraft.title} placeholder="Title" onChange={(e) => setExpDraft({ ...expDraft, title: e.target.value })} aria-label="Experience title" />
-            <input className="er-input" value={expDraft.company} placeholder="Company" onChange={(e) => setExpDraft({ ...expDraft, company: e.target.value })} aria-label="Experience company" />
-          </div>
-          <input className="er-input" value={expDraft.time} placeholder="Time, e.g. 2023 – now" onChange={(e) => setExpDraft({ ...expDraft, time: e.target.value })} aria-label="Experience time" />
-          <input className="er-input" value={expDraft.desc} placeholder="One line about it…" onChange={(e) => setExpDraft({ ...expDraft, desc: e.target.value })} aria-label="Experience description" />
-          <div className="portal-actions">
-            <button type="button" className="er-btn er-btn--ghost portal-mini-btn" onClick={saveExp}>
-              <HiPlus size={14} /> {expEdit == null ? 'Add experience' : 'Update experience'}
-            </button>
-            {expEdit != null && (
-              <button type="button" className="er-btn er-btn--ghost portal-mini-btn" onClick={() => { setExpDraft(emptyExp); setExpEdit(null); }}>
-                Cancel
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="portal-panel">
-        <div className="portal-panel__head"><h2>Education <span className="portal-count">{education.length}</span></h2></div>
-        {education.length > 0 && (
-          <div className="portal-list" style={{ marginBottom: 12 }}>
-            {education.map((item, i) => (
-              <div key={i} className="portal-row">
-                <span className="portal-row__main">
-                  <span className="portal-row__text">{item.school || 'Untitled'}{item.degree ? ` · ${item.degree}` : ''}</span>
-                  {item.time && <span className="portal-row__sub">{item.time}</span>}
-                </span>
-                <button
-                  type="button" className="portal-tool" title="Edit entry" aria-label={`Edit education ${i + 1}`}
-                  onClick={() => { setEduDraft({ ...emptyEdu, ...item }); setEduEdit(i); }}
-                >
-                  <HiPencil size={14} />
-                </button>
-                <button
-                  type="button" className="portal-tool is-danger" title="Delete entry" aria-label={`Delete education ${i + 1}`}
-                  onClick={() => setEducation((list) => list.filter((_, j) => j !== i))}
-                >
-                  <HiTrash size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="er-input" value={eduDraft.school} placeholder="School" onChange={(e) => setEduDraft({ ...eduDraft, school: e.target.value })} aria-label="School" />
-            <input className="er-input" value={eduDraft.degree} placeholder="Degree" onChange={(e) => setEduDraft({ ...eduDraft, degree: e.target.value })} aria-label="Degree" />
-          </div>
-          <input className="er-input" value={eduDraft.time} placeholder="Time, e.g. 2020 – 2024" onChange={(e) => setEduDraft({ ...eduDraft, time: e.target.value })} aria-label="Education time" />
-          <div className="portal-actions">
-            <button type="button" className="er-btn er-btn--ghost portal-mini-btn" onClick={saveEdu}>
-              <HiPlus size={14} /> {eduEdit == null ? 'Add education' : 'Update education'}
-            </button>
-            {eduEdit != null && (
-              <button type="button" className="er-btn er-btn--ghost portal-mini-btn" onClick={() => { setEduDraft(emptyEdu); setEduEdit(null); }}>
-                Cancel
-              </button>
-            )}
-          </div>
-        </div>
       </section>
 
       <div className="pf-savebar">

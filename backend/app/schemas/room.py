@@ -99,6 +99,7 @@ class RoomCreateSchema(BaseModel):
     is_private: bool = False
     allowed_emails: List[str] = []
     system_prompt: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
 
     @field_validator("name")
     @classmethod
@@ -154,6 +155,7 @@ class RoomUpdateSchema(BaseModel):
     is_private: Optional[bool] = None
     allowed_emails: Optional[List[str]] = None
     system_prompt: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
 
     @field_validator("name")
     @classmethod
@@ -221,6 +223,7 @@ class RoomResponse(BaseModel):
     is_private: bool = False
     allowed_emails: List[str] = []
     system_prompt: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
     @field_validator("topics", mode="before")

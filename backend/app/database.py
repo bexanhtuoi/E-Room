@@ -56,6 +56,7 @@ def ensure_schema_columns() -> None:
             "is_private": "BOOLEAN NOT NULL DEFAULT 0",
             "allowed_emails": "TEXT NULL",
             "system_prompt": "TEXT NULL",
+            "scheduled_at": "DATETIME NULL",
         },
         "documents": {
             "room_id": "INTEGER NULL",
@@ -71,6 +72,7 @@ def ensure_schema_columns() -> None:
             "skills": "TEXT NULL",
             "experience": "TEXT NULL",
             "education": "TEXT NULL",
+            "learning_goal": "TEXT NULL",
         },
     }
 

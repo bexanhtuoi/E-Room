@@ -22,6 +22,17 @@ class TestRoomCrud:
         assert room["status"] == "idle"
         assert room["max_participants"] == 4
 
+    def test_create_room_with_schedule(self, client: TestClient, alice: dict):
+        room = client.post(
+            "/api/v1/rooms/",
+            json={"name": f"sched-room-{alice['id']}", "scheduled_at": "2026-12-01T10:00:00"},
+        ).json()
+        assert room["scheduled_at"].startswith("2026-12-01T10:00:00")
+
+        updated = client.patch(f"/api/v1/rooms/{room['id']}", json={"scheduled_at": None})
+        assert updated.status_code == 200
+        assert updated.json()["scheduled_at"] is None
+
     def test_create_duplicate_name_returns_400(self, client: TestClient, alice: dict):
         name = f"dup-room-{alice['id']}"
         create_room(client, name)

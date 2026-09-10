@@ -119,6 +119,7 @@ class UserResponse(BaseModel):
     skills: List[str] = []
     experience: List[Dict[str, str]] = []
     education: List[Dict[str, str]] = []
+    learning_goal: Optional[str] = None
     created_at: Optional[datetime] = None
 
     @field_validator("skills", mode="before")
@@ -162,6 +163,15 @@ class UserUpdateSchema(BaseModel):
     skills: Optional[List[str]] = None
     experience: Optional[List[Dict[str, str]]] = None
     education: Optional[List[Dict[str, str]]] = None
+    learning_goal: Optional[str] = None
+
+    @field_validator("learning_goal")
+    @classmethod
+    def validate_learning_goal(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        text = v.strip()
+        return text[:500] if text else None
 
     @field_validator("headline", "location")
     @classmethod

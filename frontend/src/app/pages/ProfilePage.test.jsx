@@ -92,9 +92,12 @@ describe('ProfilePage portal', () => {
     expect(screen.queryByText('Day streak')).toBeNull();
     expect(screen.queryByRole('button', { name: /New room/ })).toBeNull();
     await waitFor(() => {
-      expect(screen.getByText(/4-day speaking streak/)).toBeTruthy();
+      expect(screen.getByText(/4-day streak/)).toBeTruthy();
     });
     expect(screen.getByText(/Peak day 2026-09-07/)).toBeTruthy();
+    expect(screen.getByText(/Level journey/)).toBeTruthy();
+    expect(screen.getByText(/Up next/)).toBeTruthy();
+    expect(screen.getByText(/Your top topic is Cinema/)).toBeTruthy();
   });
 
   it('links avatar and name to the profile page', async () => {
@@ -160,17 +163,20 @@ describe('ProfilePage portal', () => {
     expect(screen.getByRole('button', { name: 'Reset' })).toBeTruthy();
   });
 
-  it('shows resume sections with editable bio, skills and experience', async () => {
+  it('shows resume sections with editable bio and learning goal', async () => {
     renderPortal('me');
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Skills/ })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Experience/ })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Education/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'My learning goal' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /Skills/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /Experience/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /Education/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Edit headline' }));
     expect(screen.getByLabelText('Headline')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('New skill'), { target: { value: 'React' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
-    expect(await screen.findByText('React')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done editing headline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit learning goal' }));
+    fireEvent.change(screen.getByLabelText('Learning goal'), { target: { value: 'Speak daily.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Done editing learning goal' }));
+    expect(await screen.findByText('Speak daily.')).toBeTruthy();
   });
 
   it('collapses the sidebar to an icon rail', async () => {

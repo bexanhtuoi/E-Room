@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
-import { HiArrowRight, HiCalendarDays, HiFire, HiSignal } from 'react-icons/hi2';
+import { HiArrowRight, HiCalendarDays, HiFire, HiSignal, HiSparkles } from 'react-icons/hi2';
 import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
 import { ActivitySection } from './ActivitySection';
 import { bucketByDay, WeekBars } from './WeekBars';
+
+const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 function LiveRoomLine({ room }) {
   const { data: members } = useRoomMembers(room.id);
@@ -28,6 +30,21 @@ function greetingFor(hour) {
   return 'Good evening';
 }
 
+function peakHourOf(messages) {
+  const hours = new Array(24).fill(0);
+  for (const message of messages) {
+    if (!message?.created_at) continue;
+    const date = new Date(message.created_at);
+    if (Number.isNaN(date.getTime())) continue;
+    hours[date.getHours()] += 1;
+  }
+  let best = 0;
+  for (let h = 1; h < 24; h += 1) {
+    if (hours[h] > hours[best]) best = h;
+  }
+  return { hour: best, count: hours[best] };
+}
+
 function topTopicOf(rooms) {
   const counts = new Map();
   for (const room of rooms) {
@@ -45,6 +62,7 @@ function topTopicOf(rooms) {
 
 export function OverviewSection({
   userName,
+  englishLevel,
   hostedRooms,
   joinedRooms,
   liveRooms,
@@ -59,11 +77,8 @@ export function OverviewSection({
   const week = bucketByDay(messages, 7);
   const weekTotal = week.reduce((s, b) => s + b.count, 0);
   const myRooms = [...hostedRooms, ...joinedRooms];
-  const resume = [...liveRooms, ...joinedRooms, ...hostedRooms].find((r) => r.status === 'active')
-    || [...joinedRooms, ...hostedRooms].find((r) => r.status === 'idle');
-
-  const delta = stats ? stats.week_delta : 0;
-  const streak = stats?.streak_days ?? 0;
+  const levelIndex = Math.max(0, LEVELS.indexOf(englishLevel || ''));
+  const peak = peakHourOf(messages);
   const top = topTopicOf(myRooms);
   const upNext = (top && myRooms.find((r) => r.status === 'idle' && (r.topics || []).includes(top.topic)))
     || [...myRooms].reverse().find((r) => r.status === 'idle')
@@ -71,22 +86,42 @@ export function OverviewSection({
 
   const today = new Date();
   const dateLine = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  const streak = stats?.streak_days ?? 0;
+  const delta = stats ? stats.week_delta : 0;
 
   return (
     <div className="portal-stack">
       <section className="pf-today">
         <div className="pf-today__date">{dateLine}</div>
         <div className="pf-today__title">{greetingFor(today.getHours())}{userName ? `, ${userName}` : ''}.</div>
-        <div className="pf-today__sub">
-          {resume
-            ? <>Pick up <strong>“{resume.name}”</strong> {resume.status === 'active' ? '— it’s live right now.' : '— it’s waiting for voices.'}</>
-            : 'No open room right now — find one on the Rooms page and say hi.'}
+        <div className="pf-today__facts">
+          {englishLevel && <span className="portal-flag is-solid">Level {englishLevel}</span>}
+          <span className="pf-today__streak">
+            <HiFire size={15} />
+            {streak > 0 ? `${streak}-day streak` : 'Start your streak today'}
+          </span>
         </div>
-        {resume && (
-          <Link className="er-btn pf-today__cta" style={{ textDecoration: 'none' }} to={`/rooms/${resume.id}`}>
-            {resume.status === 'active' ? 'Join live' : 'Open room'} <HiArrowRight size={14} />
-          </Link>
-        )}
+      </section>
+
+      <section className="portal-panel">
+        <div className="portal-panel__head"><h2>Level journey</h2><span className="portal-muted">CEFR</span></div>
+        <div className="portal-block">
+          <div className="pf-leveltrack" role="img" aria-label={`English level ${englishLevel || 'not set'}`}>
+            {LEVELS.map((level, i) => (
+              <span key={level} className={`pf-leveltrack__stop${i < levelIndex ? ' is-past' : ''}${i === levelIndex && englishLevel ? ' is-here' : ''}`}>
+                {level}
+              </span>
+            ))}
+          </div>
+          <p className="portal-muted" style={{ margin: '10px 0 0' }}>
+            {englishLevel
+              ? `You are at ${englishLevel} — ${LEVELS.length - 1 - levelIndex} step${LEVELS.length - 1 - levelIndex === 1 ? '' : 's'} to C2. Review your lines to climb faster.`
+              : 'Set your English level in Profile and watch the journey begin.'}
+          </p>
+          <div className="portal-block" style={{ marginTop: 8 }}>
+            <button type="button" className="portal-linkbtn" onClick={() => onGo?.('assessment')}>Review what you said <HiArrowRight size={13} /></button>
+          </div>
+        </div>
       </section>
 
       {liveRooms.length > 0 && (
@@ -103,16 +138,18 @@ export function OverviewSection({
 
       <section className="portal-panel">
         <div className="portal-panel__head">
-          <h2>Your week in rooms</h2>
-          <span className="portal-muted">{weekTotal} lines said</span>
+          <h2>Your rhythm</h2>
+          <span className="portal-muted">{weekTotal} lines this week</span>
         </div>
         <div className="portal-block">
           <WeekBars data={week} height={140} />
         </div>
         <div className="pf-weekfacts">
           <span>
-            <HiFire size={14} />
-            {streak > 0 ? `${streak}-day speaking streak — keep it burning` : 'No streak yet — say one line today to start it'}
+            <HiSparkles size={14} />
+            {peak.count > 0
+              ? `Your prime time is around ${String(peak.hour).padStart(2, '0')}:00 — book rooms then`
+              : 'Speak once and I’ll learn your prime time'}
           </span>
           <span>
             <HiCalendarDays size={14} />
@@ -123,9 +160,6 @@ export function OverviewSection({
           <span className={delta > 0 ? 'is-up' : delta < 0 ? 'is-down' : ''}>
             {delta > 0 ? `▲ ${delta} lines vs last week` : delta < 0 ? `▼ ${Math.abs(delta)} lines vs last week` : 'Same pace as last week'}
           </span>
-        </div>
-        <div className="portal-block">
-          <button type="button" className="portal-linkbtn" onClick={() => onGo?.('assessment')}>Review what you said <HiArrowRight size={13} /></button>
         </div>
       </section>
 

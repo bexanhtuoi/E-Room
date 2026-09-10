@@ -188,6 +188,14 @@ class TestUserResume:
         assert len(response.json()["skills"]) == 20
 
 
+class TestLearningGoal:
+    def test_goal_roundtrip(self, client: TestClient, alice: dict):
+        response = client.patch(f"/api/v1/users/{alice['id']}", json={"learning_goal": "Speak 15 minutes daily."})
+
+        assert response.status_code == 200, response.text
+        assert response.json()["learning_goal"] == "Speak 15 minutes daily."
+
+
 class TestUserAvatar:
     def test_upload_and_download_avatar(self, client: TestClient, alice: dict):
         from unittest.mock import patch

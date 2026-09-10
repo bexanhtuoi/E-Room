@@ -204,6 +204,7 @@ export function ProfilePage({ section = 'overview' }) {
         {section === 'overview' && (
           <OverviewSection
             userName={(user.full_name || '').split(' ')[0]}
+            englishLevel={user.english_level}
             hostedRooms={hostedRooms}
             joinedRooms={joinedRooms}
             liveRooms={liveRooms}
@@ -229,7 +230,7 @@ export function ProfilePage({ section = 'overview' }) {
           <SessionsSection sessions={pastSessions} messagesByRoom={messagesByRoom} userId={user.id} />
         )}
         {section === 'schedule' && (
-          <ScheduleSection rooms={rooms} hostedRooms={hostedRooms} onCreateRoom={() => setShowCreateRoom(true)} />
+          <ScheduleSection rooms={rooms} hostedRooms={hostedRooms} />
         )}
         {section === 'assessment' && (
           <AssessmentSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user.id} />

@@ -40,6 +40,7 @@ class User(SQLModel, table=True):
     skills: str = Field(default="[]", sa_column=Column(Text, nullable=False))
     experience: str = Field(default="[]", sa_column=Column(Text, nullable=False))
     education: str = Field(default="[]", sa_column=Column(Text, nullable=False))
+    learning_goal: Optional[str] = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=now_utc, nullable=False)
     updated_at: datetime = Field(default_factory=now_utc, nullable=False)
 

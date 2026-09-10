@@ -30,6 +30,7 @@ class Room(SQLModel, table=True):
     is_private: bool = Field(default=False)
     allowed_emails: str = Field(default="[]", sa_column=Column(String(4000), nullable=False))
     system_prompt: Optional[str] = Field(default=None, sa_column=Column(String(4000)))
+    scheduled_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=now_utc, nullable=False)
     updated_at: datetime = Field(default_factory=now_utc, nullable=False)
 
