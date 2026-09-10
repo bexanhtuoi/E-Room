@@ -310,14 +310,17 @@ def download_room_document(
     except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage")
 
+    from urllib.parse import quote
+
     media_type = {"pdf": "application/pdf", "md": "text/markdown", "txt": "text/plain"}.get(
         (doc.file_type or "").lower(), "application/octet-stream"
     )
 
+    safe_name = (doc.file_name or "file").replace('"', "")
     return Response(
         content=data,
         media_type=media_type,
-        headers={"Content-Disposition": f'inline; filename="{doc.file_name}"'},
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(safe_name)}"},
     )
 
 

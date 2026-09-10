@@ -2207,6 +2207,11 @@ a.portal-row:hover .portal-row__go {
   color: #111;
 }
 
+.portal-flag {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .portal-row--btn {
   width: 100%;
   text-align: left;
