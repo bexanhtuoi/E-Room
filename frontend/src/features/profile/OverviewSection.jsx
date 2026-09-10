@@ -5,7 +5,6 @@ import { FaceStack } from '../../components/common/Faces';
 import { useRoomMembers } from '../rooms/RoomRow';
 import { ActivitySection } from './ActivitySection';
 import { LineChart, RHYTHM_RANGES, bucketByRange } from './LineChart';
-import { WeekBars } from './WeekBars';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
@@ -66,17 +65,25 @@ export function OverviewSection({
   const rhythm = useMemo(() => bucketByRange(messages, rhythmRange), [messages, rhythmRange]);
   const rhythmTotal = rhythm.reduce((s, b) => s + b.count, 0);
 
-  const weekdayBuckets = useMemo(() => {
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const buckets = names.map((label, i) => ({ key: label, label, count: 0, day: i }));
+  const consistencyDays = useMemo(() => {
+    const active = new Set();
     for (const message of messages || []) {
       if (!message?.created_at) continue;
       const date = new Date(message.created_at);
       if (Number.isNaN(date.getTime())) continue;
-      buckets[(date.getDay() + 6) % 7].count += 1;
+      active.add(date.toISOString().slice(0, 10));
     }
-    return buckets;
+    const days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 13; i >= 0; i -= 1) {
+      const day = new Date(today.getTime() - i * 86400 * 1000);
+      const key = day.toISOString().slice(0, 10);
+      days.push({ key, active: active.has(key), label: day.toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' }) });
+    }
+    return days;
   }, [messages]);
+  const consistencyCount = consistencyDays.filter((d) => d.active).length;
 
   const topTopics = useMemo(() => {
     const counts = new Map();
@@ -166,12 +173,16 @@ export function OverviewSection({
           <span className="portal-muted">{rhythmTotal} lines in the last {rhythmRange === '24h' ? '24 hours' : rhythmRange === '3d' ? '3 days' : rhythmRange === '7d' ? '7 days' : '30 days'}</span>
         </div>
         <div className="portal-block">
-          <LineChart data={rhythm} height={120} />
+          <LineChart data={rhythm} height={96} />
         </div>
         <div className="portal-grid2" style={{ marginTop: 4 }}>
           <div className="portal-block">
-            <div className="portal-block__label">By weekday</div>
-            <WeekBars data={weekdayBuckets} height={90} />
+            <div className="portal-block__label">Consistency · {consistencyCount}/14 days</div>
+            <div className="pf-dots" role="img" aria-label={`${consistencyCount} active days out of 14`}>
+              {consistencyDays.map((day) => (
+                <span key={day.key} title={`${day.label}${day.active ? ' — spoke' : ''}`} className={`pf-dot${day.active ? ' is-on' : ''}`} />
+              ))}
+            </div>
           </div>
           <div className="portal-block">
             <div className="portal-block__label">Top topics</div>

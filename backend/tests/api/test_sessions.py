@@ -91,7 +91,8 @@ class TestSessionAI:
         assert "hello" in response.json()["answer"]
 
         sent = fake_llm.ainvoke.call_args[0][0]
-        assert "session analyst" in sent[0].content
+        assert "SESSION.md" in sent[0].content
+        assert "Q&A mode" in sent[1].content
         assert "hello session world" in sent[1].content
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")

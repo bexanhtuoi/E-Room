@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { HiChatBubbleLeftRight, HiClock, HiMagnifyingGlass } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
-import { formatDateTime } from '../../lib/formatters';
+function formatShortDateTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const day = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return `${day}, ${time}`;
+}
 
 function formatDuration(seconds) {
   if (seconds == null) return 'ongoing';
@@ -77,7 +83,11 @@ export function SessionsSection() {
                     <div className="pf-room__meta">
                       <span><HiClock size={13} /> {formatDuration(session.duration_seconds)}</span>
                       <span><HiChatBubbleLeftRight size={13} /> {message_count} lines</span>
-                      {session.left_at && <span>left {formatDateTime(session.left_at)}</span>}
+                      <span>
+                        {session.joined_at ? formatShortDateTime(session.joined_at) : '—'}
+                        {' - '}
+                        {session.left_at ? formatShortDateTime(session.left_at) : 'now'}
+                      </span>
                     </div>
                   </div>
                   <Link className="er-btn portal-mini-btn pf-event__go" style={{ textDecoration: 'none' }} to={`/session/${session.id}`}>

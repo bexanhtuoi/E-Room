@@ -2208,23 +2208,23 @@ a.portal-row:hover .portal-row__go {
   .portal-app .portal-side {
     position: fixed;
     top: 0;
-    right: 0;
+    left: 0;
     bottom: 0;
     width: 264px;
     max-width: 84vw;
     z-index: 95;
-    border-left: 1px solid #111;
+    border-right: 1px solid #111;
     border-bottom: none;
     background: #fff;
     flex-direction: column;
-    transform: translateX(105%);
+    transform: translateX(-105%);
     transition: transform 0.2s ease;
     overflow-y: auto;
   }
 
   .portal-app.side-open .portal-side {
     transform: none;
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.25);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
   }
 
   .portal-app.side-open.is-collapsed .portal-side__id-text,
@@ -3014,6 +3014,25 @@ a.portal-row:hover .portal-row__go {
   .pf-copilot {
     position: static;
   }
+}
+
+.pf-dots {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px;
+}
+
+.pf-dot {
+  width: 22px;
+  height: 22px;
+  background: #f0f0f0;
+  border: 1px solid #e2e2e2;
+}
+
+.pf-dot.is-on {
+  background: var(--pf-ink, #1a1a1a);
+  border-color: var(--pf-ink, #1a1a1a);
 }
 
 .portal-row--btn {

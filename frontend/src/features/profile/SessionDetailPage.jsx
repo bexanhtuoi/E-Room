@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiSparkles } from 'react-icons/hi2';
+import { HiArrowLeft, HiChatBubbleLeftRight, HiCheck, HiClock, HiSparkles } from 'react-icons/hi2';
 import { fetchJson } from '../../lib/api';
 import { formatDateTime } from '../../lib/formatters';
 import { Face } from '../../components/common/Faces';
@@ -32,11 +32,19 @@ function formatDuration(seconds) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+function formatShortDateTime(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 export function SessionDetailPage() {
   const { sessionId } = useParams();
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState([]);
   const [recap, setRecap] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ['session', sessionId],
@@ -83,6 +91,17 @@ export function SessionDetailPage() {
     askMutation.mutate(clean);
   }
 
+  async function copyRecap() {
+    if (!recap) return;
+    try {
+      await navigator.clipboard.writeText(recap);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard unavailable — user can still select the text
+    }
+  }
+
   if (detailQuery.isLoading || messagesQuery.isLoading) {
     return (
       <div className="portal-app portal-app--page"><main className="portal-main"><div className="portal-skeleton"><span /><span /><span /></div></main></div>
@@ -112,7 +131,7 @@ export function SessionDetailPage() {
           </div>
         </div>
 
-        <header className="pf-resume__head" style={{ marginBottom: 16 }}>
+        <header className="pf-resume__head">
           {validDate && (
             <span className="pf-event__date" title={validDate.toLocaleString()}>
               <strong>{validDate.toLocaleDateString(undefined, { day: '2-digit' })}</strong>
@@ -127,42 +146,31 @@ export function SessionDetailPage() {
               <span><HiChatBubbleLeftRight size={13} /> {detail.message_count} lines</span>
               <span>{speakers.length} speaker{speakers.length === 1 ? '' : 's'}</span>
               <span className="portal-muted">
-                {session.joined_at ? formatDateTime(session.joined_at) : '—'}
-                {session.left_at ? ` → ${formatDateTime(session.left_at)}` : ' · ongoing'}
+                {formatShortDateTime(session.joined_at)} - {session.left_at ? formatShortDateTime(session.left_at) : 'now'}
               </span>
             </div>
           </div>
         </header>
 
-        <div className="pf-sessgrid">
-          <section className="portal-panel">
-            <div className="portal-panel__head"><h2>What was said</h2></div>
-            {lines.length === 0 ? (
-              <div className="portal-empty">No messages were said while you were inside.</div>
-            ) : (
-              <div className="pf-talk">
-                {lines.map((line) => (
-                  <div key={line.id} className="pf-talk__line">
-                    <Face name={line.speaker || '?'} size={30} />
-                    <div className="pf-talk__bubble">
-                      {line.speaker && <strong>{line.speaker}</strong>}
-                      <span>{line.body}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <div className="portal-stack" style={{ marginTop: 16 }}>
+          <section className="portal-panel pf-copilot">
+            <div className="portal-panel__head">
+              <h2><HiSparkles size={15} /> AI copilot</h2>
+              {recap && (
+                <button type="button" className="er-btn er-btn--ghost portal-mini-btn" onClick={copyRecap}>
+                  {copied ? <><HiCheck size={14} /> Copied</> : 'Copy recap'}
+                </button>
+              )}
+            </div>
+            {!recap && (
+              <button
+                type="button" className="er-btn pf-copilot__recap"
+                disabled={summarizeMutation.isPending || detail.message_count === 0}
+                onClick={() => summarizeMutation.mutate()}
+              >
+                {summarizeMutation.isPending ? 'Summarizing…' : '✨ Recap for Notion'}
+              </button>
             )}
-          </section>
-
-          <aside className="portal-panel pf-copilot">
-            <div className="portal-panel__head"><h2><HiSparkles size={15} /> AI copilot</h2></div>
-            <button
-              type="button" className="er-btn pf-copilot__recap"
-              disabled={summarizeMutation.isPending || detail.message_count === 0}
-              onClick={() => summarizeMutation.mutate()}
-            >
-              {summarizeMutation.isPending ? 'Summarizing…' : '✨ Recap for Notion'}
-            </button>
             {summarizeMutation.isError && (
               <div className="er-alert er-alert--err">Could not summarize. Try again later.</div>
             )}
@@ -196,7 +204,29 @@ export function SessionDetailPage() {
               </button>
             </form>
             {askMutation.isError && <div className="er-alert er-alert--err">Could not answer. Try again later.</div>}
-          </aside>
+          </section>
+
+          <section className="portal-panel">
+            <div className="portal-panel__head">
+              <h2>What was said</h2>
+              <span className="portal-muted">{lines.length} lines</span>
+            </div>
+            {lines.length === 0 ? (
+              <div className="portal-empty">No messages were said while you were inside.</div>
+            ) : (
+              <div className="pf-talk">
+                {lines.map((line) => (
+                  <div key={line.id} className="pf-talk__line">
+                    <Face name={line.speaker || '?'} size={30} />
+                    <div className="pf-talk__bubble">
+                      {line.speaker && <strong>{line.speaker}</strong>}
+                      <span>{line.body}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </main>
     </div>

@@ -19,8 +19,10 @@ from app.services import message_crud, room_crud, session_crud, user_crud
 
 router = APIRouter()
 
-SUMMARY_SYSTEM_PROMPT = load_prompt_from_file("session_summary")
-ASK_SYSTEM_PROMPT = load_prompt_from_file("session_ask")
+SESSION_SYSTEM_PROMPT = load_prompt_from_file("session")
+
+SUMMARY_TASK = "Now do Recap mode on the session below."
+ASK_TASK_PREFIX = "Now do Q&A mode on the session below. Question:"
 
 
 def get_my_session(db: Session, session_id: int, request: Request):
@@ -143,8 +145,8 @@ async def summarize_session(
 
     room = room_crud.get_one(db, id=db_session.room_id)
     summary = await ask_llm(
-        SUMMARY_SYSTEM_PROMPT,
-        f"Room: {room.name if room else db_session.room_id}\nSession transcript:\n{transcript[:12000]}",
+        SESSION_SYSTEM_PROMPT,
+        f"{SUMMARY_TASK}\nRoom: {room.name if room else db_session.room_id}\nSession transcript:\n{transcript[:12000]}",
     )
 
     return SessionSummaryResponse(summary=summary, message_count=count)
@@ -168,8 +170,8 @@ async def ask_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No messages in this session yet")
 
     answer = await ask_llm(
-        ASK_SYSTEM_PROMPT,
-        f"Session transcript:\n{transcript[:12000]}\n\nQuestion: {question}",
+        SESSION_SYSTEM_PROMPT,
+        f"{ASK_TASK_PREFIX} {question}\nSession transcript:\n{transcript[:12000]}",
     )
 
     return SessionAnswerResponse(answer=answer, message_count=count)
