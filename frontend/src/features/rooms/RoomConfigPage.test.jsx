@@ -52,7 +52,9 @@ describe('RoomConfigPage', () => {
     }
     expect(await screen.findByDisplayValue('Hosted Room')).toBeTruthy();
     expect(screen.getByText('friend@example.com')).toBeTruthy();
-    expect(screen.getByText('notes.md')).toBeTruthy();
+    const docLink = screen.getByRole('link', { name: 'notes.md' });
+    expect(docLink.getAttribute('href')).toBe('/api/v1/rooms/1/documents/6/file');
+    expect(docLink.getAttribute('target')).toBe('_blank');
   });
 
   it('redirects non-hosts to rooms list', async () => {

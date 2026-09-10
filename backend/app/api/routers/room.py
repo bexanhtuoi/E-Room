@@ -287,6 +287,40 @@ async def upload_room_document(
     return new_doc
 
 
+@router.get("/{room_id}/documents/{document_id}/file")
+def download_room_document(
+    room_id: int,
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+):
+    from fastapi.responses import Response
+
+    db_room = get_host_room(db, room_id, request)
+
+    doc = document_crud.get_one(db, id=document_id, room_id=db_room.id)
+    if not doc or doc.kind != DocumentKind.FILE or not doc.file_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    from app.integration.minio import get_object
+
+    try:
+        data = get_object(doc.file_path)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage")
+
+    media_type = {"pdf": "application/pdf", "md": "text/markdown", "txt": "text/plain"}.get(
+        (doc.file_type or "").lower(), "application/octet-stream"
+    )
+
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{doc.file_name}"'},
+    )
+
+
 @router.delete("/{room_id}/documents/{document_id}", response_model=DocumentResponse)
 def delete_room_document(
     room_id: int,

@@ -106,6 +106,7 @@ class TestRoomDocuments:
 
         with (
             patch("app.integration.minio.put_document", return_value="documents/abc_notes.md"),
+            patch("app.integration.minio.get_object", return_value=b"# hello\nsome english notes"),
             patch("app.ai.vector_store.process_document", return_value=None),
             patch("app.integration.minio.delete_object", return_value=None),
             patch("app.ai.vector_store.delete_document_vectors", return_value=0),
@@ -120,7 +121,12 @@ class TestRoomDocuments:
             listed = client.get(f"/api/v1/rooms/{room['id']}/documents").json()
             assert len(listed) == 1
 
-            deleted = client.delete(f"/api/v1/rooms/{room['id']}/documents/{uploaded.json()['id']}")
+            doc_id = uploaded.json()["id"]
+            downloaded = client.get(f"/api/v1/rooms/{room['id']}/documents/{doc_id}/file")
+            assert downloaded.status_code == 200
+            assert b"hello" in downloaded.content
+
+            deleted = client.delete(f"/api/v1/rooms/{room['id']}/documents/{doc_id}")
             assert deleted.status_code == 200
 
     def test_rejects_bad_files(self, client: TestClient, alice: dict):

@@ -49,6 +49,7 @@ function DocumentsCard({ room }) {
   });
   const docs = (Array.isArray(docsQuery.data) ? docsQuery.data : []).filter((d) => d.kind !== 'skill');
   const [uploading, setUploading] = useState(false);
+  const [pendingName, setPendingName] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -60,6 +61,7 @@ function DocumentsCard({ room }) {
     if (!file) return;
     setNotice(null);
     setUploading(true);
+    setPendingName(file.name);
     try {
       const form = new FormData();
       form.append('file', file);
@@ -77,6 +79,7 @@ function DocumentsCard({ room }) {
       setNotice({ ok: false, text: err?.message || 'Upload failed.' });
     } finally {
       setUploading(false);
+      setPendingName(null);
     }
   }
 
@@ -108,13 +111,28 @@ function DocumentsCard({ room }) {
       {!docsQuery.isLoading && docs.length === 0 && (
         <div className="portal-empty">No documents yet. Upload slides, notes or a reading and @ai will use them.</div>
       )}
-      {docs.length > 0 && (
+      {(docs.length > 0 || pendingName) && (
         <div className="portal-list" style={{ marginTop: 12 }}>
+          {pendingName && (
+            <div className="portal-row">
+              <span className="pf-spin" aria-hidden="true" />
+              <span className="portal-row__main">
+                <span className="portal-row__text">{pendingName}</span>
+                <span className="portal-row__sub">Indexing for @ai…</span>
+              </span>
+            </div>
+          )}
           {docs.map((doc) => (
             <div key={doc.id} className="portal-row">
               <span className="portal-badge">{(doc.file_type || 'FILE').toUpperCase()}</span>
               <span className="portal-row__main">
-                <span className="portal-row__text">{doc.file_name}</span>
+                <a
+                  className="portal-row__text portal-row__link"
+                  href={`${API_BASE_URL}/rooms/${room.id}/documents/${doc.id}/file`}
+                  target="_blank" rel="noreferrer" title={`Open ${doc.file_name}`}
+                >
+                  {doc.file_name}
+                </a>
                 {doc.created_at && <span className="portal-row__sub">{new Date(doc.created_at).toLocaleDateString()}</span>}
               </span>
               <button
@@ -260,13 +278,13 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
       </section>
 
       <section className="portal-panel">
-        <div className="portal-panel__head pf-wraphead">
+        <div className="portal-panel__head">
           <h2>AI prompt</h2>
           {prompt.trim() !== (defaultPrompt || '').trim()
             ? <span className="portal-flag is-solid">CUSTOM</span>
             : <span className="portal-flag">DEFAULT</span>}
         </div>
-        <p className="portal-muted" style={{ margin: '0 0 12px' }}>Edit the prompt directly — @ai follows this in your room.</p>
+        <p className="portal-muted" style={{ margin: '0 20px 12px' }}>Edit the prompt directly — @ai follows this in your room.</p>
         <textarea
           ref={promptRef}
           className="er-textarea pf-prompt" rows={12} value={prompt}

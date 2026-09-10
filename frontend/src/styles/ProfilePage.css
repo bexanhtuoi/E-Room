@@ -2166,10 +2166,18 @@ a.portal-row:hover .portal-row__go {
   overflow-wrap: break-word;
 }
 
-@media (max-width: 991.98px) {
-  .pf-wraphead h2 {
-    flex: 1 1 100%;
-  }
+.pf-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ddd;
+  border-top-color: #111;
+  border-radius: 50%;
+  animation: pf-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pf-spin {
+  to { transform: rotate(360deg); }
 }
 
 .pf-savebar {
@@ -2187,6 +2195,16 @@ a.portal-row:hover .portal-row__go {
 .pf-savebar__btn {
   padding: 12px 28px;
   font-size: 15px;
+}
+
+.portal-row__link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.portal-row__link:hover {
+  color: #111;
 }
 
 .portal-row--btn {
