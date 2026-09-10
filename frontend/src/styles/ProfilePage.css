@@ -1987,9 +1987,30 @@ a.portal-row:hover .portal-row__go {
 }
 
 .pf-center {
-  max-width: 760px;
+  max-width: 680px;
   margin: 0 auto;
   width: 100%;
+}
+
+.pf-center .portal-pagehead {
+  max-width: none;
+}
+
+.pf-crumb {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pf-faint, #9a9a9a);
+}
+
+.pf-crumb a {
+  color: var(--pf-muted, #6f6f6f);
+  text-decoration: none;
+}
+
+.pf-crumb a:hover {
+  color: var(--pf-ink, #1a1a1a);
+  text-decoration: underline;
 }
 
 .pf-resume {
@@ -2084,11 +2105,20 @@ a.portal-row:hover .portal-row__go {
   height: auto;
   min-height: calc(100svh - 64px);
   overflow: visible;
+  overflow-x: clip;
 }
 
 .portal-app--page .portal-main {
   overflow: visible;
   max-width: none;
+}
+
+.portal-app--page .portal-main::-webkit-scrollbar {
+  display: none;
+}
+
+.portal-app--page .portal-main {
+  scrollbar-width: none;
 }
 
 .pf-room__tile--lg {
@@ -2115,20 +2145,28 @@ a.portal-row:hover .portal-row__go {
 
 .pf-prompt {
   min-height: 280px;
-  resize: vertical;
-  overflow: auto;
+  resize: none;
+  overflow: hidden;
   font-size: 13px;
   line-height: 1.6;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .pf-savebar {
-  display: grid;
+  display: flex;
   gap: 12px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.pf-savebar .er-alert {
+  flex: 1;
+  margin: 0;
 }
 
 .pf-savebar__btn {
-  justify-content: center;
-  padding: 12px;
+  padding: 12px 28px;
   font-size: 15px;
 }
 

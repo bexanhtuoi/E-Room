@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { HiArrowLeft, HiCalendarDays, HiChatBubbleLeftRight, HiCloudArrowUp, HiLockClosed, HiPlus, HiTrash, HiUserGroup, HiXMark } from 'react-icons/hi2';
@@ -133,7 +133,7 @@ function DocumentsCard({ room }) {
   );
 }
 
-function ConfigForm({ room, defaultPrompt }) {
+function ConfigForm({ room, defaultPrompt, onReset }) {
   const [name, setName] = useState(room.name || '');
   const [description, setDescription] = useState(room.description || '');
   const [topics, setTopics] = useState(Array.isArray(room.topics) ? room.topics : []);
@@ -143,10 +143,19 @@ function ConfigForm({ room, defaultPrompt }) {
   const [draft, setDraft] = useState('');
   const [prompt, setPrompt] = useState(room.system_prompt || defaultPrompt);
   const [notice, setNotice] = useState(null);
+  const promptRef = useRef(null);
 
   useEffect(() => {
     if (!room.system_prompt && defaultPrompt && !prompt) setPrompt(defaultPrompt);
   }, [defaultPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const el = promptRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [prompt]);
 
   const initialPrompt = room.system_prompt || defaultPrompt;
   const dirty = name.trim() !== (room.name || '')
@@ -255,6 +264,7 @@ function ConfigForm({ room, defaultPrompt }) {
         </div>
         <p className="portal-muted" style={{ margin: '0 0 12px' }}>Edit the prompt directly — @ai follows this in your room.</p>
         <textarea
+          ref={promptRef}
           className="er-textarea pf-prompt" rows={12} value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           aria-label="AI prompt"
@@ -265,6 +275,9 @@ function ConfigForm({ room, defaultPrompt }) {
 
       <div className="pf-savebar">
         {notice && <div className={`er-alert ${notice.ok ? 'er-alert--ok' : 'er-alert--err'}`}>{notice.text}</div>}
+        <button className="er-btn er-btn--ghost pf-savebar__btn" disabled={!dirty || saveMutation.isPending} onClick={onReset}>
+          Reset
+        </button>
         <button className="er-btn pf-savebar__btn" disabled={saveMutation.isPending || !name.trim() || !dirty} onClick={() => saveMutation.mutate()}>
           {saveMutation.isPending ? 'Saving…' : 'Save changes'}
         </button>
@@ -276,6 +289,7 @@ function ConfigForm({ room, defaultPrompt }) {
 export function RoomConfigPage() {
   const { roomId } = useParams();
   const { user } = useAuth();
+  const [formKey, setFormKey] = useState(0);
 
   const roomQuery = useQuery({
     queryKey: ['room', roomId],
@@ -324,15 +338,16 @@ export function RoomConfigPage() {
       <main className="portal-main pf-center">
         <div className="portal-pagehead">
           <div>
-            <div className="portal-pagehead__crumb"><Link to="/my-rooms">My rooms</Link> / Config</div>
+            <div className="pf-crumb"><Link to="/my-rooms">My rooms</Link> / Config</div>
           </div>
         </div>
         <div className="pf-resume">
           <ResumeHeader room={room} messagesTotal={typeof countQuery.data === 'number' ? countQuery.data : 0} />
           <ConfigForm
-            key={room.id}
+            key={`${room.id}-${formKey}`}
             room={room}
             defaultPrompt={defaultQuery.data || ''}
+            onReset={() => setFormKey((k) => k + 1)}
           />
         </div>
       </main>
