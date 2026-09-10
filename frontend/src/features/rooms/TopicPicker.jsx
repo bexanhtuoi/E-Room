@@ -54,7 +54,7 @@ export function TopicPicker({ topics, onChange }) {
           {topics.map((t) => (
             <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#111', color: '#fff', fontSize: 13, fontWeight: 700, padding: '7px 8px 7px 12px' }}>
               {t}
-              <button type="button" onClick={() => remove(t)} aria-label={`Remove ${t}`} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>✕</button>
+              <button type="button" onClick={() => remove(t)} aria-label={`Remove ${t}`} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 2 }}>✕</button>
             </span>
           ))}
         </div>

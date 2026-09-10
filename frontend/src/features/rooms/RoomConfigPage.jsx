@@ -234,9 +234,9 @@ function ConfigForm({ room, defaultPrompt }) {
                     <button
                       type="button" aria-label={`Remove ${email}`} title={`Remove ${email}`}
                       onClick={() => setEmails((list) => list.filter((x) => x !== email))}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 6px', font: 'inherit' }}
-                    >
-                      <HiXMark size={12} />
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, font: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <HiXMark size={10} />
                     </button>
                   </span>
                 ))}
