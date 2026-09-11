@@ -16,6 +16,9 @@ log = get_logger("app.ai.stt")
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="stt_worker")
 _whisper_model_instance = None
 
+# Segment co avg_logprob duoi nguong nay coi nhu model "che" — bo.
+MIN_SEGMENT_LOGPROB = -1.0
+
 
 def normalize_pcm_int16(audio_data) -> np.ndarray:
     # LiveKit tra ve memoryview, mic co the dua bytearray/bytes —
@@ -68,15 +71,18 @@ def get_whisper_model():
         from faster_whisper import WhisperModel
 
         log.info(
-            "Loading faster-whisper model | model=%s device=%s compute=%s",
+            "Loading faster-whisper model | model=%s device=%s compute=%s threads=%s beam=%s",
             settings.stt_model_size,
             settings.stt_device,
             settings.stt_compute_type,
+            settings.stt_cpu_threads,
+            settings.stt_beam_size,
         )
         _whisper_model_instance = WhisperModel(
             settings.stt_model_size,
             device=settings.stt_device,
             compute_type=settings.stt_compute_type,
+            cpu_threads=settings.stt_cpu_threads,
         )
         log.info("Faster-whisper model loaded successfully")
     return _whisper_model_instance
@@ -94,11 +100,19 @@ def transcribe_faster_whisper(
             return None
 
         model = model_override or get_whisper_model()
-        initial_prompt = "Transcribe the following English speech exactly as spoken, word for word."
+        # Prompt dinh huong accent Viet + ten Viet thuong gap (Hoang, Huong...)
+        # de model khoi doan thanh tu giong am khac ("Juan", "Genteel").
+        initial_prompt = (
+            "This is an English speaking practice session in Vietnam. "
+            "The speakers are Vietnamese learners introducing themselves in English. "
+            "Common Vietnamese names you may hear: Hoang, Huong, An, Minh, Linh, Nam, Trang. "
+            "Transcribe exactly what is said, word for word."
+        )
 
         segments, info = model.transcribe(
             audio,
-            beam_size=5,
+            language="en",
+            beam_size=settings.stt_beam_size,
             temperature=0.0,
             initial_prompt=initial_prompt,
             word_timestamps=True,
@@ -118,21 +132,31 @@ def transcribe_faster_whisper(
 
         for segment in segments:
             text_clean = segment.text.strip()
-            if text_clean:
-                full_text_list.append(text_clean)
-                total_logprob += segment.avg_logprob
-                segment_count += 1
+            if not text_clean:
+                continue
+            # Bo segment model tu tin thap — thuong la "che" them
+            # ("No. No.", "Genteel...") sau cau noi that.
+            if segment.avg_logprob < MIN_SEGMENT_LOGPROB:
+                log.info(
+                    "Dropping low-confidence segment | logprob=%.2f text='%s'",
+                    segment.avg_logprob,
+                    text_clean[:80],
+                )
+                continue
+            full_text_list.append(text_clean)
+            total_logprob += segment.avg_logprob
+            segment_count += 1
 
-                if segment.words:
-                    for word_info in segment.words:
-                        word_timings.append(
-                            {
-                                "word": word_info.word.strip(),
-                                "start": word_info.start,
-                                "end": word_info.end,
-                                "probability": word_info.probability,
-                            }
-                        )
+            if segment.words:
+                for word_info in segment.words:
+                    word_timings.append(
+                        {
+                            "word": word_info.word.strip(),
+                            "start": word_info.start,
+                            "end": word_info.end,
+                            "probability": word_info.probability,
+                        }
+                    )
 
         if not full_text_list:
             return None

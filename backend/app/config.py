@@ -72,7 +72,7 @@ class Settings:
 
     # ─── Speech To Text (STT) ─────────────────────
     stt_provider: str = os.getenv("STT_PROVIDER", "faster_whisper")  # faster_whisper | openai | groq | custom_api
-    stt_model_size: str = os.getenv("STT_MODEL_SIZE", "base.en")
+    stt_model_size: str = os.getenv("STT_MODEL_SIZE", "small.en")
     stt_device: str = os.getenv("STT_DEVICE", "cpu")
     stt_compute_type: str = os.getenv("STT_COMPUTE_TYPE", "int8")
     stt_cloud_api_key: str = os.getenv("STT_CLOUD_API_KEY", "")
@@ -82,6 +82,8 @@ class Settings:
     stt_vad_min_speech_seconds: float = float(os.getenv("STT_VAD_MIN_SPEECH_SECONDS", 0.5))
     stt_vad_max_speech_seconds: float = float(os.getenv("STT_VAD_MAX_SPEECH_SECONDS", 20.0))
     stt_vad_energy_threshold: float = float(os.getenv("STT_VAD_ENERGY_THRESHOLD", 0.01))
+    stt_cpu_threads: int = int(os.getenv("STT_CPU_THREADS", 4))
+    stt_beam_size: int = int(os.getenv("STT_BEAM_SIZE", 3))
     # 0 = khong gioi han boi Redis (dua hoan toan vao concurrency cua worker)
     # > 0 = gioi han N luong chay song song tren TOAN HE THONG (du co nhieu server worker)
     ai_max_concurrency: int = int(os.getenv("AI_MAX_CONCURRENCY", 0))
