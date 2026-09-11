@@ -1,9 +1,10 @@
 import asyncio
 import json
+from datetime import timedelta
 from typing import Dict, List, Optional
 
 from livekit import rtc
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.ai.audio_vad import create_user_audio_state, process_audio_frame
 from app.ai.stt import transcribe_audio_async
@@ -12,13 +13,39 @@ from app.database import engine
 from app.integration.livekit import create_token
 from app.integration.redis import scard
 from app.log import get_logger
-from app.models import MessageRole
+from app.models import Message, MessageRole
 from app.services import message_crud, user_crud
+from app.utils.datetime_utils import now_utc
 
 log = get_logger("app.ai.transcriber")
 
 TRANSCRIBER_IDENTITY = "ai_transcriber"
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
+# Cung user + cung cau trong cua so nay → luu 1 lan (chong double-subscribe).
+DUPLICATE_TRANSCRIPT_SECONDS = 10
+
+
+def cancel_user_stream(user_tasks: Dict[str, asyncio.Task], user_identity: str) -> None:
+    # Mic publish lai (reconnect/doi mic) tao track_sid moi — huy vong lap
+    # cu truoc khi mo vong moi, keo khong co 2 pipeline cung nghe 1 mieng.
+    old_task = user_tasks.pop(user_identity, None)
+    if old_task is not None and not old_task.done():
+        old_task.cancel()
+
+
+def is_recent_duplicate(db: Session, room_id: int, user_id: Optional[int], text: str) -> bool:
+    cutoff = now_utc().replace(tzinfo=None) - timedelta(seconds=DUPLICATE_TRANSCRIPT_SECONDS)
+    existing = db.exec(
+        select(Message)
+        .where(
+            Message.room_id == room_id,
+            Message.user_id == user_id,
+            Message.text == text,
+            Message.created_at >= cutoff,
+        )
+        .limit(1)
+    ).first()
+    return existing is not None
 
 
 def save_transcript_to_db(
@@ -29,7 +56,7 @@ def save_transcript_to_db(
     confidence: float,
     avg_logprob: float,
     words_count: int,
-) -> tuple[int, Optional[int], str]:
+) -> tuple[Optional[int], Optional[int], str]:
     user_id: Optional[int] = None
     user_name = user_identity
 
@@ -43,6 +70,10 @@ def save_transcript_to_db(
             user_obj = user_crud.get_one(db, id=user_id)
             if user_obj:
                 user_name = user_obj.full_name
+
+        if is_recent_duplicate(db, room_id, user_id, text):
+            log.info("Dropping duplicate transcript | room_id=%s user=%s text='%s'", room_id, user_identity, text[:80])
+            return None, user_id, user_name
 
         meta_data = {
             "source": "speech_to_text",
@@ -115,7 +146,7 @@ async def handle_speech_completion(
             confidence,
         )
 
-        # 2. Luu vao database
+        # 2. Luu vao database (None = trung lap hoac loi luu → bo qua)
         message_id, user_id, user_name = save_transcript_to_db(
             room_id=room_id,
             user_identity=user_identity,
@@ -125,6 +156,8 @@ async def handle_speech_completion(
             avg_logprob=avg_logprob,
             words_count=len(words),
         )
+        if message_id is None:
+            return
 
         # 3. Broadcast len LiveKit de cac user khac nhan duoc transcript
         payload = build_transcript_payload(
@@ -203,6 +236,7 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
     lock_key = f"room:{room_id}:transcriber_running"
     room = rtc.Room()
     user_states: Dict[str, Dict] = {}
+    user_tasks: Dict[str, asyncio.Task] = {}
     active_tasks: List[asyncio.Task] = []
 
     token = create_token(
@@ -232,6 +266,9 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
             if participant.identity not in user_states:
                 user_states[participant.identity] = create_user_audio_state(participant.identity)
 
+            # Huy pipeline cu cua user nay truoc (track cu chet nhung vong
+            # lap chua kip dung) roi moi mo pipeline cho track moi.
+            cancel_user_stream(user_tasks, participant.identity)
             task = asyncio.create_task(
                 process_user_audio_stream(
                     room=room,
@@ -241,10 +278,20 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
                     user_state=user_states[participant.identity],
                 )
             )
+            user_tasks[participant.identity] = task
             active_tasks.append(task)
+
+    @room.on("track_unsubscribed")
+    def on_track_unsubscribed(
+        track: rtc.Track,
+        publication: rtc.RemoteTrackPublication,
+        participant: rtc.RemoteParticipant,
+    ) -> None:
+        cancel_user_stream(user_tasks, participant.identity)
 
     @room.on("participant_disconnected")
     def on_participant_disconnected(participant: rtc.RemoteParticipant) -> None:
+        cancel_user_stream(user_tasks, participant.identity)
         if participant.identity in user_states:
             del user_states[participant.identity]
 

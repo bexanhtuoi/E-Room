@@ -22,7 +22,10 @@ from app.ai.stt import (
 )
 from app.ai.transcriber import (
     build_transcript_payload,
+    cancel_user_stream,
     handle_speech_completion,
+    is_recent_duplicate,
+    save_transcript_to_db,
 )
 
 
@@ -291,3 +294,69 @@ class TestTranscriberFunctions:
             assert args[0] == 1
             assert args[1] == "answer"
             assert args[2] == "explain dependency inversion"
+
+    def test_cancel_user_stream_replaces_old_pipeline(self):
+        old_task = MagicMock()
+        old_task.done.return_value = False
+        registry = {"7": old_task}
+
+        cancel_user_stream(registry, "7")
+
+        old_task.cancel.assert_called_once()
+        assert "7" not in registry
+
+    def test_cancel_user_stream_ignores_missing_or_done(self):
+        done_task = MagicMock()
+        done_task.done.return_value = True
+        registry = {"7": done_task}
+
+        cancel_user_stream(registry, "7")
+        done_task.cancel.assert_not_called()
+
+        cancel_user_stream(registry, "nobody")
+
+    def test_transcribe_drops_low_confidence_segment(self):
+        mock_segment = MagicMock()
+        mock_segment.text = " Genteel. No. No. "
+        mock_segment.avg_logprob = -2.5
+        mock_segment.words = []
+
+        mock_model = MagicMock()
+        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="en", duration=2.0))
+
+        audio = np.zeros(32000, dtype=np.int16)
+        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model) is None
+
+    def test_save_transcript_drops_recent_duplicate(self):
+        import uuid
+
+        from sqlmodel import Session
+
+        from app.database import engine
+
+        text = f"dupe guard {uuid.uuid4().hex[:8]}"
+        first_id, _, _ = save_transcript_to_db(
+            room_id=424242,
+            user_identity="nobody",
+            text=text,
+            duration=1.0,
+            confidence=0.9,
+            avg_logprob=-0.2,
+            words_count=2,
+        )
+        assert first_id is not None
+
+        second_id, _, _ = save_transcript_to_db(
+            room_id=424242,
+            user_identity="nobody",
+            text=text,
+            duration=1.0,
+            confidence=0.9,
+            avg_logprob=-0.2,
+            words_count=2,
+        )
+        assert second_id is None
+
+        with Session(engine) as db:
+            assert is_recent_duplicate(db, 424242, None, text) is True
+            assert is_recent_duplicate(db, 424242, None, "something else entirely") is False
