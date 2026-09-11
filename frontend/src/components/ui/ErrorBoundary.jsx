@@ -8,6 +8,16 @@ export class ErrorBoundary extends Component {
   }
 
   static getDerivedStateFromError(error) {
+    // Deploy moi doi hash chunk (RoomsPage-*.js) → tab cu import chunk cu
+    // bi 404. Tu reload 1 lan de lay index.html + chunk moi, tranh vong lap
+    // bang co session (server hong that thi hien nut Reload tay).
+    const message = String(error?.message || '');
+    const isStaleChunk = /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(message);
+    if (isStaleChunk && !sessionStorage.getItem('er-chunk-reloaded')) {
+      sessionStorage.setItem('er-chunk-reloaded', '1');
+      window.location.reload();
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
