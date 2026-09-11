@@ -23,6 +23,7 @@ from app.integration.redis import (
     set,
     set_if_absent,
 )
+from app.integration.redis import keys as scan_keys
 from app.log import get_logger
 from app.models import DocumentKind, MessageRole, RoomStatus
 from app.services import document_crud, message_crud, room_crud, user_crud
@@ -59,7 +60,21 @@ def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: O
 # Lock worker theo task_id: worker chet dot ngot (restart/OOM) khong de lai
 # lock ma chet — task moi thay lock het han hoac khong phai cua task dang
 # chay thi tu lay quyen. Task dang chay refresh lock dinh ky.
-WORKER_LOCK_TTL = 360
+WORKER_LOCK_TTL = 180
+
+
+def clear_stale_worker_locks() -> int:
+    # Worker vua khoi dong = khong co task in-flight that — xoa lock cu de
+    # phong live co transcriber/observer ngay, khoi doi TTL het han.
+    cleared = 0
+    for pattern in ("room:*:transcriber_running", "room:*:observer_running"):
+        stale = scan_keys(pattern)
+        if stale:
+            delete(*stale)
+            cleared += len(stale)
+    if cleared:
+        log.info("Cleared stale worker locks | count=%s", cleared)
+    return cleared
 
 
 def claim_worker_lock(key: str, task_id: str) -> bool:

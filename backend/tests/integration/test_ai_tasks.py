@@ -52,6 +52,17 @@ class TestAITasksFlow:
             assert kwargs["task_id"] == claimed_id
             assert kwargs["args"] == [10, claimed_id]
 
+    def test_clear_stale_worker_locks(self):
+        from app.ai.tasks import clear_stale_worker_locks
+
+        with (
+            patch("app.ai.tasks.delete") as mock_delete,
+            patch("app.ai.tasks.scan_keys", return_value=["room:1:transcriber_running"]),
+        ):
+            cleared = clear_stale_worker_locks()
+            assert cleared >= 1
+            assert mock_delete.called
+
     def test_worker_lock_released_only_by_owner(self):
         from app.ai.tasks import release_worker_lock
 

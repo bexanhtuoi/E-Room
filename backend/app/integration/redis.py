@@ -56,6 +56,10 @@ def delete(*keys: str) -> int:
     return get_redis_client().delete(*keys)
 
 
+def keys(pattern: str) -> list:
+    return sorted(get_redis_client().keys(pattern))
+
+
 def exists(*keys: str) -> int:
     return get_redis_client().exists(*keys)
 

@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.signals import worker_ready
 
 from app.config import settings
 
@@ -42,3 +43,15 @@ celery_app.conf.update(
 
 def get_celery_app() -> Celery:
     return celery_app
+
+
+@worker_ready.connect
+def clear_locks_on_worker_start(sender=None, **kwargs) -> None:
+    # Tien trinh worker moi = task cu da chet theo — xoa lock orphan de
+    # phong live duoc phuc vu lai trong vai giay thay vi doi TTL.
+    try:
+        from app.ai.tasks import clear_stale_worker_locks
+
+        clear_stale_worker_locks()
+    except Exception:
+        pass
