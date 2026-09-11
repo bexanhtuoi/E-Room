@@ -16,6 +16,8 @@ from app.ai.stt import (
     build_stt_prompt,
     convert_audio_to_float32,
     convert_audio_to_wav_bytes,
+    is_loopy_hallucination,
+    is_prompt_echo,
     is_repetitive_hallucination,
     resolve_stt_language,
     transcribe_audio,
@@ -193,6 +195,32 @@ class TestSTTFunctions:
         assert is_repetitive_hallucination("yes yes yes yes yes") is True
         assert is_repetitive_hallucination("hello world from Vietnam") is False
         assert is_repetitive_hallucination("yes yes") is False
+
+    def test_loopy_hallucination_partial_repeat(self):
+        # DB that: cum 4 tu lap lai nhung ca cau khong lap y hét
+        assert is_loopy_hallucination("Nó có một cái mồm đáng màu à? Đáng màu hả? Nó có một cái mồm đáng màu à?") is True
+        assert is_repetitive_hallucination("Nó có một cái mồm đáng màu à? Đáng màu hả? Nó có một cái mồm đáng màu à?") is True
+        assert is_loopy_hallucination("Hello everyone, I am Hoang and I am 20 years old.") is False
+        assert is_loopy_hallucination("Hello, how are you today?") is False
+
+    def test_prompt_echo_guard(self):
+        auto_prompt = build_stt_prompt("auto")
+        assert is_prompt_echo("Transcribe exactly what is said, word for word.", auto_prompt) is True
+        assert is_prompt_echo("Transcribe exactly what is said, word for word. Transcribe exactly what is said,", auto_prompt) is True
+        assert is_prompt_echo("Hello everyone, welcome to the morning lab.", auto_prompt) is False
+        assert is_prompt_echo("What is said?", auto_prompt) is False
+
+    def test_transcribe_drops_prompt_echo(self):
+        mock_segment = MagicMock()
+        mock_segment.text = " Transcribe exactly what is said, word for word. "
+        mock_segment.avg_logprob = -0.2
+        mock_segment.words = []
+
+        mock_model = MagicMock()
+        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="en", duration=2.0))
+
+        audio = np.zeros(32000, dtype=np.int16)
+        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model, language="auto") is None
 
     def test_transcribe_drops_repetitive_hallucination(self):
         mock_segment = MagicMock()

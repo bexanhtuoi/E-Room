@@ -13,8 +13,9 @@ from app.log import get_logger
 
 log = get_logger("app.ai.stt")
 
-# ThreadPoolExecutor xu ly audio CPU/GPU khong chan async loop
-_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="stt_worker")
+# ThreadPoolExecutor xu ly audio CPU/GPU khong chan async loop.
+# 2 user noi lien tuc → moi cau 1 job; 2 worker la nghẽn (small ~12s/cau).
+_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="stt_worker")
 _whisper_model_instance = None
 
 # Segment co avg_logprob duoi nguong nay coi nhu model "che" — bo.
@@ -82,6 +83,12 @@ def convert_audio_to_wav_bytes(audio_data: np.ndarray | bytes, sample_rate: int 
     return wav_buffer.getvalue()
 
 
+def normalize_words(text: str) -> List[str]:
+    import re
+
+    return re.findall(r"[a-zà-ỹ0-9]+", text.lower())
+
+
 def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
     words = text.lower().split()
     if len(words) < min_repeats:
@@ -94,7 +101,45 @@ def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
         if words == words[:unit] * (len(words) // unit):
             return True
 
+    return is_loopy_hallucination(text)
+
+
+def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
+    # Cum >= phrase_words tu lap lai >= 2 lan trong cau ("A B. C? A B.")
+    # — whisper tu che khi 2 nguoi noi chong nhau / khoang lang.
+    words = normalize_words(text)
+    if len(words) < phrase_words * 2:
+        return False
+
+    seen = set()
+    for i in range(len(words) - phrase_words + 1):
+        phrase = " ".join(words[i : i + phrase_words])
+        if phrase in seen:
+            return True
+        seen.add(phrase)
+
     return False
+
+
+def is_prompt_echo(text: str, prompt: str) -> bool:
+    # Model nha lai initial_prompt khi audio chi la im lang/nhieu
+    # ("Transcribe exactly what is said, word for word.").
+    text_words = normalize_words(text)
+    prompt_words = normalize_words(prompt)
+    if not text_words or not prompt_words:
+        return False
+
+    prompt_set = set(prompt_words)
+    # Cau ngan dung toan tu trong prompt ("What is said?") co the la noi
+    # that — chi danh echo khi du dai (>= 5 tu) hoac bao nhau nguyen cau.
+    if len(text_words) >= 5 and all(word in prompt_set for word in text_words):
+        return True
+
+    joined_text = " ".join(text_words)
+    joined_prompt = " ".join(prompt_words)
+    if joined_prompt in joined_text:
+        return True
+    return len(text_words) >= 5 and joined_text in joined_prompt
 
 
 # ─── PROVIDER 1: FASTER-WHISPER LOCAL ─────────────────────────────────────
@@ -202,6 +247,12 @@ def transcribe_faster_whisper(
         # ("thank you thank you...") — bo thang.
         if is_repetitive_hallucination(full_text):
             log.info("Dropping repetitive hallucination | text='%s'", full_text[:80])
+            return None
+
+        # Model nha lai initial_prompt khi audio chi la im lang/nhieu
+        # (2 nguoi noi chong nhau de lai khoang lang) — bo thang.
+        if is_prompt_echo(full_text, resolved_prompt):
+            log.info("Dropping prompt echo | text='%s'", full_text[:80])
             return None
 
         avg_logprob = (total_logprob / segment_count) if segment_count > 0 else -1.0
@@ -329,6 +380,9 @@ async def transcribe_audio_async(
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
     loop = asyncio.get_running_loop()
+    queued = _executor._work_queue.qsize()
+    if queued >= 3:
+        log.warning("STT executor congested | queued=%s", queued)
     call = functools.partial(
         transcribe_audio,
         audio_data,
