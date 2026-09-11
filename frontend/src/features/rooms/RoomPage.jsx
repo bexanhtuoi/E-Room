@@ -929,6 +929,17 @@ export function RoomPage() {
   }, [refreshRoomData]);
 
   useEffect(() => {
+    // Tat tab dot ngot → beacon bao leave (giu kem cookie), tranh presence ma.
+    const beacon = () => {
+      try {
+        navigator.sendBeacon(`/api/v1/rooms/${roomId}/leave`, new Blob([], { type: 'application/json' }));
+      } catch {}
+    };
+    window.addEventListener('pagehide', beacon);
+    return () => window.removeEventListener('pagehide', beacon);
+  }, [roomId]);
+
+  useEffect(() => {
     let cancelled = false;
     async function joinAndGetToken() {
       try {

@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import get_session
 from app.integration.livekit import create_token, verify_webhook
 from app.integration.redis import delete as redis_delete
-from app.integration.redis import sadd, scard, smembers, srem
+from app.integration.redis import expire, sadd, scard, smembers, srem
 from app.models import DocumentKind, NotificationType, Room, RoomStatus
 from app.schemas import (
     DocumentResponse,
@@ -587,6 +587,9 @@ def close_room_session(db: Session, room_id: int, user_id: int | None) -> None:
 def register_participant_join(db: Session, room_name: str, participant_identity: str) -> None:
     redis_key = f"room:{room_name}:participants"
     sadd(redis_key, str(participant_identity))
+    # Tu het han sau 6h neu webhook leave + beacon deu miss → khong con
+    # presence ma chet lam worker transcript/observer chay am vo han.
+    expire(redis_key, 6 * 3600)
     room_id_int = int(room_name)
     mark_room_activity(room_id_int)
     db_room = room_crud.get_one(db, id=room_id_int)

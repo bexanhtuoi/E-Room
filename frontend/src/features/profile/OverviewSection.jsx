@@ -31,21 +31,6 @@ function greetingFor(hour) {
   return 'Good evening';
 }
 
-function peakHourOf(messages) {
-  const hours = new Array(24).fill(0);
-  for (const message of messages) {
-    if (!message?.created_at) continue;
-    const date = new Date(message.created_at);
-    if (Number.isNaN(date.getTime())) continue;
-    hours[date.getHours()] += 1;
-  }
-  let best = 0;
-  for (let h = 1; h < 24; h += 1) {
-    if (hours[h] > hours[best]) best = h;
-  }
-  return { hour: best, count: hours[best] };
-}
-
 export function OverviewSection({
   userName,
   englishLevel,
@@ -85,6 +70,31 @@ export function OverviewSection({
   }, [messages]);
   const consistencyCount = consistencyDays.filter((d) => d.active).length;
 
+  const weekBars = useMemo(() => {
+    const counts = new Array(7).fill(0);
+    const labels = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const day = new Date();
+      day.setHours(0, 0, 0, 0);
+      labels.unshift(new Date(day.getTime() - i * 86400 * 1000));
+    }
+    for (const message of messages || []) {
+      if (!message?.created_at) continue;
+      const time = new Date(message.created_at).getTime();
+      if (Number.isNaN(time)) continue;
+      const idx = labels.findIndex((day) => time >= day.getTime() && time < day.getTime() + 86400 * 1000);
+      if (idx >= 0) counts[idx] += 1;
+    }
+    const names = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    return labels.map((day, i) => ({
+      key: day.toISOString().slice(0, 10),
+      label: names[(day.getDay() + 6) % 7],
+      title: day.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+      count: counts[i],
+    }));
+  }, [messages]);
+  const weekMax = Math.max(1, ...weekBars.map((b) => b.count));
+
   const topTopics = useMemo(() => {
     const counts = new Map();
     for (const room of [...hostedRooms, ...joinedRooms]) {
@@ -96,7 +106,6 @@ export function OverviewSection({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [hostedRooms, joinedRooms]);
   const levelIndex = Math.max(0, LEVELS.indexOf(englishLevel || ''));
-  const peak = peakHourOf(messages);
 
   const today = new Date();
   const dateLine = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -152,7 +161,7 @@ export function OverviewSection({
 
       <section className="portal-panel pf-momentum">
         <div className="portal-panel__head">
-          <h2>Momentum <span className="portal-muted">· {rhythmTotal} lines</span></h2>
+          <h2>Momentum</h2>
           <div className="portal-tabs" role="tablist" aria-label="Rhythm range">
             {RHYTHM_RANGES.map((range) => (
               <button
@@ -168,20 +177,31 @@ export function OverviewSection({
             ))}
           </div>
         </div>
-        <LineChart data={rhythm} height={64} />
+        <div className="pf-momentum__grid">
+          <div className="pf-momentum__main">
+            <div className="portal-block__label">{rhythmTotal} lines</div>
+            <LineChart data={rhythm} height={120} />
+          </div>
+          <div className="pf-momentum__side">
+            <div className="portal-block__label">This week</div>
+            <div className="pf-weekbars" role="img" aria-label="Lines spoken each day this week">
+              {weekBars.map((bar) => (
+                <span key={bar.key} className="pf-weekbar" title={`${bar.title} — ${bar.count} lines`}>
+                  <span className="pf-weekbar__track">
+                    <span className="pf-weekbar__fill" style={{ height: `${Math.round((bar.count / weekMax) * 100)}%` }} />
+                  </span>
+                  <span className="pf-weekbar__label">{bar.label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="pf-momentum__facts">
-          <span className="pf-dots" role="img" aria-label={`${consistencyCount} active days out of 14`}>
-            {consistencyDays.map((day) => (
-              <span key={day.key} title={`${day.label}${day.active ? ' — spoke' : ''}`} className={`pf-dot${day.active ? ' is-on' : ''}`} />
-            ))}
-          </span>
-          <span className="portal-muted">{consistencyCount}/14</span>
+          <span className="portal-muted"><HiFire size={12} /> {streak > 0 ? `${streak}-day streak` : 'No streak yet'}</span>
+          <span className="portal-muted">{consistencyCount}/14 days</span>
           {topTopics.length > 0 && <span className="portal-topic">{topTopics[0][0]}</span>}
-          <span className="portal-muted">
-            <HiFire size={12} /> {peak.count > 0 ? `${String(peak.hour).padStart(2, '0')}:00` : '—'}
-          </span>
           <span className={`portal-muted${delta > 0 ? ' is-up' : ''}${delta < 0 ? ' is-down' : ''}`}>
-            {delta > 0 ? `▲${delta}` : delta < 0 ? `▼${Math.abs(delta)}` : '±0'}
+            {delta > 0 ? `▲${delta} vs last week` : delta < 0 ? `▼${Math.abs(delta)} vs last week` : 'Same as last week'}
           </span>
         </div>
       </section>

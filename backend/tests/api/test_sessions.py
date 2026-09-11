@@ -146,6 +146,28 @@ class TestSessionAI:
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")
 
+    def test_chat_persists_turns_with_session_meta(self, client: TestClient, alice: dict):
+        room = make_room_with_message(client, f"sess-save-{alice['id']}")
+        client.post(f"/api/v1/rooms/{room['id']}/join")
+        session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
+
+        with patch("app.ai.session_agent.run_session_agent", new=AsyncMock(return_value="Saved answer.")):
+            assert client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "Remember me?"}).status_code == 200
+
+        data = client.get(f"/api/v1/sessions/{session_id}/messages").json()
+        assert data["chat"] == [
+            {"role": "user", "text": "Remember me?"},
+            {"role": "ai", "text": "Saved answer."},
+        ]
+        # Transcript van sach — Q&A khong tron vao context session
+        assert "Remember me?" not in data["transcript"]
+
+        # Room chat khong thay tin Q&A
+        room_texts = [m["text"] for m in client.get("/api/v1/messages/", params={"room_id": room["id"]}).json()]
+        assert "Remember me?" not in room_texts and "Saved answer." not in room_texts
+
+        client.post(f"/api/v1/rooms/{room['id']}/leave")
+
     def test_empty_question_rejected(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-empty-{alice['id']}")
         client.post(f"/api/v1/rooms/{room['id']}/join")

@@ -33,6 +33,40 @@ def get_my_session(db: Session, session_id: int, request: Request):
     return db_session
 
 
+def is_session_chat(message) -> bool:
+    # Tin Q&A voi Session AI — luu trong bang messages nhung khong phai
+    # transcript phong noi (khong dem vao session lines / room chat).
+    try:
+        return bool((json.loads(message.meta_data or "{}") or {}).get("session_chat"))
+    except (TypeError, ValueError):
+        return False
+
+
+def save_session_chat(db: Session, db_session, user_id: int, question: str, answer: str) -> None:
+    # Luu lich su hoi dap de F5 van con, nhan meta session de phan biet.
+    meta = json.dumps({"session_chat": True, "session_id": db_session.id})
+    message_crud.create(
+        db,
+        obj_in={"room_id": db_session.room_id, "user_id": user_id, "role": MessageRole.USER, "text": question, "meta_data": meta},
+    )
+    message_crud.create(
+        db,
+        obj_in={"room_id": db_session.room_id, "user_id": None, "role": MessageRole.AI, "text": answer, "meta_data": meta},
+    )
+
+
+def get_session_chat_turns(db: Session, db_session) -> list:
+    turns = []
+    for message in message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=500):
+        try:
+            meta = json.loads(message.meta_data or "{}") or {}
+        except (TypeError, ValueError):
+            continue
+        if meta.get("session_chat") and meta.get("session_id") == db_session.id:
+            turns.append({"role": "user" if message.role == MessageRole.USER else "ai", "text": message.text})
+    return turns
+
+
 def build_session_lines(db: Session, db_session) -> list:
     messages = message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=500)
     start = db_session.joined_at.replace(tzinfo=None) if getattr(db_session.joined_at, "tzinfo", None) else db_session.joined_at
@@ -43,6 +77,8 @@ def build_session_lines(db: Session, db_session) -> list:
     lines = []
     cache: dict = {}
     for message in messages:
+        if is_session_chat(message):
+            continue
         created = message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at
         if created < start:
             continue
@@ -88,7 +124,8 @@ def get_my_sessions(
         count = sum(
             1
             for message in message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=500)
-            if (message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at) >= start
+            if not is_session_chat(message)
+            and (message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at) >= start
             and (end is None or (message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at) <= end)
         )
         items.append(SessionWithRoom(session=db_session, room=room, message_count=count))
@@ -120,7 +157,7 @@ def get_session_messages(
     db_session = get_my_session(db, session_id, request)
     transcript, count = build_transcript(db, db_session)
 
-    return {"session_id": session_id, "message_count": count, "transcript": transcript}
+    return {"session_id": session_id, "message_count": count, "transcript": transcript, "chat": get_session_chat_turns(db, db_session)}
 
 
 @router.post("/{session_id}/chat", response_model=SessionAnswerResponse)
@@ -143,6 +180,8 @@ async def chat_session(
     answer = await session_agent.run_session_agent(question, lines)
     if not answer:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI could not answer right now")
+
+    save_session_chat(db, db_session, request.state.current_user.id, question, answer)
 
     return SessionAnswerResponse(answer=answer, message_count=len(lines))
 
@@ -169,10 +208,12 @@ async def chat_session_stream(
             return
 
         saw_token = False
+        answer_parts = []
         try:
             async for event in session_agent.stream_session_agent(question, lines):
-                if event.get("kind") == "token":
+                if event.get("kind") == "token" and event.get("text"):
                     saw_token = True
+                    answer_parts.append(event["text"])
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception:
             yield f"data: {json.dumps({'kind': 'error', 'text': 'AI could not answer right now'})}\n\n"
@@ -182,6 +223,7 @@ async def chat_session_stream(
             yield f"data: {json.dumps({'kind': 'error', 'text': 'AI could not answer right now'})}\n\n"
             return
 
+        save_session_chat(db, db_session, request.state.current_user.id, question, "".join(answer_parts).strip())
         yield f"data: {json.dumps({'kind': 'done', 'message_count': len(lines)})}\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")

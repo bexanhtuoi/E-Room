@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiSparkles, HiUsers } from 'react-icons/hi2';
@@ -6,7 +6,13 @@ import { API_BASE_URL, fetchJson, getTokens } from '../../lib/api';
 import { Face } from '../../components/common/Faces';
 import '../../styles/ProfilePage.css';
 
-const QUICK_PROMPTS = ['Recap it for Notion', 'What did we decide?', 'Which new words appeared?'];
+const QUICK_PROMPTS = [
+  'Recap it for Notion',
+  'What did we decide?',
+  'Which new words appeared?',
+  'Give me feedback on my English',
+  'What should I practice next?',
+];
 
 function parseTranscript(text) {
   return String(text || '')
@@ -88,10 +94,20 @@ export function SessionDetailPage() {
   const detail = detailQuery.data ?? null;
   const session = detail?.session ?? null;
   const room = detail?.room ?? null;
+  const savedChat = useMemo(() => {
+    const turns = messagesQuery.data?.chat;
+    return Array.isArray(turns) ? turns.filter((t) => t && typeof t.text === 'string') : [];
+  }, [messagesQuery.data]);
   const lines = useMemo(() => parseTranscript(messagesQuery.data?.transcript), [messagesQuery.data]);
   const speakers = useMemo(() => [...new Set(lines.map((l) => l.speaker).filter(Boolean))], [lines]);
   const lineCount = detail?.message_count ?? 0;
   const emptySession = !messagesQuery.isLoading && lineCount === 0;
+
+  useEffect(() => {
+    if (savedChat.length > 0) {
+      setChat((log) => (log.length === 0 ? savedChat.map((t) => ({ role: t.role, text: t.text })) : log));
+    }
+  }, [savedChat]);
 
   async function ask(text) {
     const clean = String(text || '').trim();
@@ -146,14 +162,14 @@ export function SessionDetailPage() {
 
   if (detailQuery.isLoading || messagesQuery.isLoading) {
     return (
-      <div className="portal-app portal-app--page"><main className="portal-main pf-center"><div className="portal-skeleton"><span /><span /><span /></div></main></div>
+      <div className="portal-app portal-app--page"><main className="portal-main pf-center--wide"><div className="portal-skeleton"><span /><span /><span /></div></main></div>
     );
   }
 
   if (detailQuery.isError || !session) {
     return (
       <div className="portal-app portal-app--page">
-        <main className="portal-main pf-center">
+        <main className="portal-main pf-center--wide">
           <div className="er-alert er-alert--err">Session not found or you have no access.</div>
           <Link className="er-btn" style={{ textDecoration: 'none', marginTop: 12 }} to="/session"><HiArrowLeft size={14} /> Sessions</Link>
         </main>
@@ -166,7 +182,7 @@ export function SessionDetailPage() {
 
   return (
     <div className="portal-app portal-app--page">
-      <main className="portal-main pf-center">
+      <main className="portal-main pf-center--wide">
         <div className="portal-pagehead">
           <div>
             <div className="pf-crumb"><Link to="/session">Sessions</Link> / #{session.id}</div>
@@ -219,11 +235,12 @@ export function SessionDetailPage() {
               <div className="portal-empty">No transcript in this session — nothing was said while you were inside, so AI has nothing to read.</div>
             ) : (
               <>
-                <div className="pf-chatlog pf-chatlog--roomy">
+                <div className="pf-chatlog pf-chatlog--roomy pf-chatlog--tall">
                   {chat.length === 0 && (
-                    <div className="pf-chatlog__turn is-ai">
+                    <div className="pf-greet">
                       <span className="portal-badge">AI</span>
-                      <span className="pf-chattext">I’ve read every line of this session. Ask me to recap it, explain a decision, or pull out new words.</span>
+                      <p className="pf-greet__title">I’ve read every line of this session.</p>
+                      <p className="portal-muted">Pick a starter below, or ask anything in your own words.</p>
                     </div>
                   )}
                   {chat.map((turn, i) => (
@@ -245,7 +262,7 @@ export function SessionDetailPage() {
                   )}
                   <div ref={chatEndRef} />
                 </div>
-                <div className="pf-chips">
+                <div className="pf-chips pf-chips--starters">
                   {QUICK_PROMPTS.map((prompt) => (
                     <button key={prompt} type="button" className="portal-topic pf-chipbtn" disabled={streaming} onClick={() => ask(prompt)}>
                       {prompt}

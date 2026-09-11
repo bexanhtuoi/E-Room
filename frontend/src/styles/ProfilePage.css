@@ -2135,6 +2135,12 @@ a.portal-row:hover .portal-row__go {
   margin-right: auto;
 }
 
+.portal-app--page .portal-main.pf-center--wide {
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .portal-app--page .portal-main::-webkit-scrollbar {
   display: none;
 }
@@ -2579,8 +2585,71 @@ a.portal-row:hover .portal-row__go {
   font-weight: 700;
 }
 
-.pf-momentum .portal-panel__head h2 .portal-muted {
-  font-weight: 400;
+.pf-momentum__grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 16px;
+}
+
+.pf-momentum__main {
+  min-width: 0;
+}
+
+.pf-momentum__side {
+  min-width: 0;
+  border-left: 1px solid #eee;
+  padding-left: 16px;
+}
+
+.pf-weekbars {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  height: 120px;
+  padding-top: 4px;
+}
+
+.pf-weekbar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pf-weekbar__track {
+  flex: 1;
+  width: 100%;
+  max-width: 22px;
+  display: flex;
+  align-items: flex-end;
+  background: #f1f1f1;
+}
+
+.pf-weekbar__fill {
+  width: 100%;
+  min-height: 2px;
+  background: #111;
+}
+
+.pf-weekbar__label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #888;
+}
+
+@media (max-width: 720px) {
+  .pf-momentum__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-momentum__side {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid #eee;
+    padding-top: 12px;
+  }
 }
 
 .pf-momentum__facts {
@@ -2641,6 +2710,39 @@ a.portal-row:hover .portal-row__go {
 .pf-sesscard__desc {
   margin: 12px 0 0;
   font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pf-chatlog--tall {
+  min-height: 340px;
+}
+
+.pf-greet {
+  margin: auto;
+  padding: 48px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-greet__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.pf-greet .portal-muted {
+  margin: 0;
+  font-size: 13px;
+}
+
+.pf-chips--starters {
+  justify-content: center;
 }
 
 .pf-chatlog__turn .pf-chattext.portal-muted {

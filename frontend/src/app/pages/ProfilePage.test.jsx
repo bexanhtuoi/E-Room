@@ -104,7 +104,7 @@ describe('ProfilePage portal', () => {
     expect(screen.queryByText('Day streak')).toBeNull();
     expect(screen.queryByRole('button', { name: /New room/ })).toBeNull();
     await waitFor(() => {
-      expect(screen.getByText(/4-day streak/)).toBeTruthy();
+      expect(screen.getAllByText(/4-day streak/).length).toBeGreaterThan(0);
     });
     expect(screen.getByText(/Level journey/)).toBeTruthy();
     expect(screen.queryByText(/Up next/)).toBeNull();

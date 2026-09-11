@@ -1,4 +1,5 @@
-﻿from typing import List, Optional
+﻿import json
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlmodel import Session
@@ -11,6 +12,13 @@ from app.schemas import MessageCreateSchema, MessageResponse
 from app.services import message_crud, room_crud
 
 router = APIRouter()
+
+
+def is_session_chat_message(message) -> bool:
+    try:
+        return bool((json.loads(message.meta_data or "{}") or {}).get("session_chat"))
+    except (TypeError, ValueError):
+        return False
 
 
 @router.get("/", response_model=List[MessageResponse])
@@ -41,7 +49,8 @@ def get_messages(
     # Moi nhat truoc: history load + poll limit moi thay tin moi,
     # khong thi phong dong (>limit tin) se mat tin moi + poll vo dung.
     messages = message_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True, **filter_kwargs)
-    return messages
+    # An tin Q&A voi Session AI (meta session_chat) — chi doc trong /session/:id.
+    return [message for message in messages if not is_session_chat_message(message)]
 
 
 @router.get("/count")

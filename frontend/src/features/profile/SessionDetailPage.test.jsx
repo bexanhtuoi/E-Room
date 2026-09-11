@@ -24,7 +24,12 @@ fetchJson.mockImplementation(async (path) => {
     };
   }
   if (path === '/sessions/101/messages') {
-    return { session_id: 101, message_count: 2, transcript: 'An Nguyen: hello there\nAn Nguyen: it was great' };
+    return {
+      session_id: 101,
+      message_count: 2,
+      transcript: 'An Nguyen: hello there\nAn Nguyen: it was great',
+      chat: [{ role: 'user', text: 'Old question?' }, { role: 'ai', text: 'Old answer.' }],
+    };
   }
   return {};
 });
@@ -83,6 +88,12 @@ describe('SessionDetailPage', () => {
     renderDetail();
     fireEvent.click(await screen.findByRole('button', { name: 'What did we decide?' }));
     expect(await screen.findByText('They greeted and praised.')).toBeTruthy();
+  });
+
+  it('restores saved chat history after reload', async () => {
+    renderDetail();
+    expect(await screen.findByText('Old question?')).toBeTruthy();
+    expect(await screen.findByText('Old answer.')).toBeTruthy();
   });
 
   it('shows the server error message when the stream fails', async () => {

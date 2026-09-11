@@ -68,6 +68,10 @@ def decr(key: str) -> int:
     return get_redis_client().decr(key)
 
 
+def expire(name: str, ttl: int) -> int:
+    return get_redis_client().expire(name, ttl)
+
+
 def sadd(name: str, *values: str) -> int:
     return get_redis_client().sadd(name, *values)
 
