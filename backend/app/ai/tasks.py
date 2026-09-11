@@ -56,24 +56,51 @@ def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: O
     return task.id
 
 
+# Lock worker theo task_id: worker chet dot ngot (restart/OOM) khong de lai
+# lock ma chet — task moi thay lock het han hoac khong phai cua task dang
+# chay thi tu lay quyen. Task dang chay refresh lock dinh ky.
+WORKER_LOCK_TTL = 360
+
+
+def claim_worker_lock(key: str, task_id: str) -> bool:
+    return set_if_absent(key, task_id, WORKER_LOCK_TTL)
+
+
+def refresh_worker_lock(key: str, task_id: str) -> None:
+    set(key, task_id, ttl=WORKER_LOCK_TTL)
+
+
+def release_worker_lock(key: str, task_id: str) -> None:
+    if get(key) == task_id:
+        delete(key)
+
+
 def enqueue_room_observer(room_id: int) -> None:
+    from uuid import uuid4
+
     observer_key = f"room:{room_id}:observer_running"
-    if not set_if_absent(observer_key, "1", settings.ai_timeout_seconds):
+    task_id = uuid4().hex
+    if not claim_worker_lock(observer_key, task_id):
         return
 
     observe_room_audio.apply_async(
-        args=[room_id],
+        args=[room_id, task_id],
+        task_id=task_id,
         queue=settings.ai_observer_queue_name,
     )
 
 
 def enqueue_room_transcriber(room_id: int) -> None:
+    from uuid import uuid4
+
     transcriber_key = f"room:{room_id}:transcriber_running"
-    if not set_if_absent(transcriber_key, "1", settings.ai_timeout_seconds):
+    task_id = uuid4().hex
+    if not claim_worker_lock(transcriber_key, task_id):
         return
 
     transcribe_room_audio.apply_async(
-        args=[room_id],
+        args=[room_id, task_id],
+        task_id=task_id,
         queue=settings.ai_transcriber_queue_name,
     )
 
@@ -194,27 +221,37 @@ def stream_ai_response(
         return message.id
 
 
-@celery_app.task(name="app.ai.tasks.observe_room_audio")
-def observe_room_audio(room_id: int) -> None:
+@celery_app.task(name="app.ai.tasks.observe_room_audio", bind=True)
+def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
     from app.ai.observer import observe_room_audio as observe
 
+    observer_key = f"room:{room_id}:observer_running"
+    owner = task_id or self.request.id
+    if get(observer_key) not in (None, owner):
+        return
+
     try:
-        asyncio.run(observe(room_id))
+        asyncio.run(observe(room_id, owner))
     finally:
-        delete(f"room:{room_id}:observer_running")
+        release_worker_lock(observer_key, owner)
         # Tu respawn neu phong van con du 2 user de tiep tuc do im lang
         if scard(f"room:{room_id}:participants") >= 2:
             enqueue_room_observer(room_id)
 
 
-@celery_app.task(name="app.ai.tasks.transcribe_room_audio")
-def transcribe_room_audio(room_id: int) -> None:
+@celery_app.task(name="app.ai.tasks.transcribe_room_audio", bind=True)
+def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
     from app.ai.transcriber import run_room_transcriber
+
+    transcriber_key = f"room:{room_id}:transcriber_running"
+    owner = task_id or self.request.id
+    if get(transcriber_key) not in (None, owner):
+        return
 
     with Session(engine) as db:
         room = room_crud.get_one(db, id=room_id)
         if room is not None and not room.enable_transcript:
-            delete(f"room:{room_id}:transcriber_running")
+            release_worker_lock(transcriber_key, owner)
             return
 
     # Doi presence toi da ~10s truoc khi ket noi LiveKit (webhook co the
@@ -224,14 +261,14 @@ def transcribe_room_audio(room_id: int) -> None:
         time.sleep(2)
         waited += 2
     if scard(f"room:{room_id}:participants") < 1:
-        delete(f"room:{room_id}:transcriber_running")
+        release_worker_lock(transcriber_key, owner)
         log.info("Transcriber skipped empty room | room_id=%s", room_id)
         return
 
     try:
-        asyncio.run(run_room_transcriber(room_id))
+        asyncio.run(run_room_transcriber(room_id, owner))
     finally:
-        delete(f"room:{room_id}:transcriber_running")
+        release_worker_lock(transcriber_key, owner)
         # Tu respawn neu phong van con it nhat 1 participant
         if scard(f"room:{room_id}:participants") >= 1:
             enqueue_room_transcriber(room_id)

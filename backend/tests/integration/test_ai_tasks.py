@@ -38,15 +38,32 @@ class TestAITasksFlow:
             mock_apply_async.assert_called_once()
 
     def test_enqueue_room_transcriber(self):
+        from app.ai.tasks import WORKER_LOCK_TTL
+
         with (
             patch("app.ai.tasks.set_if_absent", return_value=True) as mock_setnx,
             patch("app.ai.tasks.transcribe_room_audio.apply_async") as mock_apply_async,
         ):
             enqueue_room_transcriber(room_id=10)
-            mock_setnx.assert_called_once_with(
-                "room:10:transcriber_running", "1", settings.ai_timeout_seconds
-            )
-            mock_apply_async.assert_called_once()
+            lock_key, claimed_id, ttl = mock_setnx.call_args[0]
+            assert lock_key == "room:10:transcriber_running"
+            assert ttl == WORKER_LOCK_TTL
+            _, kwargs = mock_apply_async.call_args
+            assert kwargs["task_id"] == claimed_id
+            assert kwargs["args"] == [10, claimed_id]
+
+    def test_worker_lock_released_only_by_owner(self):
+        from app.ai.tasks import release_worker_lock
+
+        with patch("app.ai.tasks.get", return_value="owner-1") as mock_get:
+            with patch("app.ai.tasks.delete") as mock_delete:
+                release_worker_lock("room:1:transcriber_running", "owner-1")
+                mock_delete.assert_called_once_with("room:1:transcriber_running")
+
+        with patch("app.ai.tasks.get", return_value="owner-1"):
+            with patch("app.ai.tasks.delete") as mock_delete:
+                release_worker_lock("room:1:transcriber_running", "owner-2")
+                mock_delete.assert_not_called()
 
     def test_check_room_heartbeats_idle_room(self):
         unique_name = f"heartbeat-room-{uuid.uuid4().hex[:8]}"

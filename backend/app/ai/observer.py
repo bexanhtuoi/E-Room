@@ -2,7 +2,7 @@ import asyncio
 
 from livekit import rtc
 
-from app.ai.tasks import mark_room_activity
+from app.ai.tasks import mark_room_activity, refresh_worker_lock
 from app.config import settings
 from app.integration.livekit import create_token
 from app.integration.redis import scard
@@ -11,7 +11,7 @@ OBSERVER_IDENTITY = "ai_observer"
 MAX_OBSERVE_SECONDS = 240
 
 
-async def observe_room_audio(room_id: int) -> None:
+async def observe_room_audio(room_id: int, task_id: str = "") -> None:
     room = rtc.Room()
     token = create_token(
         room_name=str(room_id),
@@ -31,9 +31,13 @@ async def observe_room_audio(room_id: int) -> None:
     try:
         # Chạy trong khoảng an toàn dưới time limit của Celery, het han se tu respawn
         deadline = asyncio.get_event_loop().time() + MAX_OBSERVE_SECONDS
+        loop_count = 0
         while asyncio.get_event_loop().time() < deadline:
             if scard(f"room:{room_id}:participants") < 2:
                 break
+            loop_count += 1
+            if task_id and loop_count % 12 == 0:
+                refresh_worker_lock(f"room:{room_id}:observer_running", task_id)
             await asyncio.sleep(5)
     finally:
         await room.disconnect()

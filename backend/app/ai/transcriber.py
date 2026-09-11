@@ -197,7 +197,10 @@ async def process_user_audio_stream(
         )
 
 
-async def run_room_transcriber(room_id: int) -> None:
+async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
+    from app.ai.tasks import refresh_worker_lock
+
+    lock_key = f"room:{room_id}:transcriber_running"
     room = rtc.Room()
     user_states: Dict[str, Dict] = {}
     active_tasks: List[asyncio.Task] = []
@@ -250,10 +253,16 @@ async def run_room_transcriber(room_id: int) -> None:
 
     try:
         deadline = asyncio.get_event_loop().time() + MAX_TRANSCRIBE_SESSION_SECONDS
+        loop_count = 0
         while asyncio.get_event_loop().time() < deadline:
             # Dung worker neu khong con nguoi trong phong
             if scard(f"room:{room_id}:participants") < 1:
                 break
+            # Refresh lock dinh ky — worker chet thi lock tu het han,
+            # task moi khong bi ket.
+            loop_count += 1
+            if task_id and loop_count % 12 == 0:
+                refresh_worker_lock(lock_key, task_id)
             await asyncio.sleep(5)
     finally:
         for task in active_tasks:
