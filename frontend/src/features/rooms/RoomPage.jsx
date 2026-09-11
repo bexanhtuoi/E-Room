@@ -882,6 +882,17 @@ export function RoomPage() {
   }, [phase]);
 
   useEffect(() => {
+    // Heartbeat presence moi 15s khi dang trong phong — giu transcript/
+    // observer thay minh ke ca khi webhook LiveKit den tre hoac miss.
+    if (phase !== 'connected') return undefined;
+    fetchJson(`/rooms/${roomId}/join`, { method: 'POST' }).catch(() => {});
+    const iv = setInterval(() => {
+      fetchJson(`/rooms/${roomId}/join`, { method: 'POST' }).catch(() => {});
+    }, 15000);
+    return () => clearInterval(iv);
+  }, [phase, roomId]);
+
+  useEffect(() => {
     if (floatingEmojis.length === 0) return;
     const timeout = setTimeout(() => {
       setFloatingEmojis(prev => prev.filter(e => Date.now() - e.id < 2000));

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from typing import Optional
 
 from celery.exceptions import SoftTimeLimitExceeded
@@ -215,6 +216,17 @@ def transcribe_room_audio(room_id: int) -> None:
         if room is not None and not room.enable_transcript:
             delete(f"room:{room_id}:transcriber_running")
             return
+
+    # Doi presence toi da ~10s truoc khi ket noi LiveKit (webhook co the
+    # den tre). Phong trong that thi thoat ngay de nha worker cho phong live.
+    waited = 0.0
+    while scard(f"room:{room_id}:participants") < 1 and waited < 10:
+        time.sleep(2)
+        waited += 2
+    if scard(f"room:{room_id}:participants") < 1:
+        delete(f"room:{room_id}:transcriber_running")
+        log.info("Transcriber skipped empty room | room_id=%s", room_id)
+        return
 
     try:
         asyncio.run(run_room_transcriber(room_id))

@@ -107,11 +107,10 @@ export function ScheduleSection({ rooms, messagesByRoom, userId, userEmail }) {
   const myEmail = String(userEmail || '').trim().toLowerCase();
 
   const related = rooms.filter((r) => {
-    // Chi phong lien quan toi minh: public, minh host, hoac duoc moi.
-    // Ke ca admin cung khong thay private cua nguoi khac o day.
-    if (!r.is_private) return true;
+    // STRICT: chi phong minh host hoac duoc moi (email nam trong allowed_emails).
+    // Phong public cua nguoi khac KHONG hien o day — muon join thi vao Rooms.
     if (String(r.host_id) === String(userId)) return true;
-    return myEmail && (r.allowed_emails || []).some((e) => String(e).toLowerCase() === myEmail);
+    return Boolean(myEmail) && (r.allowed_emails || []).some((e) => String(e).toLowerCase() === myEmail);
   });
 
   const scheduled = related

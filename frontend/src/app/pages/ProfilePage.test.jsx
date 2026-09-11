@@ -33,6 +33,8 @@ const ROOMS = [
   { id: 2, name: 'Joined Room', host_id: 5, status: 'active', topics: ['Music'], created_at: '2026-09-02T10:00:00Z' },
   { id: 3, name: 'Old Session', host_id: 5, status: 'ended', topics: ['Travel'], created_at: '2026-08-20T10:00:00Z' },
   { id: 4, name: 'Sunday Club', host_id: 5, status: 'idle', topics: ['Music'], created_at: '2026-09-02T10:00:00Z', scheduled_at: '2099-01-04T10:00:00Z', allowed_emails: ['an@example.com'] },
+  { id: 5, name: 'Stranger Lab', host_id: 5, status: 'idle', topics: ['Science'], created_at: '2026-09-02T10:00:00Z', scheduled_at: '2099-01-05T10:00:00Z', is_private: false, allowed_emails: [] },
+  { id: 6, name: 'My Morning Lab', host_id: 9, status: 'idle', topics: ['Voice'], created_at: '2026-09-02T10:00:00Z', scheduled_at: '2099-01-06T10:00:00Z', is_private: false, allowed_emails: [] },
 ];
 
 const MESSAGES = [
@@ -156,8 +158,10 @@ describe('ProfilePage portal', () => {
     renderPortal('schedule');
     expect(await screen.findByRole('heading', { level: 1, name: 'Schedule' })).toBeTruthy();
     expect(await screen.findByText('Sunday Club')).toBeTruthy();
+    expect(screen.getByText('My Morning Lab')).toBeTruthy();
     expect(screen.queryByText('Joined Room')).toBeNull();
     expect(screen.queryByText('Hosted Room')).toBeNull();
+    expect(screen.queryByText('Stranger Lab')).toBeNull();
     expect(screen.getByText(/1 invited/)).toBeTruthy();
   });
 
