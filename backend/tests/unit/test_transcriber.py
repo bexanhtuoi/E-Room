@@ -14,6 +14,7 @@ from app.ai.audio_vad import (
 )
 from app.ai.stt import (
     build_stt_prompt,
+    choose_stt_provider,
     convert_audio_to_float32,
     convert_audio_to_wav_bytes,
     is_loopy_hallucination,
@@ -302,6 +303,19 @@ class TestSTTFunctions:
         _, kwargs = mock_model.transcribe.call_args
         assert kwargs["language"] == "vi"
         assert "tiếng Việt" in kwargs["initial_prompt"]
+
+    def test_overflow_valve_routes_english_to_cloud(self):
+        from app.config import settings
+
+        assert choose_stt_provider(None, {"language": "en"}, 5) == (
+            "cloud" if settings.stt_cloud_api_key else None
+        )
+        with patch.object(settings, "stt_cloud_api_key", "gsk_test"):
+            assert choose_stt_provider(None, {"language": "en"}, 5) == "cloud"
+            assert choose_stt_provider(None, {"language": "vi"}, 9) is None
+            assert choose_stt_provider(None, {"language": "auto"}, 9) is None
+            assert choose_stt_provider(None, {"language": "en"}, 0) is None
+            assert choose_stt_provider("groq", {"language": "en"}, 9) == "groq"
 
     @pytest.mark.asyncio
     async def test_async_forwards_language_kwarg(self):

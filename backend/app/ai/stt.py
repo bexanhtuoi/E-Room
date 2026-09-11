@@ -14,8 +14,9 @@ from app.log import get_logger
 log = get_logger("app.ai.stt")
 
 # ThreadPoolExecutor xu ly audio CPU/GPU khong chan async loop.
-# 2 user noi lien tuc → moi cau 1 job; 2 worker la nghẽn (small ~12s/cau).
-_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="stt_worker")
+# Worst-case 6 nguoi/phong cung dut cau → 4 slot song song, moi slot
+# ~16s/cau (threads=2). Slot thu 5-6 doi 1 nhip, khong mat transcript.
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="stt_worker")
 _whisper_model_instance = None
 
 # Segment co avg_logprob duoi nguong nay coi nhu model "che" — bo.
@@ -373,6 +374,22 @@ def transcribe_audio(
     return transcribe_fn(audio_data, sample_rate=sample_rate, **kwargs)
 
 
+def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued: int) -> Optional[str]:
+    # Van tran overflow: local nghẽn (4+ cau doi) ma co cloud key thi day
+    # cau tieng Anh sang cloud (nhanh, khong doi). Khong key → xep hang
+    # local nhu cu. Cau tieng Viet/auto luon o local de giu prompt +
+    # language chinh xac.
+    if (
+        queued >= 4
+        and (provider or settings.stt_provider).lower() == "faster_whisper"
+        and str((kwargs or {}).get("language") or "en").lower() == "en"
+        and settings.stt_cloud_api_key
+    ):
+        log.info("STT overflow to cloud | queued=%s", queued)
+        return "cloud"
+    return provider
+
+
 async def transcribe_audio_async(
     audio_data: np.ndarray | bytes,
     sample_rate: int = 16000,
@@ -381,8 +398,9 @@ async def transcribe_audio_async(
 ) -> Optional[Dict[str, Any]]:
     loop = asyncio.get_running_loop()
     queued = _executor._work_queue.qsize()
-    if queued >= 3:
+    if queued >= 4:
         log.warning("STT executor congested | queued=%s", queued)
+    provider = choose_stt_provider(provider, kwargs, queued)
     call = functools.partial(
         transcribe_audio,
         audio_data,

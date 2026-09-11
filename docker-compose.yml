@@ -26,7 +26,7 @@ services:
   ai-worker:
     build: ./backend
     container_name: ai-worker
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 -O fair --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
     volumes:
@@ -54,7 +54,7 @@ services:
   ai-observer:
     build: ./backend
     container_name: ai-observer
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=2 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=2 -O fair --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
     volumes:
@@ -68,7 +68,7 @@ services:
   ai-transcriber:
     build: ./backend
     container_name: ai-transcriber
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --concurrency=3 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --concurrency=4 -O fair --max-tasks-per-child=30 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
     volumes:
