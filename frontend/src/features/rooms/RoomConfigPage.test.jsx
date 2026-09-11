@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -55,6 +55,15 @@ describe('RoomConfigPage', () => {
     const docLink = screen.getByRole('link', { name: 'notes.md' });
     expect(docLink.getAttribute('href')).toBe('/api/v1/rooms/1/documents/6/file');
     expect(docLink.getAttribute('target')).toBe('_blank');
+  });
+
+  it('lets the host pick the spoken language', async () => {
+    currentUserId = 9;
+    renderConfig();
+    const select = await screen.findByLabelText('Spoken language for transcript');
+    expect(select.value).toBe('en');
+    fireEvent.change(select, { target: { value: 'vi' } });
+    expect(select.value).toBe('vi');
   });
 
   it('redirects non-hosts to rooms list', async () => {

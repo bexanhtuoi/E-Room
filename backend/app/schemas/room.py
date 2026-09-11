@@ -38,6 +38,15 @@ def topics_to_json(values: Optional[List[str]]) -> str:
     return json.dumps(normalize_topic_list(values))
 
 
+SPOKEN_LANGUAGES = ("en", "vi", "auto")
+
+
+def normalize_language(value) -> str:
+    # Gia tri la → 'en' (fail-safe, khong crash task transcript).
+    text = str(value or "").strip().lower()
+    return text if text in SPOKEN_LANGUAGES else "en"
+
+
 MAX_ROOM_EMAILS = 50
 
 
@@ -97,6 +106,7 @@ class RoomCreateSchema(BaseModel):
     description: Optional[str] = None
     max_participants: int = 4
     is_private: bool = False
+    language: str = "en"
     allowed_emails: List[str] = []
     system_prompt: Optional[str] = None
     scheduled_at: Optional[datetime] = None
@@ -142,6 +152,11 @@ class RoomCreateSchema(BaseModel):
         text = value.strip()
         return text[:4000] if text else None
 
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: str) -> str:
+        return normalize_language(value)
+
 
 class RoomUpdateSchema(BaseModel):
     name: Optional[str] = None
@@ -153,6 +168,7 @@ class RoomUpdateSchema(BaseModel):
     enable_transcript: Optional[bool] = None
     enable_agent: Optional[bool] = None
     is_private: Optional[bool] = None
+    language: Optional[str] = None
     allowed_emails: Optional[List[str]] = None
     system_prompt: Optional[str] = None
     scheduled_at: Optional[datetime] = None
@@ -206,6 +222,13 @@ class RoomUpdateSchema(BaseModel):
         text = value.strip()
         return text[:4000] if text else None
 
+    @field_validator("language")
+    @classmethod
+    def validate_update_language(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return normalize_language(value)
+
 
 class RoomResponse(BaseModel):
     model_config = {"from_attributes": True}
@@ -221,6 +244,7 @@ class RoomResponse(BaseModel):
     enable_transcript: bool = True
     enable_agent: bool = True
     is_private: bool = False
+    language: str = "en"
     allowed_emails: List[str] = []
     system_prompt: Optional[str] = None
     scheduled_at: Optional[datetime] = None

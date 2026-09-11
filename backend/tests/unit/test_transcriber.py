@@ -13,10 +13,13 @@ from app.ai.audio_vad import (
     trim_trailing_silence,
 )
 from app.ai.stt import (
+    build_stt_prompt,
     convert_audio_to_float32,
     convert_audio_to_wav_bytes,
     is_repetitive_hallucination,
+    resolve_stt_language,
     transcribe_audio,
+    transcribe_audio_async,
     transcribe_cloud_whisper,
     transcribe_faster_whisper,
 )
@@ -233,6 +236,53 @@ class TestSTTFunctions:
         with patch.dict("app.ai.stt.STT_PROVIDERS", {"groq": MagicMock(return_value={"text": "cloud text"})}):
             res = transcribe_audio(audio, provider="groq")
             assert res == {"text": "cloud text"}
+
+    def test_resolve_stt_language_order(self):
+        assert resolve_stt_language("vi") == "vi"
+        assert resolve_stt_language("AUTO") == "auto"
+        assert resolve_stt_language("xx") == "en"
+        assert resolve_stt_language(None) == "en"
+
+    def test_build_stt_prompt_per_language(self):
+        assert "Vietnamese learners" in build_stt_prompt("en")
+        # Prompt Viet phai CO DAU — whisper bat chuoc chinh ta cua prompt.
+        assert "tiếng Việt" in build_stt_prompt("vi")
+        assert build_stt_prompt("auto") == build_stt_prompt("xx")
+
+    def test_faster_whisper_auto_omits_language_param(self):
+        mock_model = MagicMock()
+        mock_model.transcribe.return_value = ([], MagicMock(language="vi", duration=1.0))
+
+        audio = np.zeros(16000, dtype=np.int16)
+        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model, language="auto") is None
+
+        _, kwargs = mock_model.transcribe.call_args
+        assert "language" not in kwargs
+
+    def test_faster_whisper_pins_language_param(self):
+        mock_segment = MagicMock()
+        mock_segment.text = " xin chao "
+        mock_segment.avg_logprob = -0.2
+        mock_segment.words = []
+        mock_model = MagicMock()
+        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="vi", duration=1.0))
+
+        audio = np.zeros(16000, dtype=np.int16)
+        result = transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model, language="vi")
+
+        assert result is not None and result["text"] == "xin chao"
+        _, kwargs = mock_model.transcribe.call_args
+        assert kwargs["language"] == "vi"
+        assert "tiếng Việt" in kwargs["initial_prompt"]
+
+    @pytest.mark.asyncio
+    async def test_async_forwards_language_kwarg(self):
+        audio = np.zeros(16000, dtype=np.int16)
+        with patch("app.ai.stt.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
+            result = await transcribe_audio_async(audio, language="vi")
+            assert result == {"text": "hi"}
+            _, kwargs = mock_sync.call_args
+            assert kwargs.get("language") == "vi"
 
 
 class TestTranscriberFunctions:

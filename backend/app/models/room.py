@@ -28,6 +28,7 @@ class Room(SQLModel, table=True):
     enable_transcript: bool = Field(default=True)
     enable_agent: bool = Field(default=True)
     is_private: bool = Field(default=False)
+    language: str = Field(default="en", max_length=8)
     allowed_emails: str = Field(default="[]", sa_column=Column(String(4000), nullable=False))
     system_prompt: Optional[str] = Field(default=None, sa_column=Column(String(4000)))
     scheduled_at: Optional[datetime] = Field(default=None)

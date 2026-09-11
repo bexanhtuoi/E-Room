@@ -155,6 +155,7 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
   const [description, setDescription] = useState(room.description || '');
   const [topics, setTopics] = useState(Array.isArray(room.topics) ? room.topics : []);
   const [seats, setSeats] = useState(room.max_participants || 4);
+  const [language, setLanguage] = useState(['en', 'vi', 'auto'].includes(room.language) ? room.language : 'en');
   const [isPrivate, setIsPrivate] = useState(Boolean(room.is_private));
   const [emails, setEmails] = useState(Array.isArray(room.allowed_emails) ? room.allowed_emails : []);
   const [draft, setDraft] = useState('');
@@ -179,6 +180,7 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
     || description.trim() !== (room.description || '')
     || JSON.stringify(topics) !== JSON.stringify(room.topics || [])
     || seats !== room.max_participants
+    || language !== (room.language || 'en')
     || isPrivate !== Boolean(room.is_private)
     || JSON.stringify(emails) !== JSON.stringify(room.allowed_emails || [])
     || prompt.trim() !== (initialPrompt || '').trim();
@@ -189,6 +191,7 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
       description: description.trim() || null,
       topics,
       max_participants: seats,
+      language,
       is_private: isPrivate,
       allowed_emails: emails,
       system_prompt: prompt.trim() === (defaultPrompt || '').trim() ? null : (prompt.trim() || null),
@@ -227,6 +230,17 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
             <TopicPicker topics={topics} onChange={setTopics} />
           </div>
           <SeatSlider value={seats} onChange={setSeats} id="cfg-seats" />
+          <div>
+            <label className="er-label" htmlFor="cfg-language">Spoken language for transcript</label>
+            <select
+              id="cfg-language" className="er-input" value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              <option value="en">English only</option>
+              <option value="vi">Vietnamese only</option>
+              <option value="auto">Auto-detect each sentence</option>
+            </select>
+          </div>
         </div>
       </section>
 

@@ -54,6 +54,7 @@ def ensure_schema_columns() -> None:
     wanted: dict[str, dict[str, str]] = {
         "rooms": {
             "is_private": "BOOLEAN NOT NULL DEFAULT 0",
+            "language": "VARCHAR(8) NOT NULL DEFAULT 'en'",
             "allowed_emails": "TEXT NULL",
             "system_prompt": "TEXT NULL",
             "scheduled_at": "DATETIME NULL",

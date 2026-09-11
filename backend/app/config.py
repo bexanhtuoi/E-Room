@@ -72,7 +72,8 @@ class Settings:
 
     # ─── Speech To Text (STT) ─────────────────────
     stt_provider: str = os.getenv("STT_PROVIDER", "faster_whisper")  # faster_whisper | openai | groq | custom_api
-    stt_model_size: str = os.getenv("STT_MODEL_SIZE", "small.en")
+    stt_model_size: str = os.getenv("STT_MODEL_SIZE", "small")
+    stt_language: str = os.getenv("STT_LANGUAGE", "en")  # en | vi | auto
     stt_device: str = os.getenv("STT_DEVICE", "cpu")
     stt_compute_type: str = os.getenv("STT_COMPUTE_TYPE", "int8")
     stt_cloud_api_key: str = os.getenv("STT_CLOUD_API_KEY", "")

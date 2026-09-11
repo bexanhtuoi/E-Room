@@ -14,7 +14,7 @@ from app.integration.livekit import create_token
 from app.integration.redis import scard
 from app.log import get_logger
 from app.models import Message, MessageRole
-from app.services import message_crud, user_crud
+from app.services import message_crud, room_crud, user_crud
 from app.utils.datetime_utils import now_utc
 
 log = get_logger("app.ai.transcriber")
@@ -56,6 +56,7 @@ def save_transcript_to_db(
     confidence: float,
     avg_logprob: float,
     words_count: int,
+    language: Optional[str] = None,
 ) -> tuple[Optional[int], Optional[int], str]:
     user_id: Optional[int] = None
     user_name = user_identity
@@ -77,6 +78,7 @@ def save_transcript_to_db(
 
         meta_data = {
             "source": "speech_to_text",
+            "language": language or "en",
             "duration": duration,
             "confidence": confidence,
             "avg_logprob": avg_logprob,
@@ -120,6 +122,21 @@ def build_transcript_payload(
     )
 
 
+def resolve_room_language(room_id: int) -> str:
+    # Ngon ngu phong → STT_LANGUAGE → 'en'. Doc moi cau noi de host doi
+    # ngon ngu giua chung van co hieu luc ngay, khong can restart worker.
+    from app.ai.stt import resolve_stt_language
+
+    try:
+        with Session(engine) as db:
+            room = room_crud.get_one(db, id=room_id)
+            if room is not None and getattr(room, "language", None):
+                return resolve_stt_language(room.language)
+    except Exception:
+        log.exception("Room language lookup failed | room_id=%s", room_id)
+    return resolve_stt_language(None)
+
+
 async def handle_speech_completion(
     room: rtc.Room,
     room_id: int,
@@ -127,8 +144,9 @@ async def handle_speech_completion(
     audio_data,
 ) -> None:
     try:
-        # 1. Goi STT transcribe audio non-blocking
-        result = await transcribe_audio_async(audio_data, sample_rate=16000)
+        # 1. Goi STT transcribe audio non-blocking (ngon ngu theo phong)
+        spoken_language = resolve_room_language(room_id)
+        result = await transcribe_audio_async(audio_data, sample_rate=16000, language=spoken_language)
         if not result or not result.get("text", "").strip():
             return
 
@@ -137,11 +155,13 @@ async def handle_speech_completion(
         duration = result.get("duration", 0.0)
         avg_logprob = result.get("avg_logprob", 0.0)
         words = result.get("words", [])
+        detected_language = result.get("language") or spoken_language
 
         log.info(
-            "Transcribed text | room_id=%s user=%s text='%s' conf=%.2f",
+            "Transcribed text | room_id=%s user=%s lang=%s text='%s' conf=%.2f",
             room_id,
             user_identity,
+            detected_language,
             text,
             confidence,
         )
@@ -155,6 +175,7 @@ async def handle_speech_completion(
             confidence=confidence,
             avg_logprob=avg_logprob,
             words_count=len(words),
+            language=detected_language,
         )
         if message_id is None:
             return

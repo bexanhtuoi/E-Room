@@ -55,6 +55,22 @@ class TestRoomCrud:
         assert client.get(f"/api/v1/rooms/{old['id']}").status_code == 404
         assert client.get(f"/api/v1/rooms/{fresh['id']}").status_code == 200
 
+    def test_room_language_defaults_and_updates(self, client: TestClient, alice: dict):
+        room = create_room(client, f"lang-room-{alice['id']}")
+        assert room["language"] == "en"
+
+        updated = client.patch(f"/api/v1/rooms/{room['id']}", json={"language": "vi"})
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["language"] == "vi"
+
+        # Gia tri la → normalize ve 'en', khong 400
+        weird = client.patch(f"/api/v1/rooms/{room['id']}", json={"language": "xx"})
+        assert weird.status_code == 200, weird.text
+        assert weird.json()["language"] == "en"
+
+        auto_room = client.post("/api/v1/rooms/", json={"name": f"auto-room-{alice['id']}", "language": "auto"}).json()
+        assert auto_room["language"] == "auto"
+
     def test_create_duplicate_name_returns_400(self, client: TestClient, alice: dict):
         name = f"dup-room-{alice['id']}"
         create_room(client, name)

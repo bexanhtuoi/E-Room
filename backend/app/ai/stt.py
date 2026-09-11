@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import io
 import wave
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +19,38 @@ _whisper_model_instance = None
 
 # Segment co avg_logprob duoi nguong nay coi nhu model "che" — bo.
 MIN_SEGMENT_LOGPROB = -1.0
+
+SPOKEN_LANGUAGES = ("en", "vi", "auto")
+
+STT_PROMPTS = {
+    # Phong luyen noi tieng Anh (hoc vien Viet): giu ten Viet khoi bi
+    # doan thanh tu giong am ("Hoang" → "Juan").
+    "en": (
+        "This is an English speaking practice session in Vietnam. "
+        "The speakers are Vietnamese learners introducing themselves in English. "
+        "Common Vietnamese names you may hear: Hoang, Huong, An, Minh, Linh, Nam, Trang. "
+        "Transcribe exactly what is said, word for word."
+    ),
+    # Phong noi tieng Viet: prompt CO DAU day du — whisper bat chuoc
+    # chinh ta cua prompt, prompt khong dau se lam mat dau cau output.
+    "vi": (
+        "Đây là một buổi luyện nói tiếng Việt. Người nói là người Việt Nam. "
+        "Các tên thường gặp: Hoàng, Hương, An, Minh, Linh, Nam, Trang, Hà Nội, Sài Gòn. "
+        "Ghi lại chính xác từng từ được nói, giữ nguyên dấu tiếng Việt."
+    ),
+    # Tu nhan dien moi cau: prompt trung tinh, khong thien ve ben nao.
+    "auto": "Transcribe exactly what is said, word for word.",
+}
+
+
+def resolve_stt_language(value) -> str:
+    # Thu tu: room.language → STT_LANGUAGE → 'en'. Gia tri la → 'en'.
+    text = str(value if value is not None else settings.stt_language or "en").strip().lower()
+    return text if text in SPOKEN_LANGUAGES else "en"
+
+
+def build_stt_prompt(language: str) -> str:
+    return STT_PROMPTS.get(language, STT_PROMPTS["auto"])
 
 
 def normalize_pcm_int16(audio_data) -> np.ndarray:
@@ -92,6 +125,8 @@ def transcribe_faster_whisper(
     audio_data: np.ndarray | bytes,
     sample_rate: int = 16000,
     model_override: Optional[Any] = None,
+    language: Optional[str] = None,
+    initial_prompt: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     try:
         audio = convert_audio_to_float32(audio_data)
@@ -100,22 +135,22 @@ def transcribe_faster_whisper(
             return None
 
         model = model_override or get_whisper_model()
-        # Prompt dinh huong accent Viet + ten Viet thuong gap (Hoang, Huong...)
-        # de model khoi doan thanh tu giong am khac ("Juan", "Genteel").
-        initial_prompt = (
-            "This is an English speaking practice session in Vietnam. "
-            "The speakers are Vietnamese learners introducing themselves in English. "
-            "Common Vietnamese names you may hear: Hoang, Huong, An, Minh, Linh, Nam, Trang. "
-            "Transcribe exactly what is said, word for word."
-        )
+        resolved_language = resolve_stt_language(language)
+        resolved_prompt = initial_prompt or build_stt_prompt(resolved_language)
+
+        transcribe_kwargs: Dict[str, Any] = {
+            "beam_size": settings.stt_beam_size,
+            "temperature": 0.0,
+            "initial_prompt": resolved_prompt,
+            "word_timestamps": True,
+        }
+        # auto = de faster-whisper tu detect moi cau; en/vi = ep cung.
+        if resolved_language in ("en", "vi"):
+            transcribe_kwargs["language"] = resolved_language
 
         segments, info = model.transcribe(
             audio,
-            language="en",
-            beam_size=settings.stt_beam_size,
-            temperature=0.0,
-            initial_prompt=initial_prompt,
-            word_timestamps=True,
+            **transcribe_kwargs,
             # Strict chong bia: loc silence bang VAD cua whisper,
             # khong "che" tiep tu context cu, bo doan lap/garbage.
             vad_filter=True,
@@ -278,6 +313,12 @@ def transcribe_audio(
     chosen_provider = (provider or settings.stt_provider).lower()
     transcribe_fn = STT_PROVIDERS.get(chosen_provider, transcribe_faster_whisper)
 
+    # language/initial_prompt chi faster-whisper hieu — provider cloud
+    # tu co prompt/language rieng nen bo qua de khoi TypeError.
+    if transcribe_fn is not transcribe_faster_whisper:
+        kwargs.pop("language", None)
+        kwargs.pop("initial_prompt", None)
+
     return transcribe_fn(audio_data, sample_rate=sample_rate, **kwargs)
 
 
@@ -288,10 +329,11 @@ async def transcribe_audio_async(
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        _executor,
+    call = functools.partial(
         transcribe_audio,
         audio_data,
-        sample_rate,
-        provider,
+        sample_rate=sample_rate,
+        provider=provider,
+        **kwargs,
     )
+    return await loop.run_in_executor(_executor, call)
