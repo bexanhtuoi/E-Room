@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from app.ai.query import stream_agent_events, stream_agent_response, tool_thinking_lines
+from app.ai.query import stream_events, think_lines
 
 
 def make_tool_message(tool_name: str) -> AIMessage:
@@ -19,22 +19,22 @@ class FakeChunkMessage:
         self.tool_call_chunks = tool_call_chunks
 
 
-class TestToolThinkingLines:
+class TestThinkLines:
     def test_known_tools_map_to_friendly_labels(self):
         update = {"messages": [make_tool_message("web_search")]}
-        assert tool_thinking_lines(update) == ["Searching the web…"]
+        assert think_lines(update) == ["Searching the web…"]
 
     def test_unknown_tool_uses_tool_name(self):
         update = {"messages": [make_tool_message("custom_tool")]}
-        assert tool_thinking_lines(update) == ["Using custom_tool…"]
+        assert think_lines(update) == ["Using custom_tool…"]
 
     def test_streaming_chunks_expose_tool_names(self):
         msg = FakeChunkMessage([{"name": "retrieval_documents", "args": "", "id": "1", "index": 0}])
-        assert tool_thinking_lines({"messages": [msg]}) == ["Searching documents…"]
+        assert think_lines({"messages": [msg]}) == ["Searching documents…"]
 
     def test_message_without_tool_calls_gives_no_lines(self):
-        assert tool_thinking_lines({"messages": [AIMessage(content="hi")]}) == []
-        assert tool_thinking_lines({}) == []
+        assert think_lines({"messages": [AIMessage(content="hi")]}) == []
+        assert think_lines({}) == []
 
 
 class FakeToolResultMessage:
@@ -54,7 +54,7 @@ class FakeAgent:
             yield event
 
 
-class TestStreamAgentEvents:
+class TestStreamEvents:
     @pytest.mark.asyncio
     async def test_emits_thinking_then_tokens(self):
         events = [
@@ -64,7 +64,7 @@ class TestStreamAgentEvents:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         assert out[0] == {"kind": "thinking", "text": "Searching documents…"}
         assert out[1:] == [
@@ -80,7 +80,7 @@ class TestStreamAgentEvents:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         assert out[0] == {"kind": "thinking", "text": "Searching the web…"}
         assert out[1] == {"kind": "token", "text": "Hi"}
@@ -94,7 +94,7 @@ class TestStreamAgentEvents:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         kinds = [(e["kind"], e["text"]) for e in out]
         assert ("thinking", "Searching the web…") in kinds
@@ -117,7 +117,7 @@ class TestReasoningThinking:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         assert out[0] == {"kind": "thinking", "text": "Let me think"}
         assert out[1] == {"kind": "token", "text": "Hi"}
@@ -130,7 +130,7 @@ class TestReasoningThinking:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         assert out == [
             {"kind": "thinking", "text": "ab"},
@@ -147,7 +147,7 @@ class TestReasoningThinking:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         assert out.count({"kind": "thinking", "text": "Searching the web…"}) == 1
 
@@ -159,18 +159,18 @@ class TestReasoningThinking:
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [event async for event in stream_agent_events("hi")]
+            out = [event async for event in stream_events("hi")]
 
         assert out == [{"kind": "token", "text": "keep"}]
 
     @pytest.mark.asyncio
-    async def test_response_helper_yields_only_token_text(self):
+    async def test_tokens_filtered_from_mixed_events(self):
         events = [
             ("updates", {"tools": {"messages": [make_tool_message("web_search")]}}),
             ("messages", (AIMessage(content="Hi"), {"langgraph_node": "model"})),
         ]
 
         with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
-            out = [text async for text in stream_agent_response("hi")]
+            out = [event["text"] async for event in stream_events("hi") if event.get("kind") == "token"]
 
         assert out == ["Hi"]

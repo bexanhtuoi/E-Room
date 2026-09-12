@@ -3,7 +3,7 @@ from app.services.document import document_crud
 from app.services.message import message_crud
 from app.services.notification import notification_crud
 from app.services.room import room_crud
-from app.services.room_session import session_crud
+from app.services.session import session_crud
 from app.services.user import user_crud
 
 __all__ = [

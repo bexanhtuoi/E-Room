@@ -7,7 +7,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from sqlmodel import Session
 
 from app.ai.participant import stream_to_room
-from app.ai.query import stream_agent_events
+from app.ai.query import stream_events
 from app.config import settings
 from app.database import engine
 from app.integration.celery import celery_app
@@ -194,7 +194,7 @@ def stream_ai_response(
             log.exception("Room transcript context failed | room_id=%s", room_id)
 
     try:
-        response_text = asyncio.run(stream_to_room(room_id, stream_agent_events(query, system_extra)))
+        response_text = asyncio.run(stream_to_room(room_id, stream_events(query, system_extra=system_extra)))
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
         soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))

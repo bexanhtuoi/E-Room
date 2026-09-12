@@ -43,6 +43,6 @@ class User(SQLModel, table=True):
 
     rooms: list["Room"] = Relationship(back_populates="host")
     messages: list["Message"] = Relationship(back_populates="user")
-    sessions: list["RoomSession"] = Relationship(back_populates="user")
+    sessions: list["Session"] = Relationship(back_populates="user")
     notifications: list["Notification"] = Relationship(back_populates="user")
     documents: list["Document"] = Relationship(back_populates="user")

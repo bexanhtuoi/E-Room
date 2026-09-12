@@ -75,39 +75,36 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/leave")
 
     def test_agent_tool_reads_older_lines(self):
-        from app.ai.session_agent import build_get_more_messages_tool
+        from app.ai.tools import transcript_tools
 
         lines = [{"speaker": "Ann", "text": f"line {i}"} for i in range(60)]
-        get_more_messages = build_get_more_messages_tool(lines)
+        get_more_messages = {tool.name: tool for tool in transcript_tools(lines)}["get_more_messages"]
 
-        assert get_more_messages.name == "get_more_messages"
         out = get_more_messages.invoke({"start_index": 0, "count": 2})
         assert "line 0" in out and "line 1" in out
         assert "line 59" not in out
         assert get_more_messages.invoke({"start_index": 9999}).startswith("No more lines")
 
     def test_agent_tool_reports_index_range(self):
-        from app.ai.session_agent import build_transcript_info_tool
+        from app.ai.tools import transcript_tools
 
         lines = [{"speaker": "Ann", "text": "hi"}, {"speaker": "Bob", "text": "hello"}]
-        transcript_info = build_transcript_info_tool(lines)
+        transcript_info = {tool.name: tool for tool in transcript_tools(lines)}["transcript_info"]
 
-        assert transcript_info.name == "transcript_info"
         out = transcript_info.invoke({})
         assert "2 lines" in out and "0-1" in out
         assert "Ann" in out and "Bob" in out
 
     def test_agent_tool_searches_transcript(self):
-        from app.ai.session_agent import build_search_transcript_tool
+        from app.ai.tools import transcript_tools
 
         lines = [
             {"speaker": "Ann", "text": "I love rainy days"},
             {"speaker": "Bob", "text": "Sunny days are best"},
             {"speaker": "Ann", "text": "Rainy mood again"},
         ]
-        search_transcript = build_search_transcript_tool(lines)
+        search_transcript = {tool.name: tool for tool in transcript_tools(lines)}["search_transcript"]
 
-        assert search_transcript.name == "search_transcript"
         out = search_transcript.invoke({"keyword": "rainy"})
         assert "[0]" in out and "[2]" in out and "[1]" not in out
         assert search_transcript.invoke({"keyword": "xyz"}).startswith("No line")
@@ -118,11 +115,11 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        async def fake_stream(question, all_lines):
+        async def fake_stream(question, agent=None):
             yield {"kind": "thinking", "text": "Reading transcript…"}
             yield {"kind": "token", "text": "They said hello."}
 
-        with patch("app.ai.session_agent.stream_session_agent", side_effect=fake_stream):
+        with patch("app.api.routers.session.stream_events", side_effect=fake_stream):
             with client.stream("POST", f"/api/v1/sessions/{session_id}/chat/stream", json={"question": "What was said?"}) as response:
                 assert response.status_code == 200, response.text
                 body = response.read().decode()

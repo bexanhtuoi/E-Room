@@ -6,7 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from app.utils.datetime_utils import now_utc
 
 
-class RoomSession(SQLModel, table=True):
+class Session(SQLModel, table=True):
     __tablename__ = "sessions"
 
     id: Optional[int] = Field(default=None, primary_key=True)

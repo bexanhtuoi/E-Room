@@ -37,4 +37,4 @@ class Room(SQLModel, table=True):
 
     host: Optional["User"] = Relationship(back_populates="rooms")
     messages: list["Message"] = Relationship(back_populates="room")
-    sessions: list["RoomSession"] = Relationship(back_populates="room")
+    sessions: list["Session"] = Relationship(back_populates="room")

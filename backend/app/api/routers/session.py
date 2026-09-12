@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.ai import session_agent
+from app.ai.query import stream_events
 from app.api.dependencies import require_auth
 from app.database import get_session
 from app.models import MessageRole
@@ -208,7 +209,7 @@ async def chat_session_stream(
         saw_token = False
         answer_parts = []
         try:
-            async for event in session_agent.stream_session_agent(question, lines):
+            async for event in stream_events(question, agent=session_agent.get_session_agent(lines)):
                 if event.get("kind") == "token" and event.get("text"):
                     saw_token = True
                     answer_parts.append(event["text"])

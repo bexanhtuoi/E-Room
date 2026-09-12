@@ -16,7 +16,7 @@ from app.services import message_crud, room_crud
 from tests.conftest import make_user, switch_to
 
 
-class TestRoomSessionLifecycleE2E:
+class TestSessionLifecycleE2E:
     @pytest.mark.asyncio
     async def test_full_room_speaking_and_ai_cycle_e2e(self, client: TestClient, alice: dict):
         # 1. Alice tao phong moi
