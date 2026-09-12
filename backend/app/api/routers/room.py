@@ -3,11 +3,12 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlmodel import Session
 
+from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity
 from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.config import settings
 from app.database import get_session
 from app.integration.livekit import create_token, verify_webhook
-from app.integration.redis import smembers
+from app.integration.redis import expire, sadd, scard, smembers, srem
 from app.models import DocumentKind, Notification, NotificationType, Room, RoomStatus, User
 from app.schemas import (
     DocumentResponse,
@@ -21,16 +22,15 @@ from app.schemas import (
     RoomUpdateSchema,
 )
 from app.schemas.room import emails_from_json, emails_to_json, topics_to_json
-from app.services import document_crud, notification_crud, room_crud, user_crud
-from app.services.room_cleanup import delete_room_cascade, drop_doc_storage
-from app.services.room_presence import drop_participant_from_room, register_participant_join
+from app.services import document_crud, notification_crud, room_crud, session_crud, user_crud
+from app.services.document import drop_doc_storage
 from app.utils.upload import media_type_for, read_upload
 
 router = APIRouter()
 
 
 def visible_rooms(rooms: List[Room], request: Request) -> List[Room]:
-    # Phong private an hoan toan: chi host va email duoc phep thay.
+    
     if getattr(request.state, "current_user", None) is None:
         return [room for room in rooms if not room.is_private]
 
@@ -222,7 +222,7 @@ def delete_room(
 
     authorize_owner(db_room.host_id, request)
 
-    delete_room_cascade(db, room_id)
+    room_crud.delete_cascade(db, room_id)
     return db_room
 
 
@@ -472,6 +472,50 @@ def get_room_participants(
         "count": len(participants),
         "participants": participants,
     }
+
+
+def coerce_user_id(participant_identity) -> int | None:
+    try:
+        return int(str(participant_identity))
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_room_id(room_name: str) -> int | None:
+    try:
+        return int(room_name)
+    except (TypeError, ValueError):
+        return None
+
+
+def register_participant_join(db: Session, room_name: str, participant_identity: str) -> None:
+    redis_key = f"room:{room_name}:participants"
+    sadd(redis_key, str(participant_identity))
+    expire(redis_key, 6 * 3600)
+    room_id_int = parse_room_id(room_name)
+    if room_id_int is None:
+        return
+    mark_room_activity(room_id_int)
+    db_room = room_crud.get_one(db, id=room_id_int)
+    if db_room and db_room.status != RoomStatus.ACTIVE:
+        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
+    session_crud.open(db, room_id_int, coerce_user_id(participant_identity))
+    enqueue_room_observer(room_id_int)
+    enqueue_room_transcriber(room_id_int)
+
+
+def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
+    redis_key = f"room:{room_name}:participants"
+    srem(redis_key, str(participant_identity))
+    if scard(redis_key) > 0:
+        return
+    room_id_int = parse_room_id(room_name)
+    if room_id_int is None:
+        return
+    db_room = room_crud.get_one(db, id=room_id_int)
+    if db_room and db_room.status == RoomStatus.ACTIVE:
+        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.IDLE})
+    session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
 
 
 @router.post("/livekit/webhook")

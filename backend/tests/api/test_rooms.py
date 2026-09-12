@@ -183,8 +183,8 @@ class TestParticipants:
 
         try:
             with (
-                patch("app.services.room_presence.enqueue_room_observer"),
-                patch("app.services.room_presence.enqueue_room_transcriber"),
+                patch("app.api.routers.room.enqueue_room_observer"),
+                patch("app.api.routers.room.enqueue_room_transcriber"),
             ):
                 response = client.post(f"/api/v1/rooms/{room['id']}/join")
             assert response.status_code == 200
@@ -194,8 +194,8 @@ class TestParticipants:
 
             # Idempotent — join lai khong dup
             with (
-                patch("app.services.room_presence.enqueue_room_observer"),
-                patch("app.services.room_presence.enqueue_room_transcriber"),
+                patch("app.api.routers.room.enqueue_room_observer"),
+                patch("app.api.routers.room.enqueue_room_transcriber"),
             ):
                 client.post(f"/api/v1/rooms/{room['id']}/join")
             assert len(redis_smembers(key)) == 1

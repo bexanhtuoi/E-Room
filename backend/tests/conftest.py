@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_eroom.db"
+os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 os.environ["SECRET_KEY"] = "test-secret-key-32-characters-minimum!"
 os.environ["LIVEKIT_MODE"] = "local"
 os.environ["LIVEKIT_LOCAL_API_KEY"] = "testkey"
@@ -24,13 +25,12 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session", autouse=True)
 def _create_test_tables():
-    # Unit test chay rieng (khong qua TestClient/lifespan) van co du bang —
-    # tranh flakiness "no such table" phu thuoc thu tu chay file.
     from sqlmodel import SQLModel
 
     import app.models  # noqa: F401
     from app.database import engine
 
+    SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
 
 
