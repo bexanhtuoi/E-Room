@@ -31,7 +31,7 @@ from app.ai.transcriber import (
     cancel_user_stream,
     handle_speech_completion,
 )
-from app.services.transcript import is_recent_duplicate, save_transcript_to_db
+from app.services.message import is_recent_duplicate, message_crud
 
 
 def make_loud_frame(n: int = 1600) -> np.ndarray:
@@ -429,7 +429,7 @@ class TestTranscriberFunctions:
         from app.database import engine
 
         text = f"dupe guard {uuid.uuid4().hex[:8]}"
-        first_id, _, _ = save_transcript_to_db(
+        first_id, _, _ = message_crud.save_transcript(
             room_id=424242,
             user_identity="nobody",
             text=text,
@@ -440,7 +440,7 @@ class TestTranscriberFunctions:
         )
         assert first_id is not None
 
-        second_id, _, _ = save_transcript_to_db(
+        second_id, _, _ = message_crud.save_transcript(
             room_id=424242,
             user_identity="nobody",
             text=text,

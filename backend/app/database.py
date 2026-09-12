@@ -3,7 +3,16 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import settings
 
-engine = create_engine(settings.database_url, echo=False, connect_args=settings.db_connect_args)
+engine = create_engine(
+    settings.database_url,
+    echo=False,
+    connect_args=settings.db_connect_args,
+    pool_size=30,
+    max_overflow=70,
+    pool_timeout=30,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
 
 
 def get_session() -> Session:
@@ -21,7 +30,7 @@ def health() -> bool:
 
 
 def ensure_database() -> None:
-    # Fresh TiDB/MySQL chua co database — tu tao truoc khi create_all.
+    
     url = settings.database_url
     if url.startswith("sqlite"):
         return
@@ -33,12 +42,13 @@ def ensure_database() -> None:
     if not parsed.database:
         return
 
-    # URL.set(database=None) la no-op — dung URL khong ten DB de tao database
     server_url = f"{parsed.drivername}://{parsed.username}:{parsed.password or ''}@{parsed.host}:{parsed.port}/"
     server_engine = create_server_engine(server_url, connect_args=settings.db_connect_args)
+
     with server_engine.connect() as conn:
         conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{parsed.database}`"))
         conn.commit()
+
     server_engine.dispose()
 
 
@@ -49,8 +59,7 @@ def create_db_and_tables() -> None:
 
 
 def ensure_schema_columns() -> None:
-    # create_all khong ALTER bang cu — tu them cot moi con thieu.
-    # Idempotent: chay lai nhieu lan an toan (sqlite test + mysql docker).
+
     wanted: dict[str, dict[str, str]] = {
         "rooms": {
             "is_private": "BOOLEAN NOT NULL DEFAULT 0",
@@ -81,8 +90,6 @@ def ensure_schema_columns() -> None:
         "sessions": ["summary", "summarized_at"],
     }
 
-    # Cot ENUM cu khong nhan gia tri moi (vd invite) → noi thanh VARCHAR.
-    # Chi MySQL/TiDB can MODIFY; SQLite bo qua.
     modified: dict[str, dict[str, str]] = {
         "notifications": {
             "notification_type": "VARCHAR(16) NULL",

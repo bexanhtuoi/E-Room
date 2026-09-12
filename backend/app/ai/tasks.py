@@ -196,7 +196,13 @@ def stream_ai_response(
             log.exception("Room transcript context failed | room_id=%s", room_id)
 
     try:
-        response_text = asyncio.run(stream_to_room(room_id, stream_events(query, system_extra=system_extra)))
+        response_text = asyncio.run(
+            stream_to_room(
+                room_id,
+                stream_events(query, system_extra=system_extra),
+                identity=f"ai_assistant_{self.request.id[:8]}",
+            )
+        )
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
         soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))
@@ -295,9 +301,7 @@ def delete_expired_scheduled_rooms(db: Session, now: float) -> int:
         if now - scheduled_at.timestamp() < 24 * 3600:
             continue
 
-        from app.services.room_cleanup import delete_room_cascade
-
-        delete_room_cascade(db, room.id)
+        room_crud.delete_cascade(db, room.id)
         deleted_count += 1
 
     return deleted_count

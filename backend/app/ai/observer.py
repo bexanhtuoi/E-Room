@@ -2,6 +2,7 @@ import asyncio
 
 from livekit import rtc
 
+from app.ai.participant import live_humans
 from app.ai.tasks import mark_room_activity, refresh_worker_lock
 from app.config import settings
 from app.integration.livekit import create_token
@@ -27,6 +28,10 @@ async def observe_room_audio(room_id: int, task_id: str = "") -> None:
 
     room.on("active_speakers_changed", handle_active_speakers)
     await room.connect(settings.livekit_url, token)
+
+    if not await live_humans(room, room_id):
+        await room.disconnect()
+        return
 
     try:
         deadline = asyncio.get_event_loop().time() + MAX_OBSERVE_SECONDS

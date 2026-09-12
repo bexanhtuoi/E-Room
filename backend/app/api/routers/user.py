@@ -9,8 +9,6 @@ from app.database import get_session
 from app.schemas import UserResponse, UserStatsResponse, UserUpdateSchema
 from app.security import hash_password
 from app.services import user_crud
-from app.services.room_cleanup import delete_user_cascade
-from app.services.user_stats import week_counts
 from app.utils.datetime_utils import now_utc
 from app.utils.upload import read_upload
 
@@ -97,7 +95,7 @@ def get_my_stats(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserStatsResponse:
-    return UserStatsResponse(**week_counts(db, request.state.current_user.id))
+    return UserStatsResponse(**user_crud.week_counts(db, request.state.current_user.id))
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -187,6 +185,6 @@ def delete_user(
 
     authorize_owner(db_user.id, request)
 
-    delete_user_cascade(db, user_id)
+    user_crud.delete_cascade(db, user_id)
     deleted_user = user_crud.delete(db, db_obj=db_user)
     return deleted_user

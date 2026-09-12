@@ -90,3 +90,21 @@ class TestStreamToRoom:
             patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
         ):
             assert await stream_to_room(7, fake_events()) == "hello"
+
+    @pytest.mark.asyncio
+    async def test_custom_identity_avoids_duplicate_kick(self):
+        async def fake_events():
+            yield "hi"
+
+        mock_room = make_mock_room()
+
+        with (
+            patch("app.ai.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.participant.create_token", return_value="tok") as mock_token,
+            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+        ):
+            await stream_to_room(7, fake_events())
+            assert mock_token.call_args[1]["user_id"] == "ai_assistant"
+
+            await stream_to_room(7, fake_events(), identity="ai_assistant_abc123")
+            assert mock_token.call_args[1]["user_id"] == "ai_assistant_abc123"

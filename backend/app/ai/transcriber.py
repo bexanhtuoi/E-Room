@@ -6,14 +6,14 @@ from livekit import rtc
 from sqlmodel import Session
 
 from app.ai.audio_vad import create_user_audio_state, process_audio_frame
+from app.ai.participant import live_humans
 from app.ai.stt import transcribe_audio_async
 from app.config import settings
 from app.database import engine
 from app.integration.livekit import create_token
 from app.integration.redis import scard
 from app.log import get_logger
-from app.services import room_crud
-from app.services.transcript import save_transcript_to_db
+from app.services import message_crud, room_crud
 from app.utils.chat import strip_ai_mention
 
 log = get_logger("app.ai.transcriber")
@@ -108,7 +108,7 @@ async def handle_speech_completion(
         )
 
         # 2. Luu vao database (None = trung lap hoac loi luu → bo qua)
-        message_id, user_id, user_name = save_transcript_to_db(
+        message_id, user_id, user_name = message_crud.save_transcript(
             room_id=room_id,
             user_identity=user_identity,
             text=text,
@@ -161,6 +161,7 @@ async def process_user_audio_stream(
     user_identity: str,
     track: rtc.RemoteAudioTrack,
     user_state: Dict,
+    stt_tasks: set,
 ) -> None:
     audio_stream = rtc.AudioStream(track, sample_rate=16000, num_channels=1)
 
@@ -170,7 +171,7 @@ async def process_user_audio_stream(
             completed_speech = process_audio_frame(user_state, pcm_data)
 
             if completed_speech is not None:
-                asyncio.create_task(
+                pending = asyncio.create_task(
                     guarded_transcribe(
                         room=room,
                         room_id=room_id,
@@ -178,6 +179,8 @@ async def process_user_audio_stream(
                         audio_data=completed_speech,
                     )
                 )
+                stt_tasks.add(pending)
+                pending.add_done_callback(stt_tasks.discard)
     except Exception as error:
         log.error(
             "Audio stream closed or failed | room_id=%s user=%s error=%s",
@@ -195,6 +198,7 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
     user_states: Dict[str, Dict] = {}
     user_tasks: Dict[str, asyncio.Task] = {}
     active_tasks: List[asyncio.Task] = []
+    stt_tasks: set = set()
 
     token = create_token(
         room_name=str(room_id),
@@ -231,6 +235,7 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
                     user_identity=participant.identity,
                     track=track,
                     user_state=user_states[participant.identity],
+                    stt_tasks=stt_tasks,
                 )
             )
             user_tasks[participant.identity] = task
@@ -253,6 +258,9 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
     await room.connect(settings.livekit_url, token)
     log.info("Transcriber connected to room | room_id=%s", room_id)
 
+    if not await live_humans(room, room_id):
+        return
+
     try:
         deadline = asyncio.get_event_loop().time() + MAX_TRANSCRIBE_SESSION_SECONDS
         loop_count = 0
@@ -269,5 +277,13 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
         for task in active_tasks:
             if not task.done():
                 task.cancel()
+        if stt_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*stt_tasks, return_exceptions=True),
+                    timeout=60,
+                )
+            except asyncio.TimeoutError:
+                log.info("STT drain timed out | room_id=%s pending=%s", room_id, len(stt_tasks))
         await room.disconnect()
         log.info("Transcriber disconnected from room | room_id=%s", room_id)
