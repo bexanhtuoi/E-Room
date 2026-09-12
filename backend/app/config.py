@@ -17,6 +17,10 @@ def livekit_profile_env(suffix: str, default: str = "") -> str:
 
 
 class Settings:
+    # NOTE: thu tu section giong 3 file env (.env, .env.docker, .env.example):
+    # App, Auth, Database, Redis, LLM, Embedding, Reranker, STT, Qdrant,
+    # Search, LiveKit, MinIO, Stripe, Heartbeat, Logging.
+
     # ─── App ────────────────────────────────────────
     app_name: str = os.getenv("APP_NAME", "E-Room API")
     app_description: str = os.getenv("APP_DESCRIPTION", "Realtime English speaking rooms with AI support")
@@ -26,7 +30,18 @@ class Settings:
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     cors_origins: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
 
-    # ─── Database: TiDB ───────────────────────────────
+    # ─── Auth ───────────────────────────────────────
+    secret_key: str = os.getenv("SECRET_KEY", "secret")
+    algorithm: str = os.getenv("ALGORITHM", "HS256")
+    access_token_expires_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    google_redirect_uri: str = os.getenv(
+        "GOOGLE_REDIRECT_URI",
+        "http://localhost:8000/api/v1/auth/google/callback",
+    )
+
+    # ─── Database ───────────────────────────────────
     db_user: str = os.getenv("DB_USER", "root")
     db_password: str = os.getenv("DB_PASSWORD", "")
     db_host: str = os.getenv("DB_HOST", "localhost")
@@ -37,26 +52,10 @@ class Settings:
     # ─── Redis ──────────────────────────────────────
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-    # ─── Auth / JWT ─────────────────────────────────
-    secret_key: str = os.getenv("SECRET_KEY", "secret")
-    algorithm: str = os.getenv("ALGORITHM", "HS256")
-    access_token_expires_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
-
-    # ─── Google OAuth (Login with Google) ─────────────
-    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
-    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    google_redirect_uri: str = os.getenv(
-        "GOOGLE_REDIRECT_URI",
-        "http://localhost:8000/api/v1/auth/google/callback",
-    )
-
-    # ─── AI / LLM / RAG ───────────────────────────
+    # ─── LLM ────────────────────────────────────────
     llm_base_url: str = os.getenv("LLM_BASE_URL", "http://127.0.0.1:1234/v1")
     llm_model: str = os.getenv("LLM_MODEL", "google/gemma-4-e2b")
     llm_api_key: str = os.getenv("LLM_API_KEY", "")
-    embedding_base_url: str = os.getenv("EMBEDDING_BASE_URL", "")
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "")
-    embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
     ai_timeout_seconds: int = int(os.getenv("AI_TIMEOUT_SECONDS", 900))
     # Soft < hard de worker kip dang cau xin loi truoc khi bi kill.
     # Mac dinh kem hard 60s (toi thieu 60s); khong bao gio vuot qua hard.
@@ -64,13 +63,24 @@ class Settings:
         int(os.getenv("AI_SOFT_TIMEOUT_SECONDS", max(60, ai_timeout_seconds - 60))),
         ai_timeout_seconds,
     )
-    # Phong trong (0 nguoi) qua lau thi ENDED cho gon list (mac dinh 24h)
-    room_empty_end_seconds: int = int(os.getenv("ROOM_EMPTY_END_SECONDS", 86400))
     ai_queue_name: str = os.getenv("AI_QUEUE_NAME", "ai")
     ai_observer_queue_name: str = os.getenv("AI_OBSERVER_QUEUE_NAME", "ai_observer")
     ai_transcriber_queue_name: str = os.getenv("AI_TRANSCRIBER_QUEUE_NAME", "ai_transcriber")
+    # 0 = khong gioi han boi Redis (dua hoan toan vao concurrency cua worker)
+    # > 0 = gioi han N luong chay song song tren TOAN HE THONG (du co nhieu server worker)
+    ai_max_concurrency: int = int(os.getenv("AI_MAX_CONCURRENCY", 0))
 
-    # ─── Speech To Text (STT) ─────────────────────
+    # ─── Embedding ──────────────────────────────────
+    embedding_base_url: str = os.getenv("EMBEDDING_BASE_URL", "")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "")
+    embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
+
+    # ─── Reranker ───────────────────────────────────
+    reranker_model: str = os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
+    reranker_base_url: str = os.getenv("RERANKER_BASE_URL", "")
+    reranker_api_key: str = os.getenv("RERANKER_API_KEY", "")
+
+    # ─── STT ────────────────────────────────────────
     stt_provider: str = os.getenv("STT_PROVIDER", "faster_whisper")  # faster_whisper | openai | groq | custom_api
     stt_model_size: str = os.getenv("STT_MODEL_SIZE", "small")
     stt_language: str = os.getenv("STT_LANGUAGE", "en")  # en | vi | auto
@@ -85,31 +95,28 @@ class Settings:
     stt_vad_energy_threshold: float = float(os.getenv("STT_VAD_ENERGY_THRESHOLD", 0.01))
     stt_cpu_threads: int = int(os.getenv("STT_CPU_THREADS", 2))
     stt_beam_size: int = int(os.getenv("STT_BEAM_SIZE", 3))
-    # 0 = khong gioi han boi Redis (dua hoan toan vao concurrency cua worker)
-    # > 0 = gioi han N luong chay song song tren TOAN HE THONG (du co nhieu server worker)
-    ai_max_concurrency: int = int(os.getenv("AI_MAX_CONCURRENCY", 0))
-    reranker_model: str = os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
-    reranker_base_url: str = os.getenv("RERANKER_BASE_URL", "")
-    reranker_api_key: str = os.getenv("RERANKER_API_KEY", "")
+
+    # ─── Qdrant ─────────────────────────────────────
     qdrant_host: str = os.getenv("QDRANT_HOST", "localhost")
     qdrant_port: int = int(os.getenv("QDRANT_PORT", 6333))
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "embedded_documents")
+
+    # ─── Search ─────────────────────────────────────
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
     brave_search_api_key: str = os.getenv("BRAVE_SEARCH_API_KEY", "")
 
-    # ─── Stripe (Subscription) ─────────────────────
+    # ─── Stripe ─────────────────────────────────────
     stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "")
     stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
-    # ─── LiveKit (WebRTC) ──────────────────────────
+    # ─── LiveKit ────────────────────────────────────
     # Chon cum bang LIVEKIT_MODE=local|cloud (xem backend/.env.docker).
-    # LIVEKIT_URL/KEY/SECRET rieng le (neu co) van duoc uu tien de tuong thich cu.
     livekit_mode: str = os.getenv("LIVEKIT_MODE", "").strip().lower()
-    livekit_url: str = os.getenv("LIVEKIT_URL", livekit_profile_env("URL", "ws://localhost:7880"))
-    livekit_api_key: str = os.getenv("LIVEKIT_API_KEY", livekit_profile_env("API_KEY"))
-    livekit_api_secret: str = os.getenv("LIVEKIT_API_SECRET", livekit_profile_env("API_SECRET"))
+    livekit_url: str = livekit_profile_env("URL", "ws://localhost:7880")
+    livekit_api_key: str = livekit_profile_env("API_KEY")
+    livekit_api_secret: str = livekit_profile_env("API_SECRET")
 
-    # ─── MinIO (Object Storage) ─────────────────────
+    # ─── MinIO ──────────────────────────────────────
     minio_endpoint: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
     minio_access_key: str = os.getenv("MINIO_ACCESS_KEY", "")
     minio_secret_key: str = os.getenv("MINIO_SECRET_KEY", "")
@@ -118,6 +125,8 @@ class Settings:
 
     # ─── Heartbeat ──────────────────────────────────
     heartbeat_interval_seconds: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 45))
+    # Phong trong (0 nguoi) qua lau thi ENDED cho gon list (mac dinh 24h)
+    room_empty_end_seconds: int = int(os.getenv("ROOM_EMPTY_END_SECONDS", 86400))
 
     # ─── Logging ────────────────────────────────────
     log_level: str = os.getenv("LOG_LEVEL", "INFO")

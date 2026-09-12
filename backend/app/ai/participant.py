@@ -13,7 +13,6 @@ from app.integration.livekit import create_token
 AI_PARTICIPANT_IDENTITY = "ai_assistant"
 AI_PARTICIPANT_NAME = "AI Assistant"
 
-# Toc do hien tung tu (giay) — du provider co tra 1 cuc thi client van thay stream
 WORD_PACE_SECONDS = 0.04
 
 
@@ -69,7 +68,6 @@ async def stream_to_room(room_id: int, events: AsyncIterable[Any]) -> str:
             if not text:
                 continue
 
-            # Thinking khong tinh vao cau tra loi luu DB
             if kind == "thinking":
                 for piece in split_words(text):
                     await publish_piece(room, stream_id, room_id, piece, thinking=True)

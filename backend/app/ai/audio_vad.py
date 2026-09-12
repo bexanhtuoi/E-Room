@@ -45,9 +45,7 @@ def trim_trailing_silence(
     energy_threshold: Optional[float] = None,
     pad_seconds: float = TRIM_PAD_SECONDS,
 ) -> np.ndarray:
-    # Cat doan im lang dinh kem cuoi cau truoc khi dua sang STT.
-    # Whisper rat hay "che" them cau closing ("See you later. Bye.")
-    # vao khoang silence thua nay.
+
     if len(audio) == 0:
         return audio
 
@@ -127,7 +125,6 @@ def process_audio_frame(
         state["frames"].append(frame)
         return None
 
-    # Frame hien tai la silence nhung truoc do dang noi
     if state["is_speaking"]:
         state["frames"].append(frame)
         last_voice = state["last_voice_time"] or now

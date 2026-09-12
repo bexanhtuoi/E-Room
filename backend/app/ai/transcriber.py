@@ -21,13 +21,10 @@ log = get_logger("app.ai.transcriber")
 
 TRANSCRIBER_IDENTITY = "ai_transcriber"
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
-# Cung user + cung cau trong cua so nay → luu 1 lan (chong double-subscribe).
 DUPLICATE_TRANSCRIPT_SECONDS = 10
 
 
 def cancel_user_stream(user_tasks: Dict[str, asyncio.Task], user_identity: str) -> None:
-    # Mic publish lai (reconnect/doi mic) tao track_sid moi — huy vong lap
-    # cu truoc khi mo vong moi, keo khong co 2 pipeline cung nghe 1 mieng.
     old_task = user_tasks.pop(user_identity, None)
     if old_task is not None and not old_task.done():
         old_task.cancel()
@@ -123,8 +120,6 @@ def build_transcript_payload(
 
 
 def resolve_room_language(room_id: int) -> str:
-    # Ngon ngu phong → STT_LANGUAGE → 'en'. Doc moi cau noi de host doi
-    # ngon ngu giua chung van co hieu luc ngay, khong can restart worker.
     from app.ai.stt import resolve_stt_language
 
     try:
@@ -199,7 +194,6 @@ async def handle_speech_completion(
         if "@ai" in lower_text:
             from app.ai.tasks import enqueue_ai_job
 
-            # Cat query bat dau tu sau chu @ai
             idx = lower_text.find("@ai")
             query = text.lstrip()[idx + 3 :].strip()
             if query:
@@ -287,8 +281,6 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
             if participant.identity not in user_states:
                 user_states[participant.identity] = create_user_audio_state(participant.identity)
 
-            # Huy pipeline cu cua user nay truoc (track cu chet nhung vong
-            # lap chua kip dung) roi moi mo pipeline cho track moi.
             cancel_user_stream(user_tasks, participant.identity)
             task = asyncio.create_task(
                 process_user_audio_stream(
@@ -323,11 +315,10 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
         deadline = asyncio.get_event_loop().time() + MAX_TRANSCRIBE_SESSION_SECONDS
         loop_count = 0
         while asyncio.get_event_loop().time() < deadline:
-            # Dung worker neu khong con nguoi trong phong
+
             if scard(f"room:{room_id}:participants") < 1:
                 break
-            # Refresh lock dinh ky — worker chet thi lock tu het han,
-            # task moi khong bi ket.
+
             loop_count += 1
             if task_id and loop_count % 12 == 0:
                 refresh_worker_lock(lock_key, task_id)

@@ -150,7 +150,7 @@ Xem đầy đủ ở `backend/.env.example`. Quan trọng nhất:
 | `LLM_MODEL` | `gemma-4-E2B-it` | Model chat |
 | `EMBEDDING_BASE_URL` | `http://localhost:8013/v1` | llama.cpp embedding |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector DB (trong docker: `qdrant`) |
-| `LIVEKIT_URL` | `ws://localhost:7880` | WebRTC (trong docker: `ws://livekit:7880`) |
+| `LIVEKIT_MODE` + `LIVEKIT_LOCAL_URL` | `local` / `ws://localhost:7880` | WebRTC (trong docker: `ws://livekit:7880`; public: `LIVEKIT_MODE=cloud`) |
 | `ROOM_EMPTY_END_SECONDS` | `86400` | Phòng trống bao lâu thì ended |
 | `AI_TIMEOUT_SECONDS` | `300` | Trần 1 job AI |
 | `TAVILY_API_KEY` | — | Web search (không có thì agent bỏ qua) |

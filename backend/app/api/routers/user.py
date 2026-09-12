@@ -101,7 +101,7 @@ def download_avatar(user_id: int, db: Session = Depends(get_session)):
 
 
 def as_naive_utc(value: datetime) -> datetime:
-    # DB co the tra naive (sqlite) hoac aware (postgres)
+
     if value.tzinfo is not None:
         return value.replace(tzinfo=None)
 
@@ -109,7 +109,7 @@ def as_naive_utc(value: datetime) -> datetime:
 
 
 def count_streak(active_days: set, today: date) -> int:
-    # Hom nay chua noi thi tinh tiep tu hom qua
+
     cursor = today if today in active_days else today - timedelta(days=1)
 
     streak = 0
@@ -124,7 +124,6 @@ def find_most_active_day(day_counts: dict) -> tuple[Optional[str], int]:
     if not day_counts:
         return None, 0
 
-    # Ngay nhieu tin nhat, hoa thi lay ngay gan nhat
     best_day = max(sorted(day_counts), key=lambda day: day_counts[day])
 
     return best_day.isoformat(), day_counts[best_day]
@@ -138,7 +137,6 @@ def get_my_stats(
 ) -> UserStatsResponse:
     current_user = request.state.current_user
 
-    # Chi can moc thoi gian 90 ngay gan nhat de tinh streak va tuan
     now = as_naive_utc(now_utc())
     today = now.date()
     monday = today - timedelta(days=today.weekday())

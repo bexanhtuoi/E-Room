@@ -29,7 +29,6 @@ async def observe_room_audio(room_id: int, task_id: str = "") -> None:
     await room.connect(settings.livekit_url, token)
 
     try:
-        # Chạy trong khoảng an toàn dưới time limit của Celery, het han se tu respawn
         deadline = asyncio.get_event_loop().time() + MAX_OBSERVE_SECONDS
         loop_count = 0
         while asyncio.get_event_loop().time() < deadline:

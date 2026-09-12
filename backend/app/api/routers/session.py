@@ -34,8 +34,7 @@ def get_my_session(db: Session, session_id: int, request: Request):
 
 
 def is_session_chat(message) -> bool:
-    # Tin Q&A voi Session AI — luu trong bang messages nhung khong phai
-    # transcript phong noi (khong dem vao session lines / room chat).
+
     try:
         return bool((json.loads(message.meta_data or "{}") or {}).get("session_chat"))
     except (TypeError, ValueError):
@@ -43,7 +42,7 @@ def is_session_chat(message) -> bool:
 
 
 def save_session_chat(db: Session, db_session, user_id: int, question: str, answer: str) -> None:
-    # Luu lich su hoi dap de F5 van con, nhan meta session de phan biet.
+
     meta = json.dumps({"session_chat": True, "session_id": db_session.id})
     message_crud.create(
         db,
@@ -194,7 +193,6 @@ async def chat_session_stream(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ):
-    # Stream thinking + tool call + token giong @ai trong phong (SSE).
     question = (ask_in.question or "").strip()
     db_session = get_my_session(db, session_id, request)
     lines = build_session_lines(db, db_session)

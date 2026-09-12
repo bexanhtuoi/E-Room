@@ -4,9 +4,7 @@ from app.models import DocumentKind
 
 
 def build_room_context(room, skills: List) -> str:
-    # Dung context rieng cho agent khi phong co cau hinh:
-    # system prompt, skills dang bat, tag tai lieu cua phong.
-    # Phong khong cau hinh gi → chuoi rong, agent chay nhu cu.
+    
     prompt = (getattr(room, "system_prompt", None) or "").strip() if room is not None else ""
 
     active_skills = [

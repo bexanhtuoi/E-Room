@@ -101,8 +101,6 @@ def build_session_tools(all_lines: List[Dict[str, Any]]) -> list:
 def get_session_agent(all_lines: List[Dict[str, Any]]):
     tail = all_lines[-CONTEXT_LINES:]
 
-    # Tools la closure tren transcript cua RIENG session nay — agent khong
-    # co duong nao doc duoc msg cua session khac.
     system_prompt = (
         load_prompt_from_file("session")
         + f"\n\nCurrent session transcript (last {len(tail)} of {len(all_lines)} lines):\n"
@@ -118,7 +116,6 @@ def get_session_agent(all_lines: List[Dict[str, Any]]):
 
 
 async def stream_session_agent(question: str, all_lines: List[Dict[str, Any]]) -> AsyncIterable[Dict[str, str]]:
-    # Stream thinking + tool call + token giong @ai trong phong.
     agent = get_session_agent(all_lines)
 
     async for event in stream_langchain_agent_events(agent, question):

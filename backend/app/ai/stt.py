@@ -13,40 +13,30 @@ from app.log import get_logger
 
 log = get_logger("app.ai.stt")
 
-# ThreadPoolExecutor xu ly audio CPU/GPU khong chan async loop.
-# Worst-case 6 nguoi/phong cung dut cau → 4 slot song song, moi slot
-# ~16s/cau (threads=2). Slot thu 5-6 doi 1 nhip, khong mat transcript.
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="stt_worker")
 _whisper_model_instance = None
 
-# Segment co avg_logprob duoi nguong nay coi nhu model "che" — bo.
 MIN_SEGMENT_LOGPROB = -1.0
 
 SPOKEN_LANGUAGES = ("en", "vi", "auto")
 
 STT_PROMPTS = {
-    # Phong luyen noi tieng Anh (hoc vien Viet): giu ten Viet khoi bi
-    # doan thanh tu giong am ("Hoang" → "Juan").
     "en": (
         "This is an English speaking practice session in Vietnam. "
         "The speakers are Vietnamese learners introducing themselves in English. "
         "Common Vietnamese names you may hear: Hoang, Huong, An, Minh, Linh, Nam, Trang. "
         "Transcribe exactly what is said, word for word."
     ),
-    # Phong noi tieng Viet: prompt CO DAU day du — whisper bat chuoc
-    # chinh ta cua prompt, prompt khong dau se lam mat dau cau output.
     "vi": (
         "Đây là một buổi luyện nói tiếng Việt. Người nói là người Việt Nam. "
         "Các tên thường gặp: Hoàng, Hương, An, Minh, Linh, Nam, Trang, Hà Nội, Sài Gòn. "
         "Ghi lại chính xác từng từ được nói, giữ nguyên dấu tiếng Việt."
     ),
-    # Tu nhan dien moi cau: prompt trung tinh, khong thien ve ben nao.
     "auto": "Transcribe exactly what is said, word for word.",
 }
 
 
 def resolve_stt_language(value) -> str:
-    # Thu tu: room.language → STT_LANGUAGE → 'en'. Gia tri la → 'en'.
     text = str(value if value is not None else settings.stt_language or "en").strip().lower()
     return text if text in SPOKEN_LANGUAGES else "en"
 
@@ -56,8 +46,7 @@ def build_stt_prompt(language: str) -> str:
 
 
 def normalize_pcm_int16(audio_data) -> np.ndarray:
-    # LiveKit tra ve memoryview, mic co the dua bytearray/bytes —
-    # chuan hoa het ve int16 ndarray truoc khi xu ly.
+
     if isinstance(audio_data, np.ndarray):
         if audio_data.dtype == np.int16:
             return audio_data
@@ -95,7 +84,6 @@ def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
     if len(words) < min_repeats:
         return False
 
-    # Ca cau chi la 1 cum tu lap di lap lai ("thank you" x N, "yes" x N)
     for unit in range(1, len(words) // 2 + 1):
         if len(words) % unit != 0:
             continue
@@ -106,8 +94,7 @@ def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
 
 
 def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
-    # Cum >= phrase_words tu lap lai >= 2 lan trong cau ("A B. C? A B.")
-    # — whisper tu che khi 2 nguoi noi chong nhau / khoang lang.
+
     words = normalize_words(text)
     if len(words) < phrase_words * 2:
         return False
@@ -123,16 +110,14 @@ def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
 
 
 def is_prompt_echo(text: str, prompt: str) -> bool:
-    # Model nha lai initial_prompt khi audio chi la im lang/nhieu
-    # ("Transcribe exactly what is said, word for word.").
+
     text_words = normalize_words(text)
     prompt_words = normalize_words(prompt)
     if not text_words or not prompt_words:
         return False
 
     prompt_set = set(prompt_words)
-    # Cau ngan dung toan tu trong prompt ("What is said?") co the la noi
-    # that — chi danh echo khi du dai (>= 5 tu) hoac bao nhau nguyen cau.
+
     if len(text_words) >= 5 and all(word in prompt_set for word in text_words):
         return True
 
@@ -190,15 +175,13 @@ def transcribe_faster_whisper(
             "initial_prompt": resolved_prompt,
             "word_timestamps": True,
         }
-        # auto = de faster-whisper tu detect moi cau; en/vi = ep cung.
+
         if resolved_language in ("en", "vi"):
             transcribe_kwargs["language"] = resolved_language
 
         segments, info = model.transcribe(
             audio,
             **transcribe_kwargs,
-            # Strict chong bia: loc silence bang VAD cua whisper,
-            # khong "che" tiep tu context cu, bo doan lap/garbage.
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 500},
             condition_on_previous_text=False,
@@ -215,8 +198,7 @@ def transcribe_faster_whisper(
             text_clean = segment.text.strip()
             if not text_clean:
                 continue
-            # Bo segment model tu tin thap — thuong la "che" them
-            # ("No. No.", "Genteel...") sau cau noi that.
+
             if segment.avg_logprob < MIN_SEGMENT_LOGPROB:
                 log.info(
                     "Dropping low-confidence segment | logprob=%.2f text='%s'",
@@ -244,14 +226,10 @@ def transcribe_faster_whisper(
 
         full_text = " ".join(full_text_list)
 
-        # Ao giac kinh dien cua whisper: lap 1 tu/cum tu vo han
-        # ("thank you thank you...") — bo thang.
         if is_repetitive_hallucination(full_text):
             log.info("Dropping repetitive hallucination | text='%s'", full_text[:80])
             return None
 
-        # Model nha lai initial_prompt khi audio chi la im lang/nhieu
-        # (2 nguoi noi chong nhau de lai khoang lang) — bo thang.
         if is_prompt_echo(full_text, resolved_prompt):
             log.info("Dropping prompt echo | text='%s'", full_text[:80])
             return None
@@ -347,7 +325,6 @@ def transcribe_cloud_whisper(
 
 
 # ─── DISPATCHER REGISTRY ──────────────────────────────────────────────────
-# Map provider sang function tuong ung, rat de them provider moi (SenseVoice, Conformer...)
 STT_PROVIDERS: Dict[str, Callable] = {
     "faster_whisper": transcribe_faster_whisper,
     "openai": transcribe_cloud_whisper,
@@ -365,8 +342,6 @@ def transcribe_audio(
     chosen_provider = (provider or settings.stt_provider).lower()
     transcribe_fn = STT_PROVIDERS.get(chosen_provider, transcribe_faster_whisper)
 
-    # language/initial_prompt chi faster-whisper hieu — provider cloud
-    # tu co prompt/language rieng nen bo qua de khoi TypeError.
     if transcribe_fn is not transcribe_faster_whisper:
         kwargs.pop("language", None)
         kwargs.pop("initial_prompt", None)
@@ -375,10 +350,7 @@ def transcribe_audio(
 
 
 def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued: int) -> Optional[str]:
-    # Van tran overflow: local nghẽn (4+ cau doi) ma co cloud key thi day
-    # cau tieng Anh sang cloud (nhanh, khong doi). Khong key → xep hang
-    # local nhu cu. Cau tieng Viet/auto luon o local de giu prompt +
-    # language chinh xac.
+
     if (
         queued >= 4
         and (provider or settings.stt_provider).lower() == "faster_whisper"

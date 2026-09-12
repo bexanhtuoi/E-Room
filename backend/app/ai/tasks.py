@@ -56,16 +56,10 @@ def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: O
     )
     return task.id
 
-
-# Lock worker theo task_id: worker chet dot ngot (restart/OOM) khong de lai
-# lock ma chet — task moi thay lock het han hoac khong phai cua task dang
-# chay thi tu lay quyen. Task dang chay refresh lock dinh ky.
 WORKER_LOCK_TTL = 180
 
 
 def clear_stale_worker_locks() -> int:
-    # Worker vua khoi dong = khong co task in-flight that — xoa lock cu de
-    # phong live co transcriber/observer ngay, khoi doi TTL het han.
     cleared = 0
     for pattern in ("room:*:transcriber_running", "room:*:observer_running"):
         stale = scan_keys(pattern)
@@ -128,26 +122,27 @@ def stream_ai_response(
     query: str,
     source_message_id: Optional[int] = None,
 ) -> Optional[int]:
-    # 0. Bo qua neu room da tat flag tuong ung
+
     with Session(engine) as db:
         room = room_crud.get_one(db, id=room_id)
         if room is not None:
+
             if job_type == "heartbeat" and not room.enable_heartbeat:
                 delete(get_pending_key(room_id))
                 return None
+            
             if job_type != "heartbeat" and not room.enable_agent:
                 delete(get_pending_key(room_id))
                 return None
 
-    # 1. Kiem tra slot gioi han toan he thong (neu duoc bat)
+
     slot_acquired = False
     if settings.ai_max_concurrency > 0:
         slot_acquired = acquire_slot("global_ai", settings.ai_max_concurrency)
+
         if not slot_acquired:
-            # Thu lai sau 3s ma khong chiem dung worker
             raise self.retry(countdown=3, max_retries=100)
 
-    # 2. Ghi nhan da vao xu ly
     remaining_jobs = decr(get_pending_key(room_id))
     if remaining_jobs <= 0:
         delete(get_pending_key(room_id))
@@ -157,7 +152,6 @@ def stream_ai_response(
 
     set(get_running_key(room_id), self.request.id, ttl=settings.ai_timeout_seconds)
 
-    # Nap cau hinh rieng cua phong (prompt, skills, tag tai lieu) vao agent
     system_extra = ""
     try:
         from app.ai.room_context import build_room_context
@@ -169,8 +163,7 @@ def stream_ai_response(
     except Exception:
         log.exception("Room context failed | room_id=%s", room_id)
 
-    # Them 20 tin user moi nhat lam ngu canh cho @ai — gom CA voice transcript
-    # (meta.source=speech_to_text) LAN text chat tay (meta=None), deu luu role=USER.
+
     if job_type != "heartbeat":
         try:
             with Session(engine) as db:
@@ -249,7 +242,7 @@ def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
         asyncio.run(observe(room_id, owner))
     finally:
         release_worker_lock(observer_key, owner)
-        # Tu respawn neu phong van con du 2 user de tiep tuc do im lang
+
         if scard(f"room:{room_id}:participants") >= 2:
             enqueue_room_observer(room_id)
 
@@ -269,8 +262,6 @@ def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
             release_worker_lock(transcriber_key, owner)
             return
 
-    # Doi presence toi da ~10s truoc khi ket noi LiveKit (webhook co the
-    # den tre). Phong trong that thi thoat ngay de nha worker cho phong live.
     waited = 0.0
     while scard(f"room:{room_id}:participants") < 1 and waited < 10:
         time.sleep(2)
@@ -284,13 +275,12 @@ def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
         asyncio.run(run_room_transcriber(room_id, owner))
     finally:
         release_worker_lock(transcriber_key, owner)
-        # Tu respawn neu phong van con it nhat 1 participant
+
         if scard(f"room:{room_id}:participants") >= 1:
             enqueue_room_transcriber(room_id)
 
 
 def delete_expired_scheduled_rooms(db: Session, now: float) -> int:
-    # Phong co lich hen da qua hon 24h → xoa han (coi nhu da ket thuc).
     deleted_count = 0
     rooms = room_crud.get_many(db, limit=500)
 
@@ -361,8 +351,6 @@ def end_stale_empty_rooms(db: Session, now: float) -> int:
 
 @celery_app.task(name="app.ai.tasks.ensure_room_workers")
 def ensure_room_workers() -> int:
-    # Tu phuc hoi sau restart/crash worker: phong live co nguoi ma thieu
-    # transcriber/observer thi enqueue lai (enqueue_* da chan trung).
     ensured_count = 0
 
     with Session(engine) as db:

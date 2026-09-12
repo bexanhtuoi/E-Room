@@ -14,8 +14,7 @@ THINKING_LABELS = {
 def tool_names_from_messages(messages: Any) -> List[str]:
     names = []
     for msg in messages or []:
-        # Tin hoan chinh: tool_calls. Dang stream chunk: tool_call_chunks
-        # (tool_calls chi du khi message rap xong).
+
         calls = list(getattr(msg, "tool_calls", None) or [])
         calls += list(getattr(msg, "tool_call_chunks", None) or [])
         for call in calls:
@@ -37,8 +36,6 @@ def tool_thinking_lines(update: Any) -> List[str]:
 
 
 async def stream_langchain_agent_events(agent: Any, query: str) -> AsyncIterable[Dict[str, str]]:
-    # Vong stream dung chung: thinking (reasoning + tool call) + token.
-    # @ai trong phong va Session AI deu chay qua day.
     stream = agent.astream(
         {"messages": [{"role": "user", "content": query}]},
         stream_mode=["messages", "updates"],
@@ -62,8 +59,6 @@ async def stream_langchain_agent_events(agent: Any, query: str) -> AsyncIterable
             if not isinstance(message, AIMessage):
                 continue
 
-            # Thinking cua model (reasoning_content giu lai tu SSE delta).
-            # Chi phat phan moi (delta) de khong lap khi chunk mang cumulative.
             kwargs = getattr(message, "additional_kwargs", None) or {}
             reasoning = kwargs.get("reasoning_content") if isinstance(kwargs, dict) else ""
             if isinstance(reasoning, str) and reasoning:
@@ -82,17 +77,15 @@ async def stream_langchain_agent_events(agent: Any, query: str) -> AsyncIterable
 
         elif mode == "updates" and isinstance(payload, dict):
             for node, update in payload.items():
-                # Tool call nam trong update cua node "model" (AIMessage kem
-                # tool_calls); node "tools" chi tra ToolMessage ket qua.
+
                 if node not in ("tools", "model"):
                     continue
                 for line in tool_thinking_lines(update):
-                    # Moi tool chi thong bao 1 lan (chunk ve nhieu manh)
+
                     if line not in announced_tools:
                         announced_tools.add(line)
                         yield {"kind": "thinking", "text": line}
-                # Tool chay xong (co ket qua) → bao 1 cau de lap khoang
-                # im lang dai luc search/DocSearch dang chay.
+
                 if node == "tools" and "tools_done" not in announced_tools:
                     messages = update.get("messages", []) if isinstance(update, dict) else []
                     done_count = sum(

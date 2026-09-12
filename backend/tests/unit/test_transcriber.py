@@ -305,12 +305,15 @@ class TestSTTFunctions:
         assert "tiếng Việt" in kwargs["initial_prompt"]
 
     def test_overflow_valve_routes_english_to_cloud(self):
-        from app.config import settings
+        # Patch dung settings object ma choose_stt_provider dang doc
+        # (test_ai_timeout reload app.config nen app.config.settings co the
+        # la object khac — khong duoc doc ambient state o day).
+        import app.ai.stt as stt_module
 
-        assert choose_stt_provider(None, {"language": "en"}, 5) == (
-            "cloud" if settings.stt_cloud_api_key else None
-        )
-        with patch.object(settings, "stt_cloud_api_key", "gsk_test"):
+        stt_settings = stt_module.settings
+        with patch.object(stt_settings, "stt_cloud_api_key", ""):
+            assert choose_stt_provider(None, {"language": "en"}, 5) is None
+        with patch.object(stt_settings, "stt_cloud_api_key", "gsk_test"):
             assert choose_stt_provider(None, {"language": "en"}, 5) == "cloud"
             assert choose_stt_provider(None, {"language": "vi"}, 9) is None
             assert choose_stt_provider(None, {"language": "auto"}, 9) is None

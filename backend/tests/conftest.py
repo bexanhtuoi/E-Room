@@ -9,8 +9,9 @@ from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_eroom.db"
 os.environ["SECRET_KEY"] = "test-secret-key-32-characters-minimum!"
-os.environ["LIVEKIT_API_KEY"] = "testkey"
-os.environ["LIVEKIT_API_SECRET"] = "test-secret-32-characters-long!!"
+os.environ["LIVEKIT_MODE"] = "local"
+os.environ["LIVEKIT_LOCAL_API_KEY"] = "testkey"
+os.environ["LIVEKIT_LOCAL_API_SECRET"] = "test-secret-32-characters-long!!"
 
 from app.main import app  # noqa: E402
 
