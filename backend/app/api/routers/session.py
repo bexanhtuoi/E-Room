@@ -18,7 +18,7 @@ from app.schemas import (
     SessionWithRoom,
 )
 from app.services import message_crud, room_crud, session_crud
-from app.services.session import is_session_chat, session_lines
+from app.services.session import session_lines
 
 router = APIRouter()
 
@@ -75,7 +75,10 @@ def build_agent(db_session, lines):
 
 
 @router.get("/count")
-def count_sessions(db: Session = Depends(get_session)) -> dict:
+def count_sessions(
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> dict:
     return {"count": session_crud.count(db)}
 
 
@@ -89,17 +92,7 @@ def get_my_sessions(
     items = []
     for db_session in session_crud.get_mine(db, user_id=current_user.id):
         room = room_crud.get_one(db, id=db_session.room_id)
-        start = db_session.joined_at.replace(tzinfo=None) if getattr(db_session.joined_at, "tzinfo", None) else db_session.joined_at
-        end = db_session.left_at
-        if end is not None and getattr(end, "tzinfo", None):
-            end = end.replace(tzinfo=None)
-        count = sum(
-            1
-            for message in message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=500)
-            if not is_session_chat(message)
-            and (message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at) >= start
-            and (end is None or (message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at) <= end)
-        )
+        count = len(session_lines(db, db_session))
         items.append(SessionWithRoom(session=db_session, room=room, message_count=count))
 
     return MySessionsResponse(sessions=items)

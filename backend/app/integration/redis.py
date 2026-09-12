@@ -15,6 +15,10 @@ def get_redis_client() -> redis.Redis:
     return redis.Redis.from_url(
         settings.redis_url,
         decode_responses=True,
+        socket_timeout=5,
+        socket_connect_timeout=5,
+        health_check_interval=30,
+        retry_on_timeout=True,
     )
 
 
@@ -92,12 +96,28 @@ def scard(name: str) -> int:
     return get_redis_client().scard(name)
 
 
+COMPARE_DELETE_SCRIPT = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+
+COMPARE_REFRESH_SCRIPT = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+    return 1
+end
+return 0
+"""
+
 ACQUIRE_SLOT_SCRIPT = """
 local current = redis.call('INCR', KEYS[1])
 if current > tonumber(ARGV[1]) then
     redis.call('DECR', KEYS[1])
     return 0
 end
+redis.call('EXPIRE', KEYS[1], ARGV[2])
 return 1
 """
 
@@ -110,10 +130,22 @@ return 1
 """
 
 
-def acquire_slot(name: str, limit: int) -> bool:
+def compare_delete(key: str, value: str) -> bool:
+    client = get_redis_client()
+    script = client.register_script(COMPARE_DELETE_SCRIPT)
+    return bool(script(keys=[key], args=[value]))
+
+
+def compare_refresh(key: str, value: str, ttl: int) -> bool:
+    client = get_redis_client()
+    script = client.register_script(COMPARE_REFRESH_SCRIPT)
+    return bool(script(keys=[key], args=[value, ttl]))
+
+
+def acquire_slot(name: str, limit: int, ttl: int = 900) -> bool:
     client = get_redis_client()
     script = client.register_script(ACQUIRE_SLOT_SCRIPT)
-    result = script(keys=[f"eroom:slots:{name}"], args=[limit])
+    result = script(keys=[f"eroom:slots:{name}"], args=[limit, ttl])
     return bool(result)
 
 

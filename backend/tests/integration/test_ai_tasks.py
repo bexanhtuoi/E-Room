@@ -63,18 +63,34 @@ class TestAITasksFlow:
             assert cleared >= 1
             assert mock_delete.called
 
+    def test_publish_task_releases_lock_on_failure(self):
+        import pytest
+
+        from app.ai.tasks import publish_task
+
+        with (
+            patch("app.ai.tasks.claim_worker_lock", return_value=True),
+            patch("app.ai.tasks.release_worker_lock") as mock_release,
+        ):
+            sender = MagicMock()
+            sender.apply_async.side_effect = ConnectionError("broker down")
+            with pytest.raises(ConnectionError):
+                publish_task("room:1:transcriber_running", "task-1", sender, [1, "task-1"], "ai_transcriber")
+            mock_release.assert_called_once_with("room:1:transcriber_running", "task-1")
+
     def test_worker_lock_released_only_by_owner(self):
         from app.ai.tasks import release_worker_lock
 
-        with patch("app.ai.tasks.get", return_value="owner-1") as mock_get:
-            with patch("app.ai.tasks.delete") as mock_delete:
-                release_worker_lock("room:1:transcriber_running", "owner-1")
-                mock_delete.assert_called_once_with("room:1:transcriber_running")
+        with patch("app.ai.tasks.compare_delete") as mock_compare_delete:
+            release_worker_lock("room:1:transcriber_running", "owner-1")
+            mock_compare_delete.assert_called_once_with("room:1:transcriber_running", "owner-1")
 
-        with patch("app.ai.tasks.get", return_value="owner-1"):
-            with patch("app.ai.tasks.delete") as mock_delete:
-                release_worker_lock("room:1:transcriber_running", "owner-2")
-                mock_delete.assert_not_called()
+    def test_worker_lock_refresh_checks_owner(self):
+        from app.ai.tasks import refresh_worker_lock
+
+        with patch("app.ai.tasks.compare_refresh", return_value=True) as mock_refresh:
+            assert refresh_worker_lock("room:1:transcriber_running", "owner-1") is True
+            mock_refresh.assert_called_once_with("room:1:transcriber_running", "owner-1", 180)
 
     def test_check_room_heartbeats_idle_room(self):
         unique_name = f"heartbeat-room-{uuid.uuid4().hex[:8]}"

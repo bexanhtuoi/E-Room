@@ -15,6 +15,7 @@ router = APIRouter()
 def get_documents(
     db: Session = Depends(get_session),
     pagination: tuple[int, int] = Depends(get_pagination_params),
+    _: str = Depends(require_auth),
 ) -> List[DocumentResponse]:
     skip, limit = pagination
     documents = document_crud.get_many(db, skip=skip, limit=limit)
@@ -22,12 +23,19 @@ def get_documents(
 
 
 @router.get("/count")
-def count_documents(db: Session = Depends(get_session)) -> dict:
+def count_documents(
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> dict:
     return {"count": document_crud.count(db)}
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
-def get_document(document_id: int, db: Session = Depends(get_session)) -> DocumentResponse:
+def get_document(
+    document_id: int,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> DocumentResponse:
     db_document = document_crud.get_one(db, id=document_id)
     if not db_document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
@@ -41,6 +49,9 @@ def create_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
+    if ".." in (document_in.file_path or ""):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file path")
+
     obj_in_data = document_in.model_dump()
     obj_in_data["user_id"] = request.state.current_user.id
     new_document = document_crud.create(db, obj_in=obj_in_data)

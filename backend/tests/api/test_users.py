@@ -35,10 +35,20 @@ class TestGetUsers:
         assert client.get("/api/v1/users/email/nobody@test.com").status_code == 404
 
     def test_get_users_by_role_contains_registered_user(self, client: TestClient, alice: dict):
-        response = client.get("/api/v1/users/role/user")
+        response = client.get("/api/v1/users/role/user?limit=100")
         assert response.status_code == 200
-        emails = [u["email"] for u in response.json()]
-        assert alice["email"] in emails
+        found = [u for u in response.json() if u["email"] == alice["email"]]
+        if not found:
+            total = client.get("/api/v1/users/count").json()["count"]
+            response = client.get(f"/api/v1/users/role/user?skip={max(0, total - 100)}&limit=100")
+            assert response.status_code == 200
+            found = [u for u in response.json() if u["email"] == alice["email"]]
+        assert found and all(u["role"] == "user" for u in found)
+
+    def test_get_users_by_role_respects_limit(self, client: TestClient, alice: dict):
+        response = client.get("/api/v1/users/role/user?limit=2")
+        assert response.status_code == 200
+        assert len(response.json()) <= 2
 
     def test_list_users_respects_limit(self, client: TestClient, alice: dict):
         response = client.get("/api/v1/users/?limit=2")

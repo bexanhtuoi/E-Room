@@ -3,13 +3,12 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from sqlmodel import Session
 
 from app.config import settings
 from app.database import get_session
-from app.models import User
-from app.security import create_access_token, hash_password
+from app.security import create_access_token, set_auth_cookie
 from app.services import user_crud
 
 router = APIRouter()
@@ -36,16 +35,6 @@ def frontend_redirect(ok: bool) -> RedirectResponse:
     base = settings.frontend_url.rstrip("/")
     suffix = "/rooms?google=ok" if ok else "/login?google=error"
     return RedirectResponse(f"{base}{suffix}", status_code=302)
-
-
-def set_auth_cookie(response: JSONResponse | RedirectResponse, token: str):
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-    )
 
 
 @router.get("/google/login")

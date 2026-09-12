@@ -155,3 +155,6 @@ class Settings:
 
 
 settings = Settings()
+
+if settings.secret_key == "secret" and settings.app_env != "development":
+    raise RuntimeError("SECRET_KEY must be set in non-development environments")

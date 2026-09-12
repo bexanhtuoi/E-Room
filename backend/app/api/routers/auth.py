@@ -7,9 +7,8 @@ from sqlmodel import Session
 
 from app.config import settings
 from app.database import get_session
-from app.models import User
 from app.schemas import UserCreateSchema, UserResponse
-from app.security import create_access_token, hash_password, verify_password
+from app.security import create_access_token, hash_password, set_auth_cookie, verify_password
 from app.services import user_crud
 
 router = APIRouter()
@@ -55,13 +54,7 @@ def login(
     access_token = create_access_token(data=db_user.id, expires_delta=access_token_expires)
 
     response = JSONResponse(content={"message": "Login successful"})
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-    )
+    set_auth_cookie(response, access_token)
 
     return response
 

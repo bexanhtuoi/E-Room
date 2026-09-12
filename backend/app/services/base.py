@@ -21,7 +21,7 @@ class CRUDRepository:
                 stmt = stmt.where(getattr(self.model, key) == value)
         return db.exec(stmt).first()
 
-    def get_many(self, db: Session, skip: int = 0, limit: int | None = None, order_by: str = "id", desc: bool = False, *args, **kwargs) -> List[ORMModel]:
+    def get_many(self, db: Session, *args, skip: int = 0, limit: int | None = None, order_by: str = "id", desc: bool = False, **kwargs) -> List[ORMModel]:
         stmt = select(self.model)
         for condition in args:
             stmt = stmt.where(condition)
@@ -38,6 +38,12 @@ class CRUDRepository:
         if limit is not None:
             stmt = stmt.limit(limit)
         return db.exec(stmt).all()
+
+    def get_by_ids(self, db: Session, ids) -> List[ORMModel]:
+        ids = list(ids or [])
+        if not ids:
+            return []
+        return self.get_many(db, self.model.id.in_(ids))
 
     def create(self, db: Session, obj_in: Union[BaseModel, dict]) -> ORMModel:
         if hasattr(obj_in, "model_dump"):

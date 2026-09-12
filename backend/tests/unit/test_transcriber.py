@@ -30,9 +30,8 @@ from app.ai.transcriber import (
     build_transcript_payload,
     cancel_user_stream,
     handle_speech_completion,
-    is_recent_duplicate,
-    save_transcript_to_db,
 )
+from app.services.transcript import is_recent_duplicate, save_transcript_to_db
 
 
 def make_loud_frame(n: int = 1600) -> np.ndarray:

@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any, Optional, Union
 
 import jwt
+from fastapi.responses import JSONResponse, RedirectResponse
 from passlib.context import CryptContext
 
 from app.config import settings
@@ -31,6 +32,20 @@ def create_access_token(data: Union[str, Any], expires_delta: Optional[timedelta
 
 def decode_token(token: str) -> Optional[dict[str, Any]]:
     try:
-        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except jwt.PyJWTError:
         return None
+    if payload.get("type") != "access":
+        return None
+    return payload
+
+
+def set_auth_cookie(response: JSONResponse | RedirectResponse, token: str) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+    )
+

@@ -1,16 +1,14 @@
-﻿from typing import List, Optional
+﻿from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlmodel import Session
 
-from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity
 from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.config import settings
 from app.database import get_session
 from app.integration.livekit import create_token, verify_webhook
-from app.integration.redis import delete as redis_delete
-from app.integration.redis import expire, sadd, scard, smembers, srem
-from app.models import DocumentKind, NotificationType, Room, RoomStatus
+from app.integration.redis import smembers
+from app.models import DocumentKind, Notification, NotificationType, Room, RoomStatus, User
 from app.schemas import (
     DocumentResponse,
     RoomCreateSchema,
@@ -23,8 +21,10 @@ from app.schemas import (
     RoomUpdateSchema,
 )
 from app.schemas.room import emails_from_json, emails_to_json, topics_to_json
-from app.services import document_crud, message_crud, notification_crud, room_crud, session_crud, user_crud
-from app.utils.datetime_utils import now_utc
+from app.services import document_crud, notification_crud, room_crud, user_crud
+from app.services.room_cleanup import delete_room_cascade, drop_doc_storage
+from app.services.room_presence import drop_participant_from_room, register_participant_join
+from app.utils.upload import media_type_for, read_upload
 
 router = APIRouter()
 
@@ -61,7 +61,10 @@ def get_rooms(
 
 
 @router.get("/count")
-def count_rooms(db: Session = Depends(get_session)) -> dict:
+def count_rooms(
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> dict:
     return {"count": room_crud.count(db)}
 
 
@@ -108,19 +111,27 @@ def create_room(
 
 
 def notify_room_invites(db: Session, room, emails: list) -> int:
-    # Bao cho user co email duoc moi vao phong (chi gui 1 lan cho moi phong).
     host_name = ""
     if room.host_id:
         host = user_crud.get_one(db, id=room.host_id)
         host_name = (host.full_name if host else "") or ""
 
+    emails = [email for email in emails or []]
+    if not emails:
+        return 0
+
+    invited_map = {user.email: user for user in user_crud.get_many(db, User.email.in_(emails))}
+    invited_ids = [user.id for user in invited_map.values() if user.id != room.host_id]
+    sent_ids = set()
+    if invited_ids:
+        for notif in notification_crud.get_many(db, Notification.user_id.in_(invited_ids)):
+            if notif.notification_type == NotificationType.INVITE and f"room:{room.id}" in (notif.body or ""):
+                sent_ids.add(notif.user_id)
+
     sent = 0
-    for email in emails or []:
-        invited = user_crud.get_one(db, email=email)
-        if not invited or invited.id == room.host_id:
-            continue
-        existing = notification_crud.get_many(db, user_id=invited.id)
-        if any(n.notification_type == NotificationType.INVITE and f"room:{room.id}" in (n.body or "") for n in existing):
+    for email in emails:
+        invited = invited_map.get(email)
+        if not invited or invited.id == room.host_id or invited.id in sent_ids:
             continue
         notification_crud.create(
             db,
@@ -131,6 +142,7 @@ def notify_room_invites(db: Session, room, emails: list) -> int:
                 "notification_type": NotificationType.INVITE,
             },
         )
+        sent_ids.add(invited.id)
         sent += 1
 
     return sent
@@ -197,35 +209,6 @@ def update_room(
     return updated_room
 
 
-def delete_related_data(db: Session, room_id: int) -> None:
-    # Xoa toan bo messages cua room truoc khi xoa room
-    for message in message_crud.get_many(db, room_id=room_id):
-        message_crud.delete(db, db_obj=message)
-
-    # Xoa tai lieu + skills cua room (row DB truoc, MinIO + vector sau)
-    room_docs = document_crud.get_many(db, room_id=room_id)
-    for doc in room_docs:
-        document_crud.delete(db, db_obj=doc)
-
-    if room_docs:
-        from app.ai.vector_store import delete_document_vectors
-        from app.integration.minio import delete_object
-
-        for doc in room_docs:
-            if doc.kind == DocumentKind.FILE and doc.file_path:
-                try:
-                    delete_object(doc.file_path)
-                except Exception:
-                    pass
-                try:
-                    delete_document_vectors(doc.id)
-                except Exception:
-                    pass
-
-    # Xoa danh sach participants trong Redis
-    redis_delete(f"room:{room_id}:participants")
-
-
 @router.delete("/{room_id}", response_model=RoomResponse)
 def delete_room(
     room_id: int,
@@ -239,9 +222,8 @@ def delete_room(
 
     authorize_owner(db_room.host_id, request)
 
-    delete_related_data(db, room_id)
-    deleted_room = room_crud.delete(db, db_obj=db_room)
-    return deleted_room
+    delete_room_cascade(db, room_id)
+    return db_room
 
 
 def get_host_room(db: Session, room_id: int, request: Request):
@@ -255,7 +237,7 @@ def get_host_room(db: Session, room_id: int, request: Request):
 
 
 MAX_ROOM_FILE_BYTES = 10 * 1024 * 1024
-ROOM_FILE_TYPES = {"pdf": "pdf", "md": "markdown", "txt": "text"}
+ROOM_FILE_TYPES = {"pdf", "md", "txt"}
 
 
 @router.get("/{room_id}/documents", response_model=List[DocumentResponse])
@@ -279,15 +261,7 @@ async def upload_room_document(
 ) -> DocumentResponse:
     db_room = get_host_room(db, room_id, request)
 
-    suffix = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
-    if suffix not in ROOM_FILE_TYPES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pdf, md, txt files are supported")
-
-    raw = await file.read()
-    if not raw:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-    if len(raw) > MAX_ROOM_FILE_BYTES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be at most 10MB")
+    raw, suffix = await read_upload(file, ROOM_FILE_TYPES, MAX_ROOM_FILE_BYTES, "File")
 
     from app.ai.vector_store import process_document
     from app.integration.minio import delete_object, put_document
@@ -345,14 +319,10 @@ def download_room_document(
 
     from urllib.parse import quote
 
-    media_type = {"pdf": "application/pdf", "md": "text/markdown", "txt": "text/plain"}.get(
-        (doc.file_type or "").lower(), "application/octet-stream"
-    )
-
     safe_name = (doc.file_name or "file").replace('"', "")
     return Response(
         content=data,
-        media_type=media_type,
+        media_type=media_type_for(doc.file_type),
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(safe_name)}"},
     )
 
@@ -372,19 +342,7 @@ def delete_room_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     document_crud.delete(db, db_obj=doc)
-
-    if doc.kind == DocumentKind.FILE and doc.file_path:
-        from app.ai.vector_store import delete_document_vectors
-        from app.integration.minio import delete_object
-
-        try:
-            delete_object(doc.file_path)
-        except Exception:
-            pass
-        try:
-            delete_document_vectors(doc.id)
-        except Exception:
-            pass
+    drop_doc_storage(doc)
 
     return doc
 
@@ -536,8 +494,6 @@ async def handle_livekit_webhook(
     if participant_identity and participant_identity.startswith("ai_"):
         return {"status": "ignored"}
 
-    redis_key = f"room:{room_name}:participants"
-
     if event_type == "participant_joined" and participant_identity:
         try:
             register_participant_join(db, room_name, participant_identity)
@@ -548,56 +504,6 @@ async def handle_livekit_webhook(
         drop_participant_from_room(db, room_name, participant_identity)
 
     return {"status": "success", "event": event_type}
-
-
-def coerce_user_id(participant_identity) -> int | None:
-    try:
-        return int(str(participant_identity))
-    except (TypeError, ValueError):
-        return None
-
-
-def open_room_session(db: Session, room_id: int, user_id: int | None) -> None:
-    # Vao phong → mo 1 session moi (neu chua co session dang mo).
-    if user_id is None:
-        return
-    if not user_crud.get_one(db, id=user_id):
-        return
-    if session_crud.get_open(db, user_id=user_id, room_id=room_id):
-        return
-    session_crud.create(db, obj_in={"user_id": user_id, "room_id": room_id})
-
-
-def close_room_session(db: Session, room_id: int, user_id: int | None) -> None:
-    # Roi phong → dong session dang mo, chot thoi luong.
-    if user_id is None:
-        return
-    db_session = session_crud.get_open(db, user_id=user_id, room_id=room_id)
-    if not db_session:
-        return
-    left_at = now_utc()
-    joined_at = db_session.joined_at.replace(tzinfo=None) if getattr(db_session.joined_at, "tzinfo", None) else db_session.joined_at
-    session_crud.update(
-        db,
-        db_obj=db_session,
-        obj_in={"left_at": left_at, "duration_seconds": max(0, int((left_at.replace(tzinfo=None) - joined_at).total_seconds()))},
-    )
-
-
-def register_participant_join(db: Session, room_name: str, participant_identity: str) -> None:
-    redis_key = f"room:{room_name}:participants"
-    sadd(redis_key, str(participant_identity))
-    # Tu het han sau 6h neu webhook leave + beacon deu miss → khong con
-    # presence ma chet lam worker transcript/observer chay am vo han.
-    expire(redis_key, 6 * 3600)
-    room_id_int = int(room_name)
-    mark_room_activity(room_id_int)
-    db_room = room_crud.get_one(db, id=room_id_int)
-    if db_room and db_room.status != RoomStatus.ACTIVE:
-        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
-    open_room_session(db, room_id_int, coerce_user_id(participant_identity))
-    enqueue_room_observer(room_id_int)
-    enqueue_room_transcriber(room_id_int)
 
 
 @router.post("/{room_id}/join")
@@ -615,23 +521,6 @@ def join_room(
     authorize_room_access(db_room, request)
     register_participant_join(db, str(room_id), request.state.current_user.id)
     return {"status": "joined", "room_id": room_id}
-
-
-def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
-    redis_key = f"room:{room_name}:participants"
-    srem(redis_key, str(participant_identity))
-    if scard(redis_key) > 0:
-        return
-    try:
-        room_id_int = int(room_name)
-    except ValueError:
-        return
-    db_room = room_crud.get_one(db, id=room_id_int)
-    # Phong het nguoi → IDLE (van hien trong list de vao lai),
-    # chi ENDED khi bo hoang lau (heartbeat xu ly).
-    if db_room and db_room.status == RoomStatus.ACTIVE:
-        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.IDLE})
-    close_room_session(db, room_id_int, coerce_user_id(participant_identity))
 
 
 @router.post("/{room_id}/leave")

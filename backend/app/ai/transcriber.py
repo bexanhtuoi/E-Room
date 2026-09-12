@@ -1,10 +1,9 @@
 import asyncio
 import json
-from datetime import timedelta
 from typing import Dict, List, Optional
 
 from livekit import rtc
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.ai.audio_vad import create_user_audio_state, process_audio_frame
 from app.ai.stt import transcribe_audio_async
@@ -13,86 +12,33 @@ from app.database import engine
 from app.integration.livekit import create_token
 from app.integration.redis import scard
 from app.log import get_logger
-from app.models import Message, MessageRole
-from app.services import message_crud, room_crud, user_crud
-from app.utils.datetime_utils import now_utc
+from app.services import room_crud
+from app.services.transcript import save_transcript_to_db
+from app.utils.chat import strip_ai_mention
 
 log = get_logger("app.ai.transcriber")
 
 TRANSCRIBER_IDENTITY = "ai_transcriber"
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
-DUPLICATE_TRANSCRIPT_SECONDS = 10
+MAX_PARALLEL_STT = 2
+
+stt_gate = asyncio.Semaphore(MAX_PARALLEL_STT)
+
+
+async def guarded_transcribe(room, room_id: int, user_identity: str, audio_data) -> None:
+    async with stt_gate:
+        await handle_speech_completion(
+            room=room,
+            room_id=room_id,
+            user_identity=user_identity,
+            audio_data=audio_data,
+        )
 
 
 def cancel_user_stream(user_tasks: Dict[str, asyncio.Task], user_identity: str) -> None:
     old_task = user_tasks.pop(user_identity, None)
     if old_task is not None and not old_task.done():
         old_task.cancel()
-
-
-def is_recent_duplicate(db: Session, room_id: int, user_id: Optional[int], text: str) -> bool:
-    cutoff = now_utc().replace(tzinfo=None) - timedelta(seconds=DUPLICATE_TRANSCRIPT_SECONDS)
-    existing = db.exec(
-        select(Message)
-        .where(
-            Message.room_id == room_id,
-            Message.user_id == user_id,
-            Message.text == text,
-            Message.created_at >= cutoff,
-        )
-        .limit(1)
-    ).first()
-    return existing is not None
-
-
-def save_transcript_to_db(
-    room_id: int,
-    user_identity: str,
-    text: str,
-    duration: float,
-    confidence: float,
-    avg_logprob: float,
-    words_count: int,
-    language: Optional[str] = None,
-) -> tuple[Optional[int], Optional[int], str]:
-    user_id: Optional[int] = None
-    user_name = user_identity
-
-    try:
-        user_id = int(user_identity)
-    except ValueError:
-        pass
-
-    with Session(engine) as db:
-        if user_id:
-            user_obj = user_crud.get_one(db, id=user_id)
-            if user_obj:
-                user_name = user_obj.full_name
-
-        if is_recent_duplicate(db, room_id, user_id, text):
-            log.info("Dropping duplicate transcript | room_id=%s user=%s text='%s'", room_id, user_identity, text[:80])
-            return None, user_id, user_name
-
-        meta_data = {
-            "source": "speech_to_text",
-            "language": language or "en",
-            "duration": duration,
-            "confidence": confidence,
-            "avg_logprob": avg_logprob,
-            "words_count": words_count,
-        }
-
-        message = message_crud.create(
-            db,
-            obj_in={
-                "room_id": room_id,
-                "user_id": user_id,
-                "role": MessageRole.USER,
-                "text": text,
-                "meta_data": json.dumps(meta_data),
-            },
-        )
-        return message.id, user_id, user_name
 
 
 def build_transcript_payload(
@@ -189,20 +135,16 @@ async def handle_speech_completion(
         if hasattr(room, "local_participant") and room.local_participant:
             await room.local_participant.publish_data(payload, reliable=True)
 
-        # 4. Kiem tra trigger @AI
-        lower_text = text.lstrip().lower()
-        if "@ai" in lower_text:
+        query = strip_ai_mention(text)
+        if query:
             from app.ai.tasks import enqueue_ai_job
 
-            idx = lower_text.find("@ai")
-            query = text.lstrip()[idx + 3 :].strip()
-            if query:
-                enqueue_ai_job(
-                    room_id,
-                    "answer",
-                    query,
-                    message_id,
-                )
+            enqueue_ai_job(
+                room_id,
+                "answer",
+                query,
+                message_id,
+            )
 
     except Exception as error:
         log.exception(
@@ -229,7 +171,7 @@ async def process_user_audio_stream(
 
             if completed_speech is not None:
                 asyncio.create_task(
-                    handle_speech_completion(
+                    guarded_transcribe(
                         room=room,
                         room_id=room_id,
                         user_identity=user_identity,

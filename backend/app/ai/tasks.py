@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 from typing import Optional
+from uuid import uuid4
 
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlmodel import Session
@@ -13,9 +14,12 @@ from app.database import engine
 from app.integration.celery import celery_app
 from app.integration.redis import (
     acquire_slot,
+    compare_delete,
+    compare_refresh,
     decr,
     delete,
     exists,
+    expire,
     get,
     incr,
     release_slot,
@@ -25,9 +29,9 @@ from app.integration.redis import (
 )
 from app.integration.redis import keys as scan_keys
 from app.log import get_logger
-from app.models import DocumentKind, MessageRole, RoomStatus
+from app.models import MessageRole, RoomStatus
 from app.services import document_crud, message_crud, room_crud, user_crud
-from app.utils.datetime_utils import now_utc
+from app.utils.datetime_utils import as_naive_utc, now_utc
 
 log = get_logger("app.ai", level="INFO")
 
@@ -49,11 +53,17 @@ def mark_room_activity(room_id: int) -> None:
 
 
 def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: Optional[int] = None) -> str:
-    incr(get_pending_key(room_id))
-    task = stream_ai_response.apply_async(
-        args=[room_id, job_type, query, source_message_id],
-        queue=settings.ai_queue_name,
-    )
+    pending_key = get_pending_key(room_id)
+    incr(pending_key)
+    expire(pending_key, settings.ai_timeout_seconds)
+    try:
+        task = stream_ai_response.apply_async(
+            args=[room_id, job_type, query, source_message_id],
+            queue=settings.ai_queue_name,
+        )
+    except Exception:
+        decr(pending_key)
+        raise
     return task.id
 
 WORKER_LOCK_TTL = 180
@@ -75,43 +85,35 @@ def claim_worker_lock(key: str, task_id: str) -> bool:
     return set_if_absent(key, task_id, WORKER_LOCK_TTL)
 
 
-def refresh_worker_lock(key: str, task_id: str) -> None:
-    set(key, task_id, ttl=WORKER_LOCK_TTL)
+def refresh_worker_lock(key: str, task_id: str) -> bool:
+    return compare_refresh(key, task_id, WORKER_LOCK_TTL)
 
 
 def release_worker_lock(key: str, task_id: str) -> None:
-    if get(key) == task_id:
-        delete(key)
+    compare_delete(key, task_id)
+
+
+def publish_task(lock_key: str, task_id: str, task_fn, args: list, queue: str) -> bool:
+    if not claim_worker_lock(lock_key, task_id):
+        return False
+
+    try:
+        task_fn.apply_async(args=args, task_id=task_id, queue=queue)
+    except Exception:
+        release_worker_lock(lock_key, task_id)
+        raise
+
+    return True
 
 
 def enqueue_room_observer(room_id: int) -> None:
-    from uuid import uuid4
-
-    observer_key = f"room:{room_id}:observer_running"
     task_id = uuid4().hex
-    if not claim_worker_lock(observer_key, task_id):
-        return
-
-    observe_room_audio.apply_async(
-        args=[room_id, task_id],
-        task_id=task_id,
-        queue=settings.ai_observer_queue_name,
-    )
+    publish_task(f"room:{room_id}:observer_running", task_id, observe_room_audio, [room_id, task_id], settings.ai_observer_queue_name)
 
 
 def enqueue_room_transcriber(room_id: int) -> None:
-    from uuid import uuid4
-
-    transcriber_key = f"room:{room_id}:transcriber_running"
     task_id = uuid4().hex
-    if not claim_worker_lock(transcriber_key, task_id):
-        return
-
-    transcribe_room_audio.apply_async(
-        args=[room_id, task_id],
-        task_id=task_id,
-        queue=settings.ai_transcriber_queue_name,
-    )
+    publish_task(f"room:{room_id}:transcriber_running", task_id, transcribe_room_audio, [room_id, task_id], settings.ai_transcriber_queue_name)
 
 
 @celery_app.task(name="app.ai.tasks.stream_ai_response", bind=True)
@@ -138,7 +140,7 @@ def stream_ai_response(
 
     slot_acquired = False
     if settings.ai_max_concurrency > 0:
-        slot_acquired = acquire_slot("global_ai", settings.ai_max_concurrency)
+        slot_acquired = acquire_slot("global_ai", settings.ai_max_concurrency, settings.ai_timeout_seconds)
 
         if not slot_acquired:
             raise self.retry(countdown=3, max_retries=100)
@@ -289,38 +291,13 @@ def delete_expired_scheduled_rooms(db: Session, now: float) -> int:
         if scheduled_at is None:
             continue
 
-        if getattr(scheduled_at, "tzinfo", None) is not None:
-            scheduled_at = scheduled_at.replace(tzinfo=None)
+        scheduled_at = as_naive_utc(scheduled_at)
         if now - scheduled_at.timestamp() < 24 * 3600:
             continue
 
-        for message in message_crud.get_many(db, room_id=room.id):
-            message_crud.delete(db, db_obj=message)
+        from app.services.room_cleanup import delete_room_cascade
 
-        room_docs = document_crud.get_many(db, room_id=room.id)
-        for doc in room_docs:
-            document_crud.delete(db, db_obj=doc)
-
-        if room_docs:
-            try:
-                from app.ai.vector_store import delete_document_vectors
-                from app.integration.minio import delete_object
-
-                for doc in room_docs:
-                    if doc.kind == DocumentKind.FILE and doc.file_path:
-                        try:
-                            delete_object(doc.file_path)
-                        except Exception:
-                            pass
-                        try:
-                            delete_document_vectors(doc.id)
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-
-        delete(f"room:{room.id}:participants")
-        room_crud.delete(db, db_obj=room)
+        delete_room_cascade(db, room.id)
         deleted_count += 1
 
     return deleted_count
@@ -391,19 +368,24 @@ def check_room_heartbeats() -> int:
             if now - float(last_activity) < settings.heartbeat_interval_seconds:
                 continue
 
+            heartbeat_key = f"room:{room.id}:heartbeat_pending"
             is_queued = set_if_absent(
-                f"room:{room.id}:heartbeat_pending",
+                heartbeat_key,
                 "1",
                 settings.ai_timeout_seconds,
             )
             if not is_queued:
                 continue
 
-            enqueue_ai_job(
-                room.id,
-                "heartbeat",
-                f"The room is about {room.name}. Ask one concise, warm English question to restart the conversation.",
-            )
+            try:
+                enqueue_ai_job(
+                    room.id,
+                    "heartbeat",
+                    f"The room is about {room.name}. Ask one concise, warm English question to restart the conversation.",
+                )
+            except Exception:
+                delete(heartbeat_key)
+                continue
             mark_room_activity(room.id)
             queued_count += 1
 

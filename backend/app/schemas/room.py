@@ -15,11 +15,11 @@ def normalize_topic_name(value: str) -> str:
     return " ".join(normalized)
 
 
-def normalize_topic_list(values: Optional[List[str]]) -> List[str]:
+def dedupe_str_list(values, clean, limit: int = 0) -> List[str]:
     seen = set()
     result = []
     for item in values or []:
-        name = normalize_topic_name(item)
+        name = clean(item)
         if not name:
             continue
         key = name.lower()
@@ -27,6 +27,11 @@ def normalize_topic_list(values: Optional[List[str]]) -> List[str]:
             continue
         seen.add(key)
         result.append(name)
+    return result[:limit] if limit else result
+
+
+def normalize_topic_list(values: Optional[List[str]]) -> List[str]:
+    result = dedupe_str_list(values, normalize_topic_name)
     if len(result) > MAX_TOPICS_PER_ROOM:
         raise ValueError(f"A room can have at most {MAX_TOPICS_PER_ROOM} topics")
     return result
@@ -42,7 +47,6 @@ SPOKEN_LANGUAGES = ("en", "vi", "auto")
 
 
 def normalize_language(value) -> str:
-    # Gia tri la → 'en' (fail-safe, khong crash task transcript).
     text = str(value or "").strip().lower()
     return text if text in SPOKEN_LANGUAGES else "en"
 
@@ -50,18 +54,13 @@ def normalize_language(value) -> str:
 MAX_ROOM_EMAILS = 50
 
 
+def normalize_email(item) -> str:
+    email = str(item or "").strip().lower()
+    return email if "@" in email else ""
+
+
 def normalize_email_list(values: Optional[List[str]]) -> List[str]:
-    seen = set()
-    result = []
-    for item in values or []:
-        email = str(item or "").strip().lower()
-        if not email or "@" not in email:
-            continue
-        if email in seen:
-            continue
-        seen.add(email)
-        result.append(email)
-    return result[:MAX_ROOM_EMAILS]
+    return dedupe_str_list(values, normalize_email, MAX_ROOM_EMAILS)
 
 
 def emails_to_json(values: Optional[List[str]]) -> str:
@@ -100,6 +99,38 @@ def topics_from_json(raw) -> List[str]:
     return []
 
 
+def clean_name(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        raise ValueError("Room name must not be empty")
+    return text[:120]
+
+
+def clean_text(value: Optional[str], limit: int) -> Optional[str]:
+    if value is None:
+        return None
+    text = value.strip()
+    return text[:limit] if text else None
+
+
+def clean_seats(value: Optional[int]) -> Optional[int]:
+    if value is None:
+        return None
+    if value < 1 or value > MAX_SEATS_PER_ROOM:
+        raise ValueError(f"Seats must be between 1 and {MAX_SEATS_PER_ROOM}")
+    return value
+
+
+def clean_topics(values) -> Optional[List[str]]:
+    return None if values is None else normalize_topic_list(values)
+
+
+def clean_emails(values) -> Optional[List[str]]:
+    return None if values is None else normalize_email_list(values)
+
+
 class RoomCreateSchema(BaseModel):
     name: str
     topics: List[str] = []
@@ -114,10 +145,7 @@ class RoomCreateSchema(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("Room name must not be empty")
-        return text[:120]
+        return clean_name(value)
 
     @field_validator("topics")
     @classmethod
@@ -127,17 +155,12 @@ class RoomCreateSchema(BaseModel):
     @field_validator("max_participants")
     @classmethod
     def validate_seats(cls, value: int) -> int:
-        if value < 1 or value > MAX_SEATS_PER_ROOM:
-            raise ValueError(f"Seats must be between 1 and {MAX_SEATS_PER_ROOM}")
-        return value
+        return clean_seats(value)
 
     @field_validator("description")
     @classmethod
     def validate_description(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        return text[:2000] if text else None
+        return clean_text(value, 2000)
 
     @field_validator("allowed_emails")
     @classmethod
@@ -147,10 +170,7 @@ class RoomCreateSchema(BaseModel):
     @field_validator("system_prompt")
     @classmethod
     def validate_system_prompt(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        return text[:4000] if text else None
+        return clean_text(value, 4000)
 
     @field_validator("language")
     @classmethod
@@ -176,51 +196,32 @@ class RoomUpdateSchema(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        if not text:
-            raise ValueError("Room name must not be empty")
-        return text[:120]
+        return clean_name(value)
 
     @field_validator("topics")
     @classmethod
     def validate_topics(cls, values: Optional[List[str]]) -> Optional[List[str]]:
-        if values is None:
-            return None
-        return normalize_topic_list(values)
+        return clean_topics(values)
 
     @field_validator("max_participants")
     @classmethod
     def validate_seats(cls, value: Optional[int]) -> Optional[int]:
-        if value is None:
-            return None
-        if value < 1 or value > MAX_SEATS_PER_ROOM:
-            raise ValueError(f"Seats must be between 1 and {MAX_SEATS_PER_ROOM}")
-        return value
+        return clean_seats(value)
 
     @field_validator("description")
     @classmethod
     def validate_description(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        return text[:2000] if text else None
+        return clean_text(value, 2000)
 
     @field_validator("allowed_emails")
     @classmethod
     def validate_update_emails(cls, values: Optional[List[str]]) -> Optional[List[str]]:
-        if values is None:
-            return None
-        return normalize_email_list(values)
+        return clean_emails(values)
 
     @field_validator("system_prompt")
     @classmethod
     def validate_update_system_prompt(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        return text[:4000] if text else None
+        return clean_text(value, 4000)
 
     @field_validator("language")
     @classmethod

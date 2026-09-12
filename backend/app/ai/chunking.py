@@ -1,17 +1,16 @@
-﻿import json
+﻿import os
 import re
 import tempfile
-import os
-from collections import defaultdict
+from typing import List
+
+from langchain_text_splitters import MarkdownHeaderTextSplitter
+
 from app.utils.file import (
     apply_noise_filter,
     extract_pdf_text,
-    extract_qa,
     extract_source_from_url,
-    normalize_text,
     read_file_from_url,
 )
-from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 
 def normalize_split_text(text: str) -> str:
@@ -72,6 +71,23 @@ def group_sentences(pieces: list[str], min_size: int, max_size: int, overlap_cha
     return chunks
 
 
+def split_to_chunks(text: str, chunk_size: int = 600, chunk_overlap: int = 50) -> List[str]:
+    text = normalize_split_text(text)
+    if not text:
+        return []
+
+    pieces = []
+    for sent in split_sentences(text):
+        pieces.extend(split_long_sentence(sent, chunk_size))
+
+    return [
+        clean
+        for chunk_text in group_sentences(pieces, chunk_size, chunk_size * 2, chunk_overlap)
+        for clean in [re.sub(r"[ \t]+", " ", chunk_text).strip()]
+        if clean
+    ]
+
+
 def chunking_pdf(
     file_path: str,
     tag: str,
@@ -90,18 +106,7 @@ def chunking_pdf(
         if not text.strip():
             continue
 
-        text = normalize_split_text(text)
-        sents = split_sentences(text)
-        pieces = []
-        for s in sents:
-            pieces.extend(split_long_sentence(s, chunk_size))
-
-        raw_chunks = group_sentences(pieces, chunk_size, chunk_size * 2, chunk_overlap)
-
-        for chunk_text in raw_chunks:
-            clean = re.sub(r"[ \t]+", " ", chunk_text).strip()
-            if not clean:
-                continue
+        for clean in split_to_chunks(text, chunk_size, chunk_overlap):
             chunk_counter += 1
             documents.append({
                 "text": clean,
@@ -142,17 +147,6 @@ def chunking_md(
     documents = []
     chunk_counter = 0
     for doc in md_docs:
-        section_text = normalize_split_text(doc.page_content.strip())
-        if not section_text:
-            continue
-
-        sents = split_sentences(section_text)
-        pieces = []
-        for s in sents:
-            pieces.extend(split_long_sentence(s, chunk_size))
-
-        sub_chunks = group_sentences(pieces, chunk_size, chunk_size * 2, chunk_overlap)
-
         headers = doc.metadata
         location_parts = [
             headers.get("h1"),
@@ -162,10 +156,7 @@ def chunking_md(
         ]
         location = " > ".join([h for h in location_parts if h])
 
-        for chunk in sub_chunks:
-            clean = re.sub(r"[ \t]+", " ", chunk).strip()
-            if not clean:
-                continue
+        for clean in split_to_chunks(doc.page_content.strip(), chunk_size, chunk_overlap):
             chunk_counter += 1
             documents.append({
                 "text": clean,
@@ -182,7 +173,13 @@ def chunking_md(
 
 
 
-async def chunking_file(tag: str, file_path: str = "./README.md", file_bytes: bytes | None = None, chunk_size: int = 600, chunk_overlap: int = 50) -> list[dict]:
+async def chunking_file(
+    tag: str,
+    file_path: str = "./README.md",
+    file_bytes: bytes | None = None,
+    chunk_size: int = 600,
+    chunk_overlap: int = 50,
+) -> list[dict]:
     if file_bytes is None:
         file_bytes = await read_file_from_url(file_path)
     source = extract_source_from_url(file_path)

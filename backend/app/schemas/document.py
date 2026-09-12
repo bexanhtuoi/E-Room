@@ -18,6 +18,24 @@ class DocumentUpdateSchema(BaseModel):
     metadata_json: Optional[str] = None
 
 
+def clean_skill_name(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        raise ValueError("Skill name must not be empty")
+    return text[:120]
+
+
+def clean_skill_prompt(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        raise ValueError("Skill prompt must not be empty")
+    return text[:4000]
+
+
 class RoomSkillCreateSchema(BaseModel):
     name: str
     prompt: str
@@ -26,18 +44,12 @@ class RoomSkillCreateSchema(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("Skill name must not be empty")
-        return text[:120]
+        return clean_skill_name(value)
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("Skill prompt must not be empty")
-        return text[:4000]
+        return clean_skill_prompt(value)
 
 
 class RoomSkillUpdateSchema(BaseModel):
@@ -48,22 +60,12 @@ class RoomSkillUpdateSchema(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        if not text:
-            raise ValueError("Skill name must not be empty")
-        return text[:120]
+        return clean_skill_name(value)
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        text = value.strip()
-        if not text:
-            raise ValueError("Skill prompt must not be empty")
-        return text[:4000]
+        return clean_skill_prompt(value)
 
 
 class DocumentResponse(BaseModel):

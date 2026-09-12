@@ -10,6 +10,7 @@ from app.models import MessageRole
 from app.schemas import MessageCreateSchema, MessageResponse
 from app.services import message_crud, room_crud
 from app.services.session import is_session_chat
+from app.utils.chat import scrub_meta, strip_ai_mention
 
 router = APIRouter()
 
@@ -39,10 +40,8 @@ def get_messages(
     if role is not None:
         filter_kwargs["role"] = role
 
-    # Moi nhat truoc: history load + poll limit moi thay tin moi,
-    # khong thi phong dong (>limit tin) se mat tin moi + poll vo dung.
     messages = message_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True, **filter_kwargs)
-    # An tin Q&A voi Session AI (meta session_chat) — chi doc trong /session/:id.
+
     return [message for message in messages if not is_session_chat(message)]
 
 
@@ -60,6 +59,11 @@ def count_messages(
         if db_room is not None:
             authorize_room_access(db_room, request)
 
+    current_user = request.state.current_user
+    if user_id is not None and room_id is None:
+        if str(user_id) != str(current_user.id) and current_user.role != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
     filter_kwargs = {}
     if room_id is not None:
         filter_kwargs["room_id"] = room_id
@@ -72,10 +76,19 @@ def count_messages(
 
 
 @router.get("/{message_id}", response_model=MessageResponse)
-def get_message(message_id: int, db: Session = Depends(get_session)) -> MessageResponse:
+def get_message(
+    message_id: int,
+    request: Request,
+    db: Session = Depends(get_session),
+    _: str = Depends(require_auth),
+) -> MessageResponse:
     db_message = message_crud.get_one(db, id=message_id)
     if not db_message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+    db_room = room_crud.get_one(db, id=db_message.room_id)
+    if db_room is not None:
+        authorize_room_access(db_room, request)
     return db_message
 
 
@@ -86,21 +99,26 @@ def create_message(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> MessageResponse:
+    db_room = room_crud.get_one(db, id=message_in.room_id)
+    if not db_room:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+    authorize_room_access(db_room, request)
+
     obj_in_data = message_in.model_dump()
     obj_in_data["user_id"] = request.state.current_user.id
     obj_in_data["role"] = MessageRole.USER
+    obj_in_data["meta_data"] = scrub_meta(obj_in_data.get("meta_data"))
     new_message = message_crud.create(db, obj_in=obj_in_data)
 
     mark_room_activity(message_in.room_id)
-    if message_in.text.lstrip().lower().startswith("@ai"):
-        query = message_in.text.lstrip()[3:].strip()
-        if query:
-            enqueue_ai_job(
-                message_in.room_id,
-                "answer",
-                query,
-                new_message.id,
-            )
+    query = strip_ai_mention(message_in.text)
+    if query:
+        enqueue_ai_job(
+            message_in.room_id,
+            "answer",
+            query,
+            new_message.id,
+        )
 
     return new_message
 

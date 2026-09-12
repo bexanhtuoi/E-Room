@@ -26,6 +26,11 @@ class TestCreateMessage:
         message = create_message(client, room["id"], "spoken line", meta_data='{"source": "speech"}')
         assert json.loads(message["meta_data"]) == {"source": "speech"}
 
+    def test_create_strips_forged_session_chat(self, client: TestClient, alice: dict):
+        room = client.post("/api/v1/rooms/", json={"name": f"forge-room-{alice['id']}"}).json()
+        message = create_message(client, room["id"], "hello", meta_data='{"session_chat": true, "session_id": 1}')
+        assert message["meta_data"] is None
+
 
 class TestAtAiTrigger:
     def test_at_ai_enqueues_answer_job(self, client: TestClient, alice: dict, ai_mocks):
