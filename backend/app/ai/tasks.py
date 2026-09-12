@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import uuid4
 
 from celery.exceptions import SoftTimeLimitExceeded
+from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 from sqlmodel import Session
 
 from app.ai.participant import stream_to_room
@@ -132,7 +133,7 @@ def stream_ai_response(
             if job_type == "heartbeat" and not room.enable_heartbeat:
                 delete(get_pending_key(room_id))
                 return None
-            
+
             if job_type != "heartbeat" and not room.enable_agent:
                 delete(get_pending_key(room_id))
                 return None
@@ -152,7 +153,8 @@ def stream_ai_response(
     if job_type == "heartbeat":
         delete(f"room:{room_id}:heartbeat_pending")
 
-    set(get_running_key(room_id), self.request.id, ttl=settings.ai_timeout_seconds)
+    job_tag = getattr(self.request, "id", None) or "manual"
+    set(get_running_key(room_id), job_tag, ttl=settings.ai_timeout_seconds)
 
     system_extra = ""
     try:
@@ -200,13 +202,16 @@ def stream_ai_response(
             stream_to_room(
                 room_id,
                 stream_events(query, system_extra=system_extra),
-                identity=f"ai_assistant_{self.request.id[:8]}",
+                identity=f"ai_assistant_{job_tag[:8]}",
             )
         )
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
         soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))
         response_text = f"Sorry, I could not finish my response within {soft_minutes} minutes."
+    except (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError) as transient_error:
+        log.error("AI backend transient | room_id=%s job_type=%s error=%s", room_id, job_type, transient_error)
+        raise self.retry(exc=transient_error, countdown=60, max_retries=3)
     except Exception:
         log.exception("AI stream failed | room_id=%s job_type=%s", room_id, job_type)
         response_text = "Sorry, I could not generate a response right now."

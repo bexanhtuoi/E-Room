@@ -10,6 +10,7 @@ from app.ai.tasks import (
     enqueue_ai_job,
     enqueue_room_transcriber,
     mark_room_activity,
+    stream_ai_response,
 )
 from app.config import settings
 from app.database import engine
@@ -91,6 +92,38 @@ class TestAITasksFlow:
         with patch("app.ai.tasks.compare_refresh", return_value=True) as mock_refresh:
             assert refresh_worker_lock("room:1:transcriber_running", "owner-1") is True
             mock_refresh.assert_called_once_with("room:1:transcriber_running", "owner-1", 180)
+
+    def test_transient_llm_error_retries(self):
+        import pytest
+        from celery.exceptions import Retry
+        from openai import InternalServerError
+
+        with (
+            patch("app.ai.tasks.room_crud") as mock_rooms,
+            patch("app.ai.tasks.stream_to_room", side_effect=InternalServerError("Loading model", response=MagicMock(status_code=503), body=None)),
+            patch("app.ai.tasks.delete"),
+            patch("app.ai.tasks.release_slot"),
+            patch.object(stream_ai_response, "retry", side_effect=Retry("retry", KeyError(), 60)) as mock_retry,
+        ):
+            mock_rooms.get_one.return_value = None
+            with pytest.raises(Retry):
+                stream_ai_response.run(5, "heartbeat", "hi?", None)
+            assert mock_retry.call_args[1].get("countdown") == 60
+            assert mock_retry.call_args[1].get("max_retries") == 3
+
+    def test_fatal_llm_error_saves_apology(self):
+        with (
+            patch("app.ai.tasks.room_crud") as mock_rooms,
+            patch("app.ai.tasks.stream_to_room", side_effect=RuntimeError("boom")),
+            patch("app.ai.tasks.delete"),
+            patch("app.ai.tasks.release_slot"),
+            patch("app.ai.tasks.message_crud") as mock_messages,
+        ):
+            from app.models import Message
+
+            mock_rooms.get_one.return_value = None
+            mock_messages.create.return_value = Message(id=1, room_id=5, text="x")
+            assert stream_ai_response.run(5, "heartbeat", "hi?", None) == 1
 
     def test_check_room_heartbeats_idle_room(self):
         unique_name = f"heartbeat-room-{uuid.uuid4().hex[:8]}"
