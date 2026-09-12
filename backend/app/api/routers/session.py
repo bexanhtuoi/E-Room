@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
-from app.ai import session_agent
-from app.ai.query import stream_events
+from app.ai import get_agent
+from app.ai.prompt import session_prompt
+from app.ai.query import run_query, stream_events
+from app.ai.tools import TRANSCRIPT_TOOLS
 from app.api.dependencies import require_auth
 from app.database import get_session
 from app.models import MessageRole
@@ -15,7 +17,8 @@ from app.schemas import (
     SessionAskRequest,
     SessionWithRoom,
 )
-from app.services import message_crud, room_crud, session_crud, user_crud
+from app.services import message_crud, room_crud, session_crud
+from app.services.session import is_session_chat, session_lines
 
 router = APIRouter()
 
@@ -32,14 +35,6 @@ def get_my_session(db: Session, session_id: int, request: Request):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     return db_session
-
-
-def is_session_chat(message) -> bool:
-
-    try:
-        return bool((json.loads(message.meta_data or "{}") or {}).get("session_chat"))
-    except (TypeError, ValueError):
-        return False
 
 
 def save_session_chat(db: Session, db_session, user_id: int, question: str, answer: str) -> None:
@@ -67,39 +62,16 @@ def get_session_chat_turns(db: Session, db_session) -> list:
     return turns
 
 
-def build_session_lines(db: Session, db_session) -> list:
-    messages = message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=500)
-    start = db_session.joined_at.replace(tzinfo=None) if getattr(db_session.joined_at, "tzinfo", None) else db_session.joined_at
-    end = db_session.left_at
-    if end is not None and getattr(end, "tzinfo", None):
-        end = end.replace(tzinfo=None)
-
-    lines = []
-    cache: dict = {}
-    for message in messages:
-        if is_session_chat(message):
-            continue
-        created = message.created_at.replace(tzinfo=None) if getattr(message.created_at, "tzinfo", None) else message.created_at
-        if created < start:
-            continue
-        if end is not None and created > end:
-            continue
-        if message.user_id not in cache:
-            speaker = cache[message.user_id] = (
-                user_crud.get_one(db, id=message.user_id).full_name if message.user_id else "AI"
-            ) or f"User {message.user_id}"
-        else:
-            speaker = cache[message.user_id]
-        if message.role == MessageRole.AI:
-            speaker = "AI"
-        lines.append({"speaker": speaker, "text": message.text})
-
-    return lines
-
-
 def build_transcript(db: Session, db_session) -> tuple[str, int]:
-    lines = build_session_lines(db, db_session)
+    lines = session_lines(db, db_session)
     return "\n".join(f"{line['speaker']}: {line['text']}" for line in lines), len(lines)
+
+
+def build_agent(db_session, lines):
+    return get_agent(
+        tools=TRANSCRIPT_TOOLS,
+        prompt=session_prompt(db_session.id, lines),
+    )
 
 
 @router.get("/count")
@@ -173,11 +145,11 @@ async def chat_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question must not be empty")
 
     db_session = get_my_session(db, session_id, request)
-    lines = build_session_lines(db, db_session)
+    lines = session_lines(db, db_session)
     if not lines:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No messages in this session yet")
 
-    answer = await session_agent.run_session_agent(question, lines)
+    answer = await run_query(question, agent=build_agent(db_session, lines))
     if not answer:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI could not answer right now")
 
@@ -196,7 +168,7 @@ async def chat_session_stream(
 ):
     question = (ask_in.question or "").strip()
     db_session = get_my_session(db, session_id, request)
-    lines = build_session_lines(db, db_session)
+    lines = session_lines(db, db_session)
 
     async def event_source():
         if not question:
@@ -209,7 +181,7 @@ async def chat_session_stream(
         saw_token = False
         answer_parts = []
         try:
-            async for event in stream_events(question, agent=session_agent.get_session_agent(lines)):
+            async for event in stream_events(question, agent=build_agent(db_session, lines)):
                 if event.get("kind") == "token" and event.get("text"):
                     saw_token = True
                     answer_parts.append(event["text"])

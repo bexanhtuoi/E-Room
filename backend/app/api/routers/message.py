@@ -1,24 +1,17 @@
-﻿import json
-from typing import List, Optional
+﻿from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlmodel import Session
 
-from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.ai.tasks import enqueue_ai_job, mark_room_activity
+from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.database import get_session
 from app.models import MessageRole
 from app.schemas import MessageCreateSchema, MessageResponse
 from app.services import message_crud, room_crud
+from app.services.session import is_session_chat
 
 router = APIRouter()
-
-
-def is_session_chat_message(message) -> bool:
-    try:
-        return bool((json.loads(message.meta_data or "{}") or {}).get("session_chat"))
-    except (TypeError, ValueError):
-        return False
 
 
 @router.get("/", response_model=List[MessageResponse])
@@ -50,7 +43,7 @@ def get_messages(
     # khong thi phong dong (>limit tin) se mat tin moi + poll vo dung.
     messages = message_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True, **filter_kwargs)
     # An tin Q&A voi Session AI (meta session_chat) — chi doc trong /session/:id.
-    return [message for message in messages if not is_session_chat_message(message)]
+    return [message for message in messages if not is_session_chat(message)]
 
 
 @router.get("/count")

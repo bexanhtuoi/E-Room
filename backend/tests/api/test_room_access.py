@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.ai.room_context import build_room_context
+from app.ai.prompt import room_prompt as build_room_context
 from app.models import DocumentKind
 from tests.conftest import make_user, register, switch_to, unique_email
 from types import SimpleNamespace

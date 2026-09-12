@@ -93,6 +93,16 @@ def split_payload(payload: Any) -> tuple:
     return None, None
 
 
+async def run_query(query: str, agent: Any = None, system_extra: str = "") -> str:
+    parts = []
+
+    async for event in stream_events(query, agent=agent, system_extra=system_extra):
+        if event.get("kind") == "token" and event.get("text"):
+            parts.append(event["text"])
+
+    return "".join(parts).strip()
+
+
 async def stream_events(query: str, agent: Any = None, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
     agent = agent or get_agent(system_extra)
     announced = set()

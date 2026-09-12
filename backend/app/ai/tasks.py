@@ -154,12 +154,12 @@ def stream_ai_response(
 
     system_extra = ""
     try:
-        from app.ai.room_context import build_room_context
+        from app.ai.prompt import room_prompt
 
         with Session(engine) as db:
             context_room = room_crud.get_one(db, id=room_id)
             context_docs = document_crud.get_many(db, room_id=room_id) if context_room is not None else []
-            system_extra = build_room_context(context_room, context_docs)
+            system_extra = room_prompt(context_room, context_docs)
     except Exception:
         log.exception("Room context failed | room_id=%s", room_id)
 

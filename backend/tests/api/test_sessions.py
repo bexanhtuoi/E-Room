@@ -14,6 +14,24 @@ def make_room_with_message(client: TestClient, name: str) -> dict:
     return room
 
 
+def make_session_with_lines(texts: list, room_id: int) -> int:
+    from sqlmodel import Session as DBSession
+
+    from app.database import engine
+    from app.models import MessageRole
+    from app.services import message_crud
+    from app.services.session import session_crud
+
+    with DBSession(engine) as db:
+        db_session = session_crud.create(db, obj_in={"user_id": 1, "room_id": room_id})
+        for text in texts:
+            message_crud.create(
+                db,
+                obj_in={"room_id": room_id, "user_id": None, "role": MessageRole.USER, "text": text},
+            )
+        return db_session.id
+
+
 class TestSessionTracking:
     def test_join_opens_and_leave_closes_session(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-room-{alice['id']}")
@@ -62,53 +80,54 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        with patch("app.ai.session_agent.run_session_agent", new=AsyncMock(return_value="They said hello.")) as mock_run:
+        with patch("app.api.routers.session.run_query", new=AsyncMock(return_value="They said hello.")) as mock_run:
             response = client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "What was said?"})
 
         assert response.status_code == 200, response.text
         assert "hello" in response.json()["answer"]
 
-        asked_question, sent_lines = mock_run.call_args[0]
-        assert asked_question == "What was said?"
-        assert any("hello session world" in line["text"] for line in sent_lines)
+        assert mock_run.call_args[0] == ("What was said?",)
+        assert mock_run.call_args[1].get("agent") is not None
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")
 
     def test_agent_tool_reads_older_lines(self):
-        from app.ai.tools import transcript_tools
+        from app.ai.tools import get_more_messages
 
-        lines = [{"speaker": "Ann", "text": f"line {i}"} for i in range(60)]
-        get_more_messages = {tool.name: tool for tool in transcript_tools(lines)}["get_more_messages"]
+        session_id = make_session_with_lines([f"line {i}" for i in range(60)], room_id=771001)
 
-        out = get_more_messages.invoke({"start_index": 0, "count": 2})
+        out = get_more_messages.invoke({"session_id": session_id, "start_index": 0, "count": 2})
         assert "line 0" in out and "line 1" in out
         assert "line 59" not in out
-        assert get_more_messages.invoke({"start_index": 9999}).startswith("No more lines")
+        assert get_more_messages.invoke({"session_id": session_id, "start_index": 9999}).startswith("No more lines")
 
     def test_agent_tool_reports_index_range(self):
-        from app.ai.tools import transcript_tools
+        from app.ai.tools import transcript_info
 
-        lines = [{"speaker": "Ann", "text": "hi"}, {"speaker": "Bob", "text": "hello"}]
-        transcript_info = {tool.name: tool for tool in transcript_tools(lines)}["transcript_info"]
+        session_id = make_session_with_lines(["hi", "hello"], room_id=771002)
 
-        out = transcript_info.invoke({})
+        out = transcript_info.invoke({"session_id": session_id})
         assert "2 lines" in out and "0-1" in out
-        assert "Ann" in out and "Bob" in out
 
     def test_agent_tool_searches_transcript(self):
-        from app.ai.tools import transcript_tools
+        from app.ai.tools import search_transcript
 
-        lines = [
-            {"speaker": "Ann", "text": "I love rainy days"},
-            {"speaker": "Bob", "text": "Sunny days are best"},
-            {"speaker": "Ann", "text": "Rainy mood again"},
-        ]
-        search_transcript = {tool.name: tool for tool in transcript_tools(lines)}["search_transcript"]
+        session_id = make_session_with_lines(
+            ["I love rainy days", "Sunny days are best", "Rainy mood again"],
+            room_id=771003,
+        )
 
-        out = search_transcript.invoke({"keyword": "rainy"})
+        out = search_transcript.invoke({"session_id": session_id, "keyword": "rainy"})
         assert "[0]" in out and "[2]" in out and "[1]" not in out
-        assert search_transcript.invoke({"keyword": "xyz"}).startswith("No line")
-        assert "at least 2" in search_transcript.invoke({"keyword": "x"})
+        assert search_transcript.invoke({"session_id": session_id, "keyword": "xyz"}).startswith("No line")
+        assert "at least 2" in search_transcript.invoke({"session_id": session_id, "keyword": "x"})
+
+    def test_agent_tool_missing_session(self):
+        from app.ai.tools import get_more_messages, search_transcript, transcript_info
+
+        assert transcript_info.invoke({"session_id": 999999999}) == "This session has no transcript lines."
+        assert get_more_messages.invoke({"session_id": 999999999}).startswith("No more lines")
+        assert search_transcript.invoke({"session_id": 999999999, "keyword": "hi"}).startswith("No line")
 
     def test_chat_stream_emits_sse_events(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-stream-{alice['id']}")
@@ -148,7 +167,7 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        with patch("app.ai.session_agent.run_session_agent", new=AsyncMock(return_value="Saved answer.")):
+        with patch("app.api.routers.session.run_query", new=AsyncMock(return_value="Saved answer.")):
             assert client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "Remember me?"}).status_code == 200
 
         data = client.get(f"/api/v1/sessions/{session_id}/messages").json()
