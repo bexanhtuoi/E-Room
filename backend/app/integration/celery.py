@@ -47,8 +47,6 @@ def get_celery_app() -> Celery:
 
 @worker_ready.connect
 def clear_locks_on_worker_start(sender=None, **kwargs) -> None:
-    # Tien trinh worker moi = task cu da chet theo — xoa lock orphan de
-    # phong live duoc phuc vu lai trong vai giay thay vi doi TTL.
     try:
         from app.ai.tasks import clear_stale_worker_locks
 
