@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from app.models import DocumentKind
 
@@ -16,56 +16,6 @@ class DocumentCreateSchema(BaseModel):
 class DocumentUpdateSchema(BaseModel):
     file_name: Optional[str] = None
     metadata_json: Optional[str] = None
-
-
-def clean_skill_name(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    text = value.strip()
-    if not text:
-        raise ValueError("Skill name must not be empty")
-    return text[:120]
-
-
-def clean_skill_prompt(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    text = value.strip()
-    if not text:
-        raise ValueError("Skill prompt must not be empty")
-    return text[:4000]
-
-
-class RoomSkillCreateSchema(BaseModel):
-    name: str
-    prompt: str
-    enabled: bool = True
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, value: str) -> str:
-        return clean_skill_name(value)
-
-    @field_validator("prompt")
-    @classmethod
-    def validate_prompt(cls, value: str) -> str:
-        return clean_skill_prompt(value)
-
-
-class RoomSkillUpdateSchema(BaseModel):
-    name: Optional[str] = None
-    prompt: Optional[str] = None
-    enabled: Optional[bool] = None
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, value: Optional[str]) -> Optional[str]:
-        return clean_skill_name(value)
-
-    @field_validator("prompt")
-    @classmethod
-    def validate_prompt(cls, value: Optional[str]) -> Optional[str]:
-        return clean_skill_prompt(value)
 
 
 class DocumentResponse(BaseModel):

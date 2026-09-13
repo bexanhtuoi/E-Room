@@ -23,7 +23,6 @@ import { RoomConfigPage } from './RoomConfigPage';
 
 fetchJson.mockImplementation(async (path) => {
   if (path === '/rooms/1') return { ...ROOM };
-  if (path === '/rooms/1/skills') return [{ id: 5, room_id: 1, kind: 'skill', file_name: 'Coach', file_type: 'skill', file_path: '', content: 'Be kind.', enabled: true }];
   if (path === '/rooms/1/documents') return [{ id: 6, room_id: 1, kind: 'file', file_name: 'notes.md', file_type: 'md', file_path: 'documents/x', created_at: '2026-09-01T10:00:00Z' }];
   if (path.startsWith('/rooms/')) return [];
   return [];

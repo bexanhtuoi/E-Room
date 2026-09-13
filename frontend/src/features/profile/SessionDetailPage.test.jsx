@@ -15,6 +15,7 @@ vi.mock('../../app/AuthContext', () => ({
 import { fetchJson } from '../../lib/api';
 import { SessionDetailPage } from './SessionDetailPage';
 
+let mockChat = [];
 fetchJson.mockImplementation(async (path) => {
   if (path === '/sessions/101') {
     return {
@@ -28,7 +29,7 @@ fetchJson.mockImplementation(async (path) => {
       session_id: 101,
       message_count: 2,
       transcript: 'An Nguyen: hello there\nAn Nguyen: it was great',
-      chat: [{ role: 'user', text: 'Old question?' }, { role: 'ai', text: 'Old answer.' }],
+      chat: mockChat,
     };
   }
   return {};
@@ -91,9 +92,14 @@ describe('SessionDetailPage', () => {
   });
 
   it('restores saved chat history after reload', async () => {
-    renderDetail();
-    expect(await screen.findByText('Old question?')).toBeTruthy();
-    expect(await screen.findByText('Old answer.')).toBeTruthy();
+    mockChat = [{ role: 'user', text: 'Old question?' }, { role: 'ai', text: 'Old answer.' }];
+    try {
+      renderDetail();
+      expect(await screen.findByText('Old question?')).toBeTruthy();
+      expect(await screen.findByText('Old answer.')).toBeTruthy();
+    } finally {
+      mockChat = [];
+    }
   });
 
   it('shows the server error message when the stream fails', async () => {

@@ -8,6 +8,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 from sqlmodel import Session
 
+from app.ai import get_agent
 from app.ai.participant import stream_to_room
 from app.ai.query import stream_events
 from app.config import settings
@@ -51,6 +52,27 @@ def get_activity_key(room_id: int) -> str:
 
 def mark_room_activity(room_id: int) -> None:
     set(get_activity_key(room_id), str(now_utc().timestamp()), ttl=settings.ai_timeout_seconds)
+
+
+def format_room_message(db: Session, message, cache: dict) -> str:
+    if message.role == MessageRole.AI:
+        return f"AI [chat]: {message.text}"
+    if message.user_id not in cache:
+        cache[message.user_id] = (
+            user_crud.get_one(db, id=message.user_id).full_name if message.user_id else "Someone"
+        ) or f"User {message.user_id}"
+    try:
+        source = (json.loads(message.meta_data or "{}") or {}).get("source", "")
+    except (TypeError, ValueError):
+        source = ""
+    channel = "voice" if source == "speech_to_text" else "chat"
+    return f"{cache[message.user_id]} [{channel}]: {message.text}"
+
+
+def recent_room_context(db: Session, room_id: int, limit: int) -> list:
+    recent = message_crud.get_many(db, room_id=room_id, order_by="id", desc=True, limit=limit)
+    cache: dict = {}
+    return [format_room_message(db, message, cache) for message in reversed(list(recent))]
 
 
 def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: Optional[int] = None) -> str:
@@ -156,52 +178,39 @@ def stream_ai_response(
     job_tag = getattr(self.request, "id", None) or "manual"
     set(get_running_key(room_id), job_tag, ttl=settings.ai_timeout_seconds)
 
-    system_extra = ""
+    context_room = None
+    context_docs: list = []
     try:
-        from app.ai.prompt import room_prompt
+        from app.ai.prompt import room_system_prompt, room_tag_rule
 
         with Session(engine) as db:
             context_room = room_crud.get_one(db, id=room_id)
-            context_docs = document_crud.get_many(db, room_id=room_id) if context_room is not None else []
-            system_extra = room_prompt(context_room, context_docs)
+            if context_room is not None:
+                context_docs = document_crud.get_many(db, room_id=room_id)
+        agent = get_agent(
+            prompt=room_system_prompt(context_room),
+            system_extra=room_tag_rule(context_room, context_docs),
+        )
     except Exception:
         log.exception("Room context failed | room_id=%s", room_id)
+        agent = get_agent()
 
 
-    if job_type != "heartbeat":
-        try:
-            with Session(engine) as db:
-                recent = message_crud.get_many(db, room_id=room_id, role=MessageRole.USER, order_by="id", desc=True, limit=20)
-                recent = list(reversed(recent))
-                if recent:
-                    cache: dict = {}
-                    context_lines = []
-                    for message in recent:
-                        if message.user_id not in cache:
-                            speaker = cache[message.user_id] = (
-                                user_crud.get_one(db, id=message.user_id).full_name if message.user_id else "Someone"
-                            ) or f"User {message.user_id}"
-                        else:
-                            speaker = cache[message.user_id]
-                        try:
-                            source = (json.loads(message.meta_data or "{}") or {}).get("source", "")
-                        except (TypeError, ValueError):
-                            source = ""
-                        channel = "voice" if source == "speech_to_text" else "chat"
-                        context_lines.append(f"{speaker} [{channel}]: {message.text}")
-                    query = (
-                        "Recent room context (newest last):\n"
-                        + "\n".join(context_lines)
-                        + f"\n\nCurrent question:\n{query}"
-                    )
-        except Exception:
-            log.exception("Room transcript context failed | room_id=%s", room_id)
+    limit = 10 if job_type == "heartbeat" else 20
+    tail = query if job_type == "heartbeat" else f"Current question:\n{query}"
+    try:
+        with Session(engine) as db:
+            context_lines = recent_room_context(db, room_id, limit)
+            if context_lines:
+                query = "Recent room context (newest last):\n" + "\n".join(context_lines) + f"\n\n{tail}"
+    except Exception:
+        log.exception("Room transcript context failed | room_id=%s", room_id)
 
     try:
         response_text = asyncio.run(
             stream_to_room(
                 room_id,
-                stream_events(query, system_extra=system_extra),
+                stream_events(query, agent=agent),
                 identity=f"ai_assistant_{job_tag[:8]}",
             )
         )

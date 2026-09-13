@@ -16,8 +16,6 @@ from app.schemas import (
     RoomMatchRequest,
     RoomMatchResponse,
     RoomResponse,
-    RoomSkillCreateSchema,
-    RoomSkillUpdateSchema,
     RoomTokenResponse,
     RoomUpdateSchema,
 )
@@ -345,84 +343,6 @@ def delete_room_document(
     drop_doc_storage(doc)
 
     return doc
-
-
-@router.get("/{room_id}/skills", response_model=List[DocumentResponse])
-def get_room_skills(
-    room_id: int,
-    request: Request,
-    db: Session = Depends(get_session),
-    _: str = Depends(require_auth),
-) -> List[DocumentResponse]:
-    db_room = get_host_room(db, room_id, request)
-    skills = document_crud.get_many(db, room_id=db_room.id, kind=DocumentKind.SKILL, order_by="id")
-    return skills
-
-
-@router.post("/{room_id}/skills", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-def create_room_skill(
-    room_id: int,
-    skill_in: RoomSkillCreateSchema,
-    request: Request,
-    db: Session = Depends(get_session),
-    _: str = Depends(require_auth),
-) -> DocumentResponse:
-    db_room = get_host_room(db, room_id, request)
-
-    return document_crud.create(
-        db,
-        obj_in={
-            "user_id": request.state.current_user.id,
-            "room_id": db_room.id,
-            "kind": DocumentKind.SKILL,
-            "file_name": skill_in.name,
-            "file_type": "skill",
-            "file_path": "",
-            "content": skill_in.prompt,
-            "enabled": skill_in.enabled,
-        },
-    )
-
-
-@router.patch("/{room_id}/skills/{document_id}", response_model=DocumentResponse)
-def update_room_skill(
-    room_id: int,
-    document_id: int,
-    skill_in: RoomSkillUpdateSchema,
-    request: Request,
-    db: Session = Depends(get_session),
-    _: str = Depends(require_auth),
-) -> DocumentResponse:
-    db_room = get_host_room(db, room_id, request)
-
-    doc = document_crud.get_one(db, id=document_id, room_id=db_room.id, kind=DocumentKind.SKILL)
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found")
-
-    obj_in_data = skill_in.model_dump(exclude_unset=True)
-    if "name" in obj_in_data:
-        obj_in_data["file_name"] = obj_in_data.pop("name")
-    if "prompt" in obj_in_data:
-        obj_in_data["content"] = obj_in_data.pop("prompt")
-
-    return document_crud.update(db, db_obj=doc, obj_in=obj_in_data)
-
-
-@router.delete("/{room_id}/skills/{document_id}", response_model=DocumentResponse)
-def delete_room_skill(
-    room_id: int,
-    document_id: int,
-    request: Request,
-    db: Session = Depends(get_session),
-    _: str = Depends(require_auth),
-) -> DocumentResponse:
-    db_room = get_host_room(db, room_id, request)
-
-    doc = document_crud.get_one(db, id=document_id, room_id=db_room.id, kind=DocumentKind.SKILL)
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found")
-
-    return document_crud.delete(db, db_obj=doc)
 
 
 @router.post("/{room_id}/token", response_model=RoomTokenResponse)

@@ -17,7 +17,7 @@ from app.schemas import (
     SessionAskRequest,
     SessionWithRoom,
 )
-from app.services import message_crud, room_crud, session_crud
+from app.services import message_crud, room_crud, session_crud, user_crud
 from app.services.session import session_lines
 
 router = APIRouter()
@@ -58,7 +58,7 @@ def get_session_chat_turns(db: Session, db_session) -> list:
         except (TypeError, ValueError):
             continue
         if meta.get("session_chat") and meta.get("session_id") == db_session.id:
-            turns.append({"role": "user" if message.role == MessageRole.USER else "ai", "text": message.text})
+            turns.append({"role": "user" if message.role == MessageRole.USER else "ai", "text": message.text, "user_id": message.user_id})
     return turns
 
 
@@ -72,6 +72,25 @@ def build_agent(db_session, lines):
         tools=TRANSCRIPT_TOOLS,
         prompt=session_prompt(db_session.id, lines),
     )
+
+
+def recent_chat_context(db: Session, db_session, limit: int = 20) -> str:
+    turns = get_session_chat_turns(db, db_session)[-limit:]
+    if not turns:
+        return ""
+    cache: dict = {}
+    lines = []
+    for turn in turns:
+        if turn["role"] == "user":
+            user_id = turn.get("user_id")
+            if user_id not in cache:
+                user = user_crud.get_one(db, id=user_id) if user_id else None
+                cache[user_id] = (getattr(user, "full_name", None) or f"User {user_id}") if user_id else "You"
+            speaker = cache[user_id]
+        else:
+            speaker = "AI"
+        lines.append(f"{speaker}: {turn['text']}")
+    return "Recent questions in this chat (newest last):\n" + "\n".join(lines) + "\n\n"
 
 
 @router.get("/count")
@@ -142,7 +161,8 @@ async def chat_session(
     if not lines:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No messages in this session yet")
 
-    answer = await run_query(question, agent=build_agent(db_session, lines))
+    full_question = recent_chat_context(db, db_session) + f"Current question:\n{question}"
+    answer = await run_query(full_question, agent=build_agent(db_session, lines))
     if not answer:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI could not answer right now")
 
@@ -173,8 +193,9 @@ async def chat_session_stream(
 
         saw_token = False
         answer_parts = []
+        full_question = recent_chat_context(db, db_session) + f"Current question:\n{question}"
         try:
-            async for event in stream_events(question, agent=build_agent(db_session, lines)):
+            async for event in stream_events(full_question, agent=build_agent(db_session, lines)):
                 if event.get("kind") == "token" and event.get("text"):
                     saw_token = True
                     answer_parts.append(event["text"])

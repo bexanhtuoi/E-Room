@@ -2716,10 +2716,6 @@ a.portal-row:hover .portal-row__go {
   overflow: hidden;
 }
 
-.pf-chatlog--tall {
-  min-height: 340px;
-}
-
 .pf-greet {
   margin: auto;
   padding: 48px 16px;
@@ -3136,18 +3132,41 @@ a.portal-row:hover .portal-row__go {
 .pf-chatlog {
   display: grid;
   gap: 10px;
-  max-height: 360px;
+  max-height: 900px;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.pf-chatlog::-webkit-scrollbar {
+  display: none;
+}
+
+.pf-chatlog--tall {
+  min-height: 700px;
 }
 
 .pf-chatlog__turn {
-  display: grid;
-  gap: 6px;
-  justify-items: start;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .pf-chatlog__turn.is-user {
-  justify-items: end;
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.pf-chatlog__turn .portal-badge {
+  font-size: 13px;
+  padding: 6px 10px;
+  margin-top: 8px;
+}
+
+.pf-chatlog__turn .pf-chattext {
+  max-width: 75%;
+  min-width: 0;
 }
 
 .pf-chatlog__turn .pf-chattext {

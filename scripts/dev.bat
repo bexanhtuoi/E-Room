@@ -33,12 +33,17 @@ if exist "%TS%" (
 
 REM -- Step 4: full stack --------------------------------------
 echo [4/6] Starting full stack (api, workers, db, livekit, frontend)...
-docker compose up -d
-if %errorlevel% neq 0 (
-    echo        [ERROR] docker compose failed. Is Docker Desktop running?
-    pause
-    exit /b 1
+for /l %%i in (1,1,3) do (
+    docker compose up -d
+    if not errorlevel 1 goto :compose_ok
+    echo        ... compose fail lan %%i/3, cho 10s thu lai...
+    timeout /t 10 /nobreak >nul
 )
+echo        [ERROR] docker compose failed. Is Docker Desktop running?
+pause
+exit /b 1
+:compose_ok
+echo        Stack OK.
 
 REM -- Step 5: migrate -----------------------------------------
 echo [5/6] Running DB migrations...

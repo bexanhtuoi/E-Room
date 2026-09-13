@@ -54,7 +54,7 @@ async def post_rerank(client, base_url: str, payload: dict, headers: dict):
 async def rerank_documents(
     query: str,
     documents: list[dict],
-    top_k: int = 10,
+    top_k: int = 5,
 ) -> list[dict]:
     if not documents:
         return documents

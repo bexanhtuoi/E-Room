@@ -104,7 +104,7 @@ async def run_query(query: str, agent: Any = None, system_extra: str = "") -> st
 
 
 async def stream_events(query: str, agent: Any = None, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
-    agent = agent or get_agent(system_extra)
+    agent = agent or get_agent(system_extra=system_extra)
     announced = set()
     sent = [""]
 

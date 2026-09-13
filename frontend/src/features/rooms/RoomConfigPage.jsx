@@ -47,7 +47,7 @@ function DocumentsCard({ room }) {
     queryKey: ['rooms', room.id, 'documents'],
     queryFn: () => fetchJson(`/rooms/${room.id}/documents`),
   });
-  const docs = (Array.isArray(docsQuery.data) ? docsQuery.data : []).filter((d) => d.kind !== 'skill');
+  const docs = Array.isArray(docsQuery.data) ? docsQuery.data : [];
   const [uploading, setUploading] = useState(false);
   const [pendingName, setPendingName] = useState(null);
   const [dragging, setDragging] = useState(false);

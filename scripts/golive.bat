@@ -12,18 +12,20 @@ set "TS=C:\Program Files\Tailscale\tailscale.exe"
 REM -- Step 1: Docker --------------------------------------------
 echo [1/6] Checking Docker...
 docker ps >nul 2>&1
-if %errorlevel% neq 0 (
-    echo        Docker not running. Starting Docker Desktop...
-    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-    echo        Waiting 60s for Docker to boot...
-    timeout /t 60 /nobreak >nul
+if %errorlevel% equ 0 goto :docker_ok
+echo        Docker not running. Starting Docker Desktop...
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+echo        Waiting for Docker (toi da 15 phut, check moi 5s)...
+for /l %%i in (1,1,180) do (
+    timeout /t 5 /nobreak >nul
     docker ps >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo        [ERROR] Docker still not ready. Start it manually, then re-run.
-        pause
-        exit /b 1
-    )
+    if not errorlevel 1 goto :docker_ok
+    echo        ... cho %%i/180 (Docker dang khoi dong)...
 )
+echo        [ERROR] Docker still not ready after 15 minutes. Start it manually, then re-run.
+pause
+exit /b 1
+:docker_ok
 echo        Docker OK.
 
 REM -- Step 2: env -----------------------------------------------

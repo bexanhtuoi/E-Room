@@ -2,8 +2,6 @@ from app.schemas.document import (
     DocumentCreateSchema,
     DocumentResponse,
     DocumentUpdateSchema,
-    RoomSkillCreateSchema,
-    RoomSkillUpdateSchema,
 )
 from app.schemas.message import MessageCreateSchema, MessageResponse
 from app.schemas.notification import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
@@ -28,8 +26,6 @@ __all__ = [
     "DocumentCreateSchema",
     "DocumentResponse",
     "DocumentUpdateSchema",
-    "RoomSkillCreateSchema",
-    "RoomSkillUpdateSchema",
     "MessageCreateSchema",
     "MessageResponse",
     "NotificationCreateSchema",

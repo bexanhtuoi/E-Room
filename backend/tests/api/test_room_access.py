@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.ai.prompt import room_prompt as build_room_context
+from app.ai.prompt import get_main_prompt, room_system_prompt, room_tag_rule
 from app.models import DocumentKind
 from tests.conftest import make_user, register, switch_to, unique_email
 from types import SimpleNamespace
@@ -96,42 +96,6 @@ class TestRoomInvites:
         assert response.status_code == 201
 
 
-class TestRoomSkills:
-    def test_host_crud_skills(self, client: TestClient, alice: dict):
-        room = client.post("/api/v1/rooms/", json={"name": f"skill-{alice['id']}"}).json()
-
-        created = client.post(
-            f"/api/v1/rooms/{room['id']}/skills",
-            json={"name": "Vocab coach", "prompt": "Explain new words simply."},
-        )
-        assert created.status_code == 201
-        assert created.json()["kind"] == "skill"
-        assert created.json()["content"] == "Explain new words simply."
-
-        listed = client.get(f"/api/v1/rooms/{room['id']}/skills").json()
-        assert len(listed) == 1
-
-        updated = client.patch(
-            f"/api/v1/rooms/{room['id']}/skills/{created.json()['id']}",
-            json={"enabled": False},
-        )
-        assert updated.json()["enabled"] is False
-
-        deleted = client.delete(f"/api/v1/rooms/{room['id']}/skills/{created.json()['id']}")
-        assert deleted.status_code == 200
-        assert client.get(f"/api/v1/rooms/{room['id']}/skills").json() == []
-
-    def test_stranger_cannot_touch_skills(self, client: TestClient, alice: dict):
-        room = client.post("/api/v1/rooms/", json={"name": f"skill2-{alice['id']}"}).json()
-        bob = make_user(client)
-        switch_to(client, bob)
-
-        assert client.get(f"/api/v1/rooms/{room['id']}/skills").status_code == 403
-        assert client.post(f"/api/v1/rooms/{room['id']}/skills", json={"name": "X", "prompt": "Y"}).status_code == 403
-
-        switch_to(client, alice)
-
-
 class TestRoomDocuments:
     def test_upload_lists_and_deletes(self, client: TestClient, alice: dict):
         room = client.post("/api/v1/rooms/", json={"name": f"doc-{alice['id']}"}).json()
@@ -172,21 +136,17 @@ class TestRoomDocuments:
 
 
 class TestRoomContext:
-    def test_empty_room_gives_empty_context(self):
-        room = SimpleNamespace(id=1, name="Plain", system_prompt=None)
-        assert build_room_context(room, []) == ""
+    def test_missing_room_falls_back_to_main_prompt(self):
+        assert room_system_prompt(None) == get_main_prompt()
 
-    def test_context_holds_prompt_skills_and_tag(self):
+    def test_host_prompt_replaces_main_prompt(self):
         room = SimpleNamespace(id=7, name="Cinema", system_prompt="Speak slowly.")
-        skills = [
-            SimpleNamespace(kind=DocumentKind.SKILL, file_name="Coach", content="Correct gently.", enabled=True),
-            SimpleNamespace(kind=DocumentKind.SKILL, file_name="Off", content="Ignore me.", enabled=False),
+        assert room_system_prompt(room) == "Speak slowly."
+
+    def test_tag_rule_needs_docs(self):
+        room = SimpleNamespace(id=7, name="Cinema", system_prompt=None)
+        assert room_tag_rule(room, []) == ""
+        documents = [
             SimpleNamespace(kind=DocumentKind.FILE, file_name="notes.md", content=None, enabled=True),
         ]
-
-        context = build_room_context(room, skills)
-
-        assert "Speak slowly." in context
-        assert "Coach" in context and "Correct gently." in context
-        assert "Ignore me." not in context
-        assert "tag='room:7'" in context
+        assert "tag='room:7'" in room_tag_rule(room, documents)

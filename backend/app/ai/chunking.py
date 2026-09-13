@@ -193,7 +193,7 @@ async def chunking_file(
         finally:
             os.unlink(tmp)
 
-    elif file_path.endswith(".md"):
+    elif file_path.endswith((".md", ".txt")):
         return chunking_md(file_bytes, tag, source, chunk_size, chunk_overlap)
 
     else:

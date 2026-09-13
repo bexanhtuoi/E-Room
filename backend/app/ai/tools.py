@@ -31,20 +31,20 @@ Use this tool when the user asks a question that may be answered by content in u
 - Do NOT use for general conversation, greetings, or simple Q&A that doesn't reference documents.
 - If the first query returns nothing useful, try rephrasing the query.
 - The `tag` parameter can be used to narrow search to documents with a specific tag.
-- The `reranking` parameter enables cross-encoder reranking for improved relevance (default True).
-- The `rerank_k` parameter controls how many results to keep after reranking (default 10).
+- The `reranking` parameter enables cross-encoder reranking for improved relevance (default False).
+- The `rerank_k` parameter controls how many results to keep after reranking (default 5).
 
 Args:
     query (str): The user question refined for search. Translate to English if needed.
-    k (int, optional): Number of results from hybrid search (default 5, min 20 for reranking).
+    k (int, optional): Number of results from hybrid search (default 10, max 20).
     tag (str, optional): Only search documents with this tag.
-    reranking (bool, optional): Apply reranker after retrieval (default True).
-    rerank_k (int, optional): Number of results after reranking (default 10).
+    reranking (bool, optional): Apply reranker after retrieval (default False).
+    rerank_k (int, optional): Number of results after reranking (default 5).
 
 Returns:
     list[dict]: Each item has "text" (str) and "metadata" (dict with filename, page, etc).
 """)
-async def retrieval_documents(query: str, k: int = 20, tag: str | None = None, reranking: bool = True, rerank_k: int = 10) -> list[dict]:
+async def retrieval_documents(query: str, k: int = 10, tag: str | None = None, reranking: bool = False, rerank_k: int = 5) -> list[dict]:
     query = str(query) if not isinstance(query, str) else query
     tag = str(tag) if tag and not isinstance(tag, str) else tag
     tag = None if tag in ("None", "none", "", "null", "nan") else tag

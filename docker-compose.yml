@@ -16,11 +16,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-      llama:
-        condition: service_started
       ollama:
-        condition: service_started
-      reranker:
         condition: service_started
 
   ai-worker:
@@ -35,8 +31,6 @@ services:
       redis:
         condition: service_healthy
       livekit:
-        condition: service_started
-      llama:
         condition: service_started
 
   ai-beat:
@@ -130,10 +124,10 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     container_name: livekit
-    command: --config /etc/livekit.yaml --node-ip 192.168.1.9
+    command: --config /etc/livekit.yaml --node-ip 192.168.1.10
     restart: unless-stopped
     environment:
-      NODE_IP: 192.168.1.9
+      NODE_IP: 192.168.1.10
     ports:
       - "7880:7880"
       - "7881:7881"
@@ -146,16 +140,17 @@ services:
       redis:
         condition: service_healthy
 
-  llama:
-    image: ghcr.io/ggml-org/llama.cpp:server
-    container_name: llama
-    entrypoint: ["/app/llama-server"]
-    command: ["-hf", "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL", "--host", "0.0.0.0", "--port", "8012", "-c", "8192"]
-    restart: unless-stopped
-    ports:
-      - "8012:8012"
-    volumes:
-      - llama_data:/root/.cache/huggingface
+  # llama:
+  #   image: ghcr.io/ggml-org/llama.cpp:server
+  #   container_name: llama
+  #   profiles: ["llm-local"]
+  #   entrypoint: ["/app/llama-server"]
+  #   command: ["-hf", "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL", "--host", "0.0.0.0", "--port", "8012", "-c", "8192"]
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8012:8012"
+  #   volumes:
+  #     - llama_data:/root/.cache/huggingface
 
   ollama:
     image: ollama/ollama:latest
@@ -176,8 +171,9 @@ services:
   reranker:
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: reranker
+    profiles: ["llm-local"]
     entrypoint: ["/app/llama-server"]
-    command: ["-hf", "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", "--host", "0.0.0.0", "--port", "8014", "-c", "4096", "--pooling", "rank", "--rerank"]
+    command: ["-hf", "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", "--host", "0.0.0.0", "--port", "8014", "-c", "4096", "-b", "2048", "-ub", "2048", "--pooling", "rank", "--rerank"]
     restart: unless-stopped
     ports:
       - "8014:8014"

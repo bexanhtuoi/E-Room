@@ -8,9 +8,7 @@ from app.utils.datetime_utils import now_utc
 
 
 class DocumentKind(StrEnum):
-    # file: tai lieu upload (MinIO + vector) | skill: doan prompt nap vao agent
     FILE = "file"
-    SKILL = "skill"
 
 
 class Document(SQLModel, table=True):

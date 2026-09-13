@@ -26,6 +26,10 @@ def get_llm() -> ChatOpenAI:
         model=settings.llm_model,
         api_key=settings.llm_api_key or "not-needed",
         timeout=settings.ai_timeout_seconds,
+        extra_body={
+            "reasoning_effort": "low",
+            "reasoning_format": "parsed",
+        },
     )
 
 

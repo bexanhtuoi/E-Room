@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiSparkles, HiUsers } from 'react-icons/hi2';
+import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiPaperAirplane, HiSparkles, HiUsers } from 'react-icons/hi2';
 import { API_BASE_URL, fetchJson, getTokens } from '../../lib/api';
 import { Face } from '../../components/common/Faces';
 import '../../styles/ProfilePage.css';
@@ -187,9 +187,6 @@ export function SessionDetailPage() {
           <div>
             <div className="pf-crumb"><Link to="/session">Sessions</Link> / #{session.id}</div>
           </div>
-          <div className="portal-pagehead__actions">
-            {room && <Link className="er-btn" style={{ textDecoration: 'none' }} to={`/rooms/${room.id}`}>Open room</Link>}
-          </div>
         </div>
 
         <section className="portal-panel pf-sesscard">
@@ -243,32 +240,30 @@ export function SessionDetailPage() {
                       <p className="portal-muted">Pick a starter below, or ask anything in your own words.</p>
                     </div>
                   )}
-                  {chat.map((turn, i) => (
-                    <div key={i} className={`pf-chatlog__turn is-${turn.role}`}>
-                      <span className="portal-badge">{turn.role === 'ai' ? 'AI' : 'YOU'}</span>
-                      <span className="pf-chattext">
-                        {turn.text}
-                        {turn.role === 'ai' && streaming && i === chat.length - 1 && <span className="pf-caret" aria-hidden="true" />}
-                      </span>
-                    </div>
-                  ))}
-                  {streaming && (
-                    <div className="pf-chatlog__turn is-ai">
-                      <span className="portal-badge">AI</span>
-                      <span className="pf-chattext portal-muted">
-                        {thinkingText || 'Thinking…'}
-                      </span>
-                    </div>
-                  )}
+                  {chat.map((turn, i) => {
+                    const isLive = streaming && i === chat.length - 1;
+                    const showThinking = turn.role === 'ai' && isLive && !turn.text;
+                    return (
+                      <div key={i} className={`pf-chatlog__turn is-${turn.role}`}>
+                        <span className="portal-badge">{turn.role === 'ai' ? 'AI' : 'YOU'}</span>
+                        <span className={`pf-chattext${showThinking ? ' portal-muted' : ''}`}>
+                          {showThinking ? (thinkingText || 'Thinking…') : turn.text}
+                          {turn.role === 'ai' && isLive && !showThinking && <span className="pf-caret" aria-hidden="true" />}
+                        </span>
+                      </div>
+                    );
+                  })}
                   <div ref={chatEndRef} />
                 </div>
-                <div className="pf-chips pf-chips--starters">
-                  {QUICK_PROMPTS.map((prompt) => (
-                    <button key={prompt} type="button" className="portal-topic pf-chipbtn" disabled={streaming} onClick={() => ask(prompt)}>
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
+                {chat.length === 0 && (
+                  <div className="pf-chips pf-chips--starters">
+                    {QUICK_PROMPTS.map((prompt) => (
+                      <button key={prompt} type="button" className="portal-topic pf-chipbtn" disabled={streaming} onClick={() => ask(prompt)}>
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <form onSubmit={(e) => { e.preventDefault(); ask(question); }} className="pf-askrow">
                   <input
                     className="er-input" value={question}
@@ -277,8 +272,8 @@ export function SessionDetailPage() {
                     aria-label="Ask about this session"
                     disabled={streaming}
                   />
-                  <button type="submit" className="er-btn" disabled={streaming || !question.trim()}>
-                    {streaming ? '…' : 'Ask'}
+                  <button type="submit" className="er-btn" aria-label="Ask" title="Ask" disabled={streaming || !question.trim()}>
+                    {streaming ? '…' : <HiPaperAirplane size={16} />}
                   </button>
                 </form>
                 {askError && <div className="er-alert er-alert--err">{askError}</div>}

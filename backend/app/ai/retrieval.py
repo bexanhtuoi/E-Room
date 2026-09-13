@@ -19,11 +19,12 @@ def get_embed_model():
     return get_embedding_model()
 
 
-async def retrieve_relevant_documents(query: str, k: int = 20, tag: str | None = None, reranking: bool = True, rerank_k: int = 10) -> list[dict]:
+async def retrieve_relevant_documents(query: str, k: int = 10, tag: str | None = None, reranking: bool = False, rerank_k: int = 5) -> list[dict]:
     client = get_store()
     embed_model = get_embed_model()
 
-    k = max(k, 20)
+    k = min(max(k, 1), 10)
+    reranking = False
 
     query_dense, query_sparse = await asyncio.gather(
         embed_model.aembed_query(query),
@@ -53,5 +54,8 @@ async def retrieve_relevant_documents(query: str, k: int = 20, tag: str | None =
 
     if reranking and docs:
         docs = await rerank_documents(query, docs, top_k=rerank_k)
+
+    if not docs:
+        return [{"text": "No matching documents found for this query.", "metadata": {}}]
 
     return docs
