@@ -149,4 +149,5 @@ class TestRoomContext:
         documents = [
             SimpleNamespace(kind=DocumentKind.FILE, file_name="notes.md", content=None, enabled=True),
         ]
-        assert "tag='room:7'" in room_tag_rule(room, documents)
+        assert "retrieval_documents" in room_tag_rule(room, documents)
+        assert "only searches this room" in room_tag_rule(room, documents)

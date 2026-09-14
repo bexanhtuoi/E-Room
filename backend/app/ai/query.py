@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 from langchain_core.messages import AIMessage
 
 from app.ai import get_agent
+from app.utils.retry import aresilient
 
 THINKING_LABELS = {
     "retrieval_documents": "Searching documents…",
@@ -103,6 +104,7 @@ async def run_query(query: str, agent: Any = None, system_extra: str = "") -> st
     return "".join(parts).strip()
 
 
+@aresilient()
 async def stream_events(query: str, agent: Any = None, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
     agent = agent or get_agent(system_extra=system_extra)
     announced = set()

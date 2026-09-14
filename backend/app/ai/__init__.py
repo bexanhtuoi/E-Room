@@ -1,3 +1,5 @@
+from typing import Dict, Optional
+
 import langchain_openai.chat_models.base as lc_base
 from langchain.agents import create_agent as create_langchain_agent
 from langchain_openai import ChatOpenAI
@@ -20,16 +22,29 @@ def keep_reasoning_content(_dict, default_class):
 lc_base._convert_delta_to_message_chunk = keep_reasoning_content
 
 
-def get_llm() -> ChatOpenAI:
+def is_openrouter(base_url: str) -> bool:
+    return "openrouter" in (base_url or "").lower()
+
+
+def reasoning_body(base_url: str) -> Dict[str, object]:
+    if is_openrouter(base_url):
+        return {"reasoning": {"effort": "low"}}
+
+    return {
+        "reasoning_effort": "low",
+        "reasoning_format": "parsed",
+    }
+
+
+def get_llm(timeout: Optional[int] = None) -> ChatOpenAI:
+    base_url = settings.llm_base_url
+
     return ChatOpenAI(
-        base_url=settings.llm_base_url,
+        base_url=base_url,
         model=settings.llm_model,
         api_key=settings.llm_api_key or "not-needed",
-        timeout=settings.ai_timeout_seconds,
-        extra_body={
-            "reasoning_effort": "low",
-            "reasoning_format": "parsed",
-        },
+        timeout=timeout if timeout is not None else settings.llm_call_timeout_seconds,
+        extra_body=reasoning_body(base_url),
     )
 
 

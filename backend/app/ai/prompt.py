@@ -40,7 +40,8 @@ def room_tag_rule(room, documents: List) -> str:
         return ""
     return (
         "This room has a knowledge base. When you need facts, always call "
-        f"retrieval_documents with tag='room:{room.id}' before answering from general knowledge."
+        "retrieval_documents before answering from general knowledge. "
+        "It only searches this room's documents."
     )
 
 

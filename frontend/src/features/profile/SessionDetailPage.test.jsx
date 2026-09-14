@@ -29,6 +29,10 @@ fetchJson.mockImplementation(async (path) => {
       session_id: 101,
       message_count: 2,
       transcript: 'An Nguyen: hello there\nAn Nguyen: it was great',
+      transcript_lines: [
+        { speaker: 'An Nguyen', text: 'hello there' },
+        { speaker: 'An Nguyen', text: 'it was great' },
+      ],
       chat: mockChat,
     };
   }
@@ -99,6 +103,32 @@ describe('SessionDetailPage', () => {
       expect(await screen.findByText('Old answer.')).toBeTruthy();
     } finally {
       mockChat = [];
+    }
+  });
+
+  it('ignores colons inside message text when listing speakers', async () => {
+    const fallback = fetchJson.getMockImplementation();
+    fetchJson.mockImplementation(async (path) => {
+      if (path === '/sessions/101/messages') {
+        return {
+          session_id: 101,
+          message_count: 2,
+          transcript: 'You: hi\nAI: Key points:\n- **Item one:** done',
+          transcript_lines: [
+            { speaker: 'An Nguyen', text: 'hi' },
+            { speaker: 'AI', text: 'Key points:\n- **Item one:** done\nSee https://x.y/z for more' },
+          ],
+          chat: [],
+        };
+      }
+      return fallback(path);
+    });
+    try {
+      renderDetail();
+      expect(await screen.findByText('An Nguyen, AI')).toBeTruthy();
+      expect(await screen.findByText(/Item one/)).toBeTruthy();
+    } finally {
+      fetchJson.mockImplementation(fallback);
     }
   });
 

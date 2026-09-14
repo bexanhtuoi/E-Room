@@ -59,11 +59,13 @@ async def publish_piece(
     room_id: int,
     piece: str,
     thinking: bool = False,
+    job_id: str = "",
 ) -> None:
     payload = json.dumps(
         {
             "type": "ai_stream",
             "stream_id": stream_id,
+            "job_id": job_id,
             "room_id": room_id,
             "role": "ai",
             "sender": AI_PARTICIPANT_NAME,
@@ -75,7 +77,12 @@ async def publish_piece(
     await room.local_participant.publish_data(payload, reliable=True)
 
 
-async def stream_to_room(room_id: int, events: AsyncIterable[Any], identity: str = "") -> str:
+async def stream_to_room(
+    room_id: int,
+    events: AsyncIterable[Any],
+    identity: str = "",
+    job_id: str = "",
+) -> str:
     room = rtc.Room()
     stream_id = str(uuid4())
     token = create_token(
@@ -95,18 +102,19 @@ async def stream_to_room(room_id: int, events: AsyncIterable[Any], identity: str
 
             if kind == "thinking":
                 for piece in split_words(text):
-                    await publish_piece(room, stream_id, room_id, piece, thinking=True)
+                    await publish_piece(room, stream_id, room_id, piece, thinking=True, job_id=job_id)
                 continue
 
             full_text += text
             for piece in split_words(text):
-                await publish_piece(room, stream_id, room_id, piece)
+                await publish_piece(room, stream_id, room_id, piece, job_id=job_id)
                 await asyncio.sleep(WORD_PACE_SECONDS)
 
         payload = json.dumps(
             {
                 "type": "ai_stream",
                 "stream_id": stream_id,
+                "job_id": job_id,
                 "room_id": room_id,
                 "role": "ai",
                 "sender": AI_PARTICIPANT_NAME,

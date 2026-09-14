@@ -140,8 +140,15 @@ def get_session_messages(
 ) -> dict:
     db_session = get_my_session(db, session_id, request)
     transcript, count = build_transcript(db, db_session)
+    transcript_lines = [{"speaker": line["speaker"], "text": line["text"]} for line in session_lines(db, db_session)]
 
-    return {"session_id": session_id, "message_count": count, "transcript": transcript, "chat": get_session_chat_turns(db, db_session)}
+    return {
+        "session_id": session_id,
+        "message_count": count,
+        "transcript": transcript,
+        "transcript_lines": transcript_lines,
+        "chat": get_session_chat_turns(db, db_session),
+    }
 
 
 @router.post("/{session_id}/chat", response_model=SessionAnswerResponse)

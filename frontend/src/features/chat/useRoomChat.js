@@ -187,6 +187,16 @@ export function useRoomChat(roomId) {
       } else if (data.type === 'ai_stream') {
         const key = data.stream_id || 'default';
         const id = `ai-${key}`;
+        const jobId = data.job_id ? String(data.job_id) : '';
+        // Stream thu lai cung job: xoa khung do + entry stream cu
+        if (jobId) {
+          for (const [streamKey, stream] of streamsRef.current.entries()) {
+            if (streamKey !== key && stream?.jobId === jobId) streamsRef.current.delete(streamKey);
+          }
+        }
+        const dropSuperseded = (list) => (
+          jobId ? list.filter((it) => !(it.jobId === jobId && it.id !== id && it.streaming)) : list
+        );
         // Stream moi nhat thang: tat co streaming + thinking cua stream cu
         const settleOthers = (list) => list.map((it) => (
           isLiveAiId(it.id) && it.id !== id && it.id !== 'ai-pending' && it.streaming
@@ -195,7 +205,7 @@ export function useRoomChat(roomId) {
         ));
         // Chunk that dau tien ve → xoa placeholder "thinking"
         setItems((prev) => {
-          const settled = settleOthers(prev);
+          const settled = settleOthers(dropSuperseded(prev));
           return settled.some((it) => it.id === 'ai-pending') ? settled.filter((it) => it.id !== 'ai-pending') : settled;
         });
         if (data.is_final) {
@@ -208,19 +218,20 @@ export function useRoomChat(roomId) {
           setItems((prev) => {
             // Final thay the bubble streaming cung id (giu vi tri), dong thinking
             const existing = prev.find((it) => it.id === id);
-            const rest = settleOthers(prev).filter((it) => it.id !== id);
-            return [...rest, { id, kind: 'ai', userId: null, sender: 'AI', text: stream.text, thinkingText: stream.thinking || undefined, streaming: false, sourceId: claimSourceId(isFirst, existing?.sourceId), time: stampTime(Date.now()) }].slice(-200);
+            const rest = settleOthers(dropSuperseded(prev)).filter((it) => it.id !== id);
+            return [...rest, { id, kind: 'ai', userId: null, sender: 'AI', text: stream.text, thinkingText: stream.thinking || undefined, streaming: false, jobId: jobId || undefined, sourceId: claimSourceId(isFirst, existing?.sourceId), time: stampTime(Date.now()) }].slice(-200);
           });
         } else if (data.chunk) {
           const isFirst = !streamsRef.current.has(key);
           const prev = streamsRef.current.get(key) || { text: '', thinking: '' };
           if (data.thinking) prev.thinking += data.chunk;
           else prev.text += data.chunk;
+          if (jobId) prev.jobId = jobId;
           streamsRef.current.set(key, prev);
           setItems((prevItems) => {
             const existing = prevItems.find((it) => it.id === id);
-            const rest = settleOthers(prevItems).filter((it) => it.id !== id);
-            return [...rest, { id, kind: 'ai', userId: null, sender: 'AI', text: prev.text, thinkingText: prev.thinking || undefined, streaming: true, sourceId: claimSourceId(isFirst, existing?.sourceId), time: stampTime(Date.now()) }].slice(-200);
+            const rest = settleOthers(dropSuperseded(prevItems)).filter((it) => it.id !== id);
+            return [...rest, { id, kind: 'ai', userId: null, sender: 'AI', text: prev.text, thinkingText: prev.thinking || undefined, streaming: true, jobId: jobId || undefined, sourceId: claimSourceId(isFirst, existing?.sourceId), time: stampTime(Date.now()) }].slice(-200);
           });
         }
       }

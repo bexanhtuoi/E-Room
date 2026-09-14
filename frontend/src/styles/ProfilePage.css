@@ -3167,12 +3167,8 @@ a.portal-row:hover .portal-row__go {
 .pf-chatlog__turn .pf-chattext {
   max-width: 75%;
   min-width: 0;
-}
-
-.pf-chatlog__turn .pf-chattext {
   background: #f4f4f4;
   padding: 10px 12px;
-  max-width: 100%;
 }
 
 .pf-chatlog__turn.is-ai .pf-chattext {

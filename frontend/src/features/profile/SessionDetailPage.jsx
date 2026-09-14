@@ -98,7 +98,17 @@ export function SessionDetailPage() {
     const turns = messagesQuery.data?.chat;
     return Array.isArray(turns) ? turns.filter((t) => t && typeof t.text === 'string') : [];
   }, [messagesQuery.data]);
-  const lines = useMemo(() => parseTranscript(messagesQuery.data?.transcript), [messagesQuery.data]);
+  const lines = useMemo(() => {
+    const structured = messagesQuery.data?.transcript_lines;
+    if (Array.isArray(structured) && structured.length > 0) {
+      return structured.map((line, i) => ({
+        id: i,
+        speaker: line?.speaker || null,
+        body: line?.text ?? '',
+      }));
+    }
+    return parseTranscript(messagesQuery.data?.transcript);
+  }, [messagesQuery.data]);
   const speakers = useMemo(() => [...new Set(lines.map((l) => l.speaker).filter(Boolean))], [lines]);
   const lineCount = detail?.message_count ?? 0;
   const emptySession = !messagesQuery.isLoading && lineCount === 0;

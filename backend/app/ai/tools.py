@@ -23,28 +23,33 @@ def load_lines(session_id: int) -> list:
         return session_lines(db, db_session)
 
 
-@tool(description="""Search and retrieve relevant information from uploaded documents.
+RETRIEVAL_BASE_DESCRIPTION = """Search and retrieve relevant information from uploaded documents.
 
 Use this tool when the user asks a question that may be answered by content in uploaded documents (PDF, TXT, MD files). The tool searches a vector database of document chunks and returns the most relevant passages.
 
 - Always call this first for factual or knowledge-based questions.
 - Do NOT use for general conversation, greetings, or simple Q&A that doesn't reference documents.
 - If the first query returns nothing useful, try rephrasing the query.
-- The `tag` parameter can be used to narrow search to documents with a specific tag.
 - The `reranking` parameter enables cross-encoder reranking for improved relevance (default False).
 - The `rerank_k` parameter controls how many results to keep after reranking (default 5).
 
 Args:
     query (str): The user question refined for search. Translate to English if needed.
     k (int, optional): Number of results from hybrid search (default 10, max 20).
-    tag (str, optional): Only search documents with this tag.
     reranking (bool, optional): Apply reranker after retrieval (default False).
     rerank_k (int, optional): Number of results after reranking (default 5).
 
 Returns:
     list[dict]: Each item has "text" (str) and "metadata" (dict with filename, page, etc).
-""")
+"""
+
+
+@tool(description=RETRIEVAL_BASE_DESCRIPTION + "\n- The `tag` parameter can be used to narrow search to documents with a specific tag (e.g. tag='room:123').\n")
 async def retrieval_documents(query: str, k: int = 10, tag: str | None = None, reranking: bool = False, rerank_k: int = 5) -> list[dict]:
+    return await run_retrieval(query, k, tag, reranking, rerank_k)
+
+
+async def run_retrieval(query: Any, k: int, tag: Any, reranking: bool, rerank_k: int) -> list[dict]:
     query = str(query) if not isinstance(query, str) else query
     tag = str(tag) if tag and not isinstance(tag, str) else tag
     tag = None if tag in ("None", "none", "", "null", "nan") else tag
@@ -58,6 +63,21 @@ async def retrieval_documents(query: str, k: int = 10, tag: str | None = None, r
 
     log_call("retrieval_documents", {"query": query, "k": k, "tag": tag, "reranking": reranking, "rerank_k": rerank_k}, results)
     return results
+
+
+def make_room_retrieval_tool(room_id: int):
+    room_tag = f"room:{room_id}"
+
+    @tool(
+        description=RETRIEVAL_BASE_DESCRIPTION
+        + "\n- This tool only searches documents uploaded to the current room. Never ask for other rooms.\n",
+    )
+    async def room_retrieval_documents(query: str, k: int = 10, reranking: bool = False, rerank_k: int = 5) -> list[dict]:
+        return await run_retrieval(query, k, room_tag, reranking=reranking, rerank_k=rerank_k)
+
+    room_retrieval_documents.name = "retrieval_documents"
+
+    return room_retrieval_documents
 
 
 

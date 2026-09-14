@@ -92,6 +92,27 @@ class TestStreamToRoom:
             assert await stream_to_room(7, fake_events()) == "hello"
 
     @pytest.mark.asyncio
+    async def test_job_id_is_included_in_all_payloads(self):
+        async def fake_events():
+            yield {"kind": "thinking", "text": "Searching"}
+            yield {"kind": "token", "text": "done"}
+
+        mock_room = make_mock_room()
+
+        with (
+            patch("app.ai.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.participant.create_token", return_value="tok"),
+            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+        ):
+            await stream_to_room(7, fake_events(), identity="ai_assistant_abc123", job_id="abc123")
+
+        calls = mock_room.local_participant.publish_data.call_args_list
+        payloads = [json.loads(call.args[0]) for call in calls]
+
+        assert payloads
+        assert all(payload.get("job_id") == "abc123" for payload in payloads)
+
+    @pytest.mark.asyncio
     async def test_custom_identity_avoids_duplicate_kick(self):
         async def fake_events():
             yield "hi"

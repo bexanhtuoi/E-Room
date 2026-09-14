@@ -75,6 +75,39 @@ describe('useRoomChat live flow', () => {
     unmount();
   });
 
+  it('supersedes unfinished bubble when retry stream shares job_id', async () => {
+    const { result, unmount } = await renderChat();
+    act(() => {
+      result.current.handleLiveData({ type: 'ai_stream', stream_id: 'r1', job_id: 'job9', room_id: 30008, chunk: 'Hel', is_final: false });
+    });
+    expect(result.current.items.find((it) => it.id === 'ai-r1')?.streaming).toBe(true);
+
+    act(() => {
+      result.current.handleLiveData({ type: 'ai_stream', stream_id: 'r2', job_id: 'job9', room_id: 30008, chunk: 'Yo', is_final: false });
+    });
+    expect(result.current.items.some((it) => it.id === 'ai-r1')).toBe(false);
+    expect(result.current.items.find((it) => it.id === 'ai-r2')?.text).toBe('Yo');
+
+    act(() => {
+      result.current.handleLiveData({ type: 'ai_stream', stream_id: 'r2', job_id: 'job9', room_id: 30008, is_final: true });
+    });
+    const settled = result.current.items.filter((it) => it.kind === 'ai' && !it.streaming);
+    expect(settled).toHaveLength(1);
+    expect(settled[0].text).toBe('Yo');
+    unmount();
+  });
+
+  it('keeps bubbles from different jobs', async () => {
+    const { result, unmount } = await renderChat();
+    act(() => {
+      result.current.handleLiveData({ type: 'ai_stream', stream_id: 'a1', job_id: 'jobA', room_id: 30008, chunk: 'AAA', is_final: false });
+      result.current.handleLiveData({ type: 'ai_stream', stream_id: 'b1', job_id: 'jobB', room_id: 30008, chunk: 'BBB', is_final: false });
+    });
+    expect(result.current.items.find((it) => it.id === 'ai-a1')?.text).toBe('AAA');
+    expect(result.current.items.find((it) => it.id === 'ai-b1')?.text).toBe('BBB');
+    unmount();
+  });
+
   it('sorts numeric ids numerically so newest survives slice in busy rooms', () => {
     // "30008" < "999" neu so string — phai so number thi tin moi (id lon)
     // moi dung cuoi va khong bi slice(-200) cat mat trong phong dong.

@@ -63,6 +63,7 @@ class Settings:
         int(os.getenv("AI_SOFT_TIMEOUT_SECONDS", max(60, ai_timeout_seconds - 60))),
         ai_timeout_seconds,
     )
+    llm_call_timeout_seconds: int = int(os.getenv("LLM_CALL_TIMEOUT_SECONDS", 120))
     ai_queue_name: str = os.getenv("AI_QUEUE_NAME", "ai")
     ai_observer_queue_name: str = os.getenv("AI_OBSERVER_QUEUE_NAME", "ai_observer")
     ai_transcriber_queue_name: str = os.getenv("AI_TRANSCRIBER_QUEUE_NAME", "ai_transcriber")

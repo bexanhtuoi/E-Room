@@ -5,12 +5,13 @@ from typing import Optional
 from uuid import uuid4
 
 from celery.exceptions import SoftTimeLimitExceeded
-from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+from openai import APIConnectionError, APIError, APITimeoutError, InternalServerError, RateLimitError
 from sqlmodel import Session
 
 from app.ai import get_agent
 from app.ai.participant import stream_to_room
 from app.ai.query import stream_events
+from app.ai.tools import make_room_retrieval_tool, web_search
 from app.config import settings
 from app.database import engine
 from app.integration.celery import celery_app
@@ -34,6 +35,7 @@ from app.log import get_logger
 from app.models import MessageRole, RoomStatus
 from app.services import document_crud, message_crud, room_crud, user_crud
 from app.utils.datetime_utils import as_naive_utc, now_utc
+from app.utils.retry import EmptyLLMResponse, is_retryable_error
 
 log = get_logger("app.ai", level="INFO")
 
@@ -188,6 +190,7 @@ def stream_ai_response(
             if context_room is not None:
                 context_docs = document_crud.get_many(db, room_id=room_id)
         agent = get_agent(
+            tools=[make_room_retrieval_tool(room_id), web_search],
             prompt=room_system_prompt(context_room),
             system_extra=room_tag_rule(context_room, context_docs),
         )
@@ -212,15 +215,33 @@ def stream_ai_response(
                 room_id,
                 stream_events(query, agent=agent),
                 identity=f"ai_assistant_{job_tag[:8]}",
+                job_id=job_tag[:8],
             )
         )
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
         soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))
         response_text = f"Sorry, I could not finish my response within {soft_minutes} minutes."
-    except (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError) as transient_error:
-        log.error("AI backend transient | room_id=%s job_type=%s error=%s", room_id, job_type, transient_error)
-        raise self.retry(exc=transient_error, countdown=60, max_retries=3)
+    except (APIError, APIConnectionError, APITimeoutError, InternalServerError, RateLimitError) as transient_error:
+        if not is_retryable_error(transient_error):
+            log.error(
+                "AI backend fatal | room_id=%s job_type=%s error=%s",
+                room_id,
+                job_type,
+                transient_error,
+            )
+            response_text = "Sorry, I could not generate a response right now."
+        else:
+            log.error(
+                "AI backend transient after retries | room_id=%s job_type=%s error=%s",
+                room_id,
+                job_type,
+                transient_error,
+            )
+            raise self.retry(exc=transient_error, countdown=60, max_retries=3)
+    except EmptyLLMResponse:
+        log.error("AI stream empty after retries | room_id=%s job_type=%s", room_id, job_type)
+        response_text = ""
     except Exception:
         log.exception("AI stream failed | room_id=%s job_type=%s", room_id, job_type)
         response_text = "Sorry, I could not generate a response right now."
