@@ -40,6 +40,11 @@ class Settings:
         "GOOGLE_REDIRECT_URI",
         "http://localhost:8000/api/v1/auth/google/callback",
     )
+    rate_limit_enabled: bool = os.getenv("RATE_LIMIT_ENABLED", "true").lower() in ("true", "1", "yes")
+    rate_limit_login_attempts: int = int(os.getenv("RATE_LIMIT_LOGIN_ATTEMPTS", 20))
+    rate_limit_login_window_seconds: int = int(os.getenv("RATE_LIMIT_LOGIN_WINDOW_SECONDS", 300))
+    rate_limit_register_attempts: int = int(os.getenv("RATE_LIMIT_REGISTER_ATTEMPTS", 10))
+    rate_limit_register_window_seconds: int = int(os.getenv("RATE_LIMIT_REGISTER_WINDOW_SECONDS", 3600))
 
     # ─── Database ───────────────────────────────────
     db_user: str = os.getenv("DB_USER", "root")

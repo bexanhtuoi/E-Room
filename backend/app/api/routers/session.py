@@ -6,8 +6,8 @@ from sqlmodel import Session
 
 from app.ai import get_agent
 from app.ai.prompt import session_prompt
-from app.ai.query import run_query, stream_events
-from app.ai.tools import TRANSCRIPT_TOOLS
+from app.ai.query import build_room_messages, run_query, stream_events
+from app.ai.tools import TRANSCRIPT_TOOLS, format_lines
 from app.api.dependencies import require_auth
 from app.database import get_session
 from app.models import MessageRole
@@ -67,11 +67,16 @@ def build_transcript(db: Session, db_session) -> tuple[str, int]:
     return "\n".join(f"{line['speaker']}: {line['text']}" for line in lines), len(lines)
 
 
-def build_agent(db_session, lines):
+def build_agent(db_session, total_lines: int):
     return get_agent(
         tools=TRANSCRIPT_TOOLS,
-        prompt=session_prompt(db_session.id, lines),
+        prompt=session_prompt(db_session.id, total_lines),
     )
+
+
+def build_session_messages(lines: list, full_question: str, tail: int = 50) -> list:
+    history = [format_lines(lines[-tail:])] if lines else []
+    return build_room_messages(history, full_question)
 
 
 def recent_chat_context(db: Session, db_session, limit: int = 20) -> str:
@@ -169,7 +174,8 @@ async def chat_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No messages in this session yet")
 
     full_question = recent_chat_context(db, db_session) + f"Current question:\n{question}"
-    answer = await run_query(full_question, agent=build_agent(db_session, lines))
+    messages = build_session_messages(lines, full_question)
+    answer = await run_query(messages, agent=build_agent(db_session, len(lines)))
     if not answer:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI could not answer right now")
 
@@ -201,8 +207,9 @@ async def chat_session_stream(
         saw_token = False
         answer_parts = []
         full_question = recent_chat_context(db, db_session) + f"Current question:\n{question}"
+        messages = build_session_messages(lines, full_question)
         try:
-            async for event in stream_events(full_question, agent=build_agent(db_session, lines)):
+            async for event in stream_events(messages, agent=build_agent(db_session, len(lines))):
                 if event.get("kind") == "token" and event.get("text"):
                     saw_token = True
                     answer_parts.append(event["text"])

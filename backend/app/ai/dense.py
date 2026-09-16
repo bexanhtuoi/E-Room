@@ -1,5 +1,7 @@
 ﻿import asyncio
+
 from langchain_openai import OpenAIEmbeddings
+
 from app.config import settings
 from app.log import get_logger
 

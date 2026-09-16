@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app.ai.transcriber import handle_speech_completion
 from app.database import engine
-from app.integration.livekit import create_token
+from app.integration.livekit import create_webhook_token
 from app.models import MessageRole, RoomStatus
 from app.services import message_crud, room_crud
 from tests.conftest import make_user, switch_to
@@ -40,27 +40,21 @@ class TestSessionLifecycleE2E:
         assert bob_token_res.status_code == 200
 
         # 4. LiveKit Webhook bao su kien 2 user da join
-        webhook_token = create_token(room_name=str(room_id), user_id="livekit-server")
-        headers = {"Authorization": f"Bearer {webhook_token}"}
+        def post_event(event: str, identity: str):
+            payload = {
+                "event": event,
+                "room": {"name": str(room_id)},
+                "participant": {"identity": identity},
+            }
+            raw = json.dumps(payload).encode()
+            return client.post(
+                "/api/v1/rooms/livekit/webhook",
+                content=raw,
+                headers={"Authorization": create_webhook_token(raw), "Content-Type": "application/json"},
+            )
 
-        client.post(
-            "/api/v1/rooms/livekit/webhook",
-            json={
-                "event": "participant_joined",
-                "room": {"name": str(room_id)},
-                "participant": {"identity": str(alice["id"])},
-            },
-            headers=headers,
-        )
-        client.post(
-            "/api/v1/rooms/livekit/webhook",
-            json={
-                "event": "participant_joined",
-                "room": {"name": str(room_id)},
-                "participant": {"identity": str(bob["id"])},
-            },
-            headers=headers,
-        )
+        assert post_event("participant_joined", str(alice["id"])).status_code == 200
+        assert post_event("participant_joined", str(bob["id"])).status_code == 200
 
         # Kiem tra trang thai phong trong DB chuyen sang ACTIVE
         with Session(engine) as db:
@@ -120,24 +114,8 @@ class TestSessionLifecycleE2E:
             assert args[2] == "what is synchronous vs asynchronous?"
 
         # 6. User roi phong qua Webhook
-        client.post(
-            "/api/v1/rooms/livekit/webhook",
-            json={
-                "event": "participant_left",
-                "room": {"name": str(room_id)},
-                "participant": {"identity": str(alice["id"])},
-            },
-            headers=headers,
-        )
-        client.post(
-            "/api/v1/rooms/livekit/webhook",
-            json={
-                "event": "participant_left",
-                "room": {"name": str(room_id)},
-                "participant": {"identity": str(bob["id"])},
-            },
-            headers=headers,
-        )
+        assert post_event("participant_left", str(alice["id"])).status_code == 200
+        assert post_event("participant_left", str(bob["id"])).status_code == 200
 
         # Phong het nguoi → IDLE (van hien list de vao lai), chi ENDED khi bo hoang lau
         with Session(engine) as db:

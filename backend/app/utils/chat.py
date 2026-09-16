@@ -1,13 +1,19 @@
 import json
+import re
 from typing import Optional
+
+AI_MENTION_PATTERN = re.compile(r"(?:^|\s)@ai\b", re.IGNORECASE)
 
 
 def strip_ai_mention(text: str) -> Optional[str]:
-    lowered = (text or "").lstrip().lower()
-    if "@ai" not in lowered:
+    stripped = (text or "").lstrip()
+    match = AI_MENTION_PATTERN.search(stripped)
+
+    if match is None:
         return None
 
-    query = (text or "").lstrip()[lowered.find("@ai") + 3 :].strip()
+    query = stripped[match.end():].strip()
+
     return query or None
 
 

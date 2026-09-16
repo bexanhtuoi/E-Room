@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app.ai import get_agent
 from app.ai.participant import stream_to_room
-from app.ai.query import stream_events
+from app.ai.query import build_room_messages, stream_events
 from app.ai.tools import make_room_retrieval_tool, web_search
 from app.config import settings
 from app.database import engine
@@ -53,7 +53,10 @@ def get_activity_key(room_id: int) -> str:
 
 
 def mark_room_activity(room_id: int) -> None:
-    set(get_activity_key(room_id), str(now_utc().timestamp()), ttl=settings.ai_timeout_seconds)
+    try:
+        set(get_activity_key(room_id), str(now_utc().timestamp()), ttl=settings.ai_timeout_seconds)
+    except Exception as error:
+        log.warning("Room activity not recorded | room_id=%s error=%s", room_id, error)
 
 
 def format_room_message(db: Session, message, cache: dict) -> str:
@@ -77,19 +80,23 @@ def recent_room_context(db: Session, room_id: int, limit: int) -> list:
     return [format_room_message(db, message, cache) for message in reversed(list(recent))]
 
 
-def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: Optional[int] = None) -> str:
-    pending_key = get_pending_key(room_id)
-    incr(pending_key)
-    expire(pending_key, settings.ai_timeout_seconds)
+def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: Optional[int] = None) -> Optional[str]:
     try:
-        task = stream_ai_response.apply_async(
-            args=[room_id, job_type, query, source_message_id],
-            queue=settings.ai_queue_name,
-        )
-    except Exception:
-        decr(pending_key)
-        raise
-    return task.id
+        pending_key = get_pending_key(room_id)
+        incr(pending_key)
+        expire(pending_key, settings.ai_timeout_seconds)
+        try:
+            task = stream_ai_response.apply_async(
+                args=[room_id, job_type, query, source_message_id],
+                queue=settings.ai_queue_name,
+            )
+        except Exception:
+            decr(pending_key)
+            raise
+        return task.id
+    except Exception as error:
+        log.warning("AI job not enqueued | room_id=%s job_type=%s error=%s", room_id, job_type, error)
+        return None
 
 WORKER_LOCK_TTL = 180
 
@@ -201,19 +208,20 @@ def stream_ai_response(
 
     limit = 10 if job_type == "heartbeat" else 20
     tail = query if job_type == "heartbeat" else f"Current question:\n{query}"
+    history_lines: list = []
     try:
         with Session(engine) as db:
-            context_lines = recent_room_context(db, room_id, limit)
-            if context_lines:
-                query = "Recent room context (newest last):\n" + "\n".join(context_lines) + f"\n\n{tail}"
+            history_lines = recent_room_context(db, room_id, limit)
     except Exception:
         log.exception("Room transcript context failed | room_id=%s", room_id)
+
+    messages = build_room_messages(history_lines, tail)
 
     try:
         response_text = asyncio.run(
             stream_to_room(
                 room_id,
-                stream_events(query, agent=agent),
+                stream_events(messages, agent=agent),
                 identity=f"ai_assistant_{job_tag[:8]}",
                 job_id=job_tag[:8],
             )

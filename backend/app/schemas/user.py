@@ -6,8 +6,6 @@ from pydantic import BaseModel, EmailStr, field_validator
 from app.models import EnglishLevel, RoleEnum
 
 
-
-
 class Token(BaseModel):
     access_token: str
     token_type: str

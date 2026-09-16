@@ -20,7 +20,7 @@ class TestRoomHeartbeatE2E:
             room = room_crud.create(
                 db,
                 obj_in={
-                    "name": "Artificial Intelligence Ethics",
+                    "name": room_name,
                     "status": RoomStatus.ACTIVE,
                 },
             )
@@ -43,7 +43,7 @@ class TestRoomHeartbeatE2E:
             args = mock_enqueue_job.call_args[0]
             assert args[0] == room_id
             assert args[1] == "heartbeat"
-            assert "Artificial Intelligence Ethics" in args[2]
+            assert room_name in args[2]
 
         # 3. Gia lap Celery worker nhan task va stream cau hoi AI vao phong
         mock_self = MagicMock()

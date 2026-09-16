@@ -1,8 +1,7 @@
 ﻿import os
 from functools import lru_cache
-from typing import Any, Dict, List
+from typing import List
 
-from app.ai.tools import format_lines
 from app.models import DocumentKind
 
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +10,8 @@ PROMPTS_DIR = os.path.join(AGENT_DIR, "prompts")
 DEFAULT_PROMPTS = {
     "main": """You are a helpful assistant with access to a document knowledge base."""
 }
+
+MEMORIES_HEADER = "# Memories"
 
 
 def read_prompt_file(agent_name: str) -> str:
@@ -45,14 +46,9 @@ def room_tag_rule(room, documents: List) -> str:
     )
 
 
-def session_prompt(session_id: int, lines: List[Dict[str, Any]], tail: int = 50) -> str:
-    total = len(lines)
-    tail_lines = lines[-tail:]
-
+def session_prompt(session_id: int, total_lines: int) -> str:
     return (
         load_prompt("session")
         + f"\n\nYou may only use transcript tools with session_id={session_id}. Never access other sessions."
-        + f"\n\nCurrent session transcript (last {len(tail_lines)} of {total} lines):\n"
-        + (format_lines(tail_lines) if tail_lines else "(empty transcript)")
-        + f"\n\nLine numbers run 0-{total - 1} oldest to newest."
+        + f"\n\nLine numbers run 0-{total_lines - 1} oldest to newest."
     )

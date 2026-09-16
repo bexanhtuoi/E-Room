@@ -8,10 +8,11 @@ from sqlmodel import Session
 
 from app.api import api_router
 from app.config import settings
-from app.database import create_db_and_tables, engine, health as db_health
+from app.database import create_db_and_tables, engine
+from app.database import health as db_health
 from app.log import get_logger
-from app.seeds import seed_all
 from app.security import decode_token
+from app.seeds import seed_all
 from app.services import user_crud
 
 log = get_logger(__name__)
@@ -98,8 +99,8 @@ async def log_requests(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=settings.cors_origins,
+    allow_credentials="*" not in settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

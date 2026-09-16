@@ -1,6 +1,8 @@
-﻿from typing import List
+﻿import json
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from redis.exceptions import RedisError
 from sqlmodel import Session
 
 from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity
@@ -8,7 +10,8 @@ from app.api.dependencies import authorize_owner, authorize_room_access, get_pag
 from app.config import settings
 from app.database import get_session
 from app.integration.livekit import create_token, verify_webhook
-from app.integration.redis import expire, sadd, scard, smembers, srem
+from app.integration.redis import claim_seat, expire, sadd, scard, smembers, srem
+from app.log import get_logger
 from app.models import DocumentKind, Notification, NotificationType, Room, RoomStatus, User
 from app.schemas import (
     DocumentResponse,
@@ -26,9 +29,72 @@ from app.utils.upload import media_type_for, read_upload
 
 router = APIRouter()
 
+log = get_logger("app.api")
+
+PRESENCE_TTL_SECONDS = 6 * 3600
+
+
+def presence_key(room_id: int) -> str:
+    return f"room:{room_id}:participants"
+
+
+def presence_members(room_id: int) -> set:
+    try:
+        return set(smembers(presence_key(room_id)))
+    except RedisError as error:
+        log.warning("Presence read failed | room_id=%s error=%s", room_id, error)
+        return set()
+
+
+def presence_count(room_id: int) -> Optional[int]:
+    try:
+        return scard(presence_key(room_id))
+    except RedisError as error:
+        log.warning("Presence count failed | room_id=%s error=%s", room_id, error)
+        return None
+
+
+def presence_add(room_id: int, identity: str) -> None:
+    try:
+        key = presence_key(room_id)
+        sadd(key, str(identity))
+        expire(key, PRESENCE_TTL_SECONDS)
+    except RedisError as error:
+        log.warning("Presence add failed | room_id=%s error=%s", room_id, error)
+
+
+def presence_remove(room_id: int, identity: str) -> Optional[int]:
+    try:
+        key = presence_key(room_id)
+        srem(key, str(identity))
+        return scard(key)
+    except RedisError as error:
+        log.warning("Presence remove failed | room_id=%s error=%s", room_id, error)
+        return None
+
+
+def room_is_full(room: Room, user_id: int) -> bool:
+    count = presence_count(room.id)
+
+    if count is None:
+        return False
+
+    if str(user_id) in presence_members(room.id):
+        return False
+
+    return count >= (room.max_participants or 4)
+
+
+def claim_room_seat(room: Room, identity: str) -> bool:
+    try:
+        return claim_seat(presence_key(room.id), str(identity), room.max_participants or 4, PRESENCE_TTL_SECONDS)
+    except RedisError as error:
+        log.warning("Seat claim skipped | room_id=%s error=%s", room.id, error)
+        return True
+
 
 def visible_rooms(rooms: List[Room], request: Request) -> List[Room]:
-    
+
     if getattr(request.state, "current_user", None) is None:
         return [room for room in rooms if not room.is_private]
 
@@ -359,6 +425,10 @@ def get_room_token(
     authorize_room_access(db_room, request)
 
     current_user = request.state.current_user
+
+    if room_is_full(db_room, current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Room is full")
+
     token = create_token(
         room_name=str(db_room.id),
         user_id=current_user.id,
@@ -385,7 +455,13 @@ def get_room_participants(
 
     authorize_room_access(db_room, request)
 
-    participants = list(smembers(f"room:{room_id}:participants"))
+    try:
+        participants = list(smembers(f"room:{room_id}:participants"))
+    except RedisError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Presence service unavailable",
+        )
 
     return {
         "room_id": room_id,
@@ -408,33 +484,58 @@ def parse_room_id(room_name: str) -> int | None:
         return None
 
 
-def register_participant_join(db: Session, room_name: str, participant_identity: str) -> None:
-    redis_key = f"room:{room_name}:participants"
-    sadd(redis_key, str(participant_identity))
-    expire(redis_key, 6 * 3600)
+def register_participant_join(db: Session, room_name: str, participant_identity: str, enforce_limit: bool = False) -> bool:
     room_id_int = parse_room_id(room_name)
+
     if room_id_int is None:
-        return
-    mark_room_activity(room_id_int)
+        return False
+
     db_room = room_crud.get_one(db, id=room_id_int)
-    if db_room and db_room.status != RoomStatus.ACTIVE:
+
+    if db_room is None:
+        presence_add(room_id_int, participant_identity)
+        return True
+
+    if enforce_limit and not claim_room_seat(db_room, participant_identity):
+        return False
+
+    presence_add(room_id_int, participant_identity)
+    mark_room_activity(room_id_int)
+
+    if db_room.status != RoomStatus.ACTIVE:
         room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
+
     session_crud.open(db, room_id_int, coerce_user_id(participant_identity))
-    enqueue_room_observer(room_id_int)
-    enqueue_room_transcriber(room_id_int)
+
+    try:
+        enqueue_room_observer(room_id_int)
+        enqueue_room_transcriber(room_id_int)
+    except Exception as error:
+        log.warning("Room workers not enqueued | room_id=%s error=%s", room_id_int, error)
+
+    return True
 
 
 def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
-    redis_key = f"room:{room_name}:participants"
-    srem(redis_key, str(participant_identity))
-    if scard(redis_key) > 0:
-        return
     room_id_int = parse_room_id(room_name)
+
     if room_id_int is None:
         return
+
+    remaining = presence_remove(room_id_int, participant_identity)
+
+    if remaining is None:
+        session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
+        return
+
+    if remaining > 0:
+        return
+
     db_room = room_crud.get_one(db, id=room_id_int)
+
     if db_room and db_room.status == RoomStatus.ACTIVE:
         room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.IDLE})
+
     session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
 
 
@@ -444,11 +545,19 @@ async def handle_livekit_webhook(
     db: Session = Depends(get_session),
 ) -> dict:
     auth_header = request.headers.get("Authorization", "")
-    event = verify_webhook(auth_header)
+    raw_body = await request.body()
+    event = verify_webhook(auth_header, raw_body)
     if not event:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook token")
 
-    body = await request.json()
+    try:
+        body = json.loads(raw_body) if raw_body else {}
+    except ValueError:
+        return {"status": "ignored"}
+
+    if not isinstance(body, dict):
+        return {"status": "ignored"}
+
     event_type = body.get("event") or event.get("event")
     room_name = body.get("room", {}).get("name") or event.get("room", {}).get("name")
     participant_identity = body.get("participant", {}).get("identity") or event.get("participant", {}).get("identity")
@@ -483,7 +592,9 @@ def join_room(
     if not db_room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
     authorize_room_access(db_room, request)
-    register_participant_join(db, str(room_id), request.state.current_user.id)
+    seated = register_participant_join(db, str(room_id), request.state.current_user.id, enforce_limit=True)
+    if not seated:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Room is full")
     return {"status": "joined", "room_id": room_id}
 
 

@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional

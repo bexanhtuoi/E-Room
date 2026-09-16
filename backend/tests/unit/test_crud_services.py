@@ -45,7 +45,7 @@ class TestCRUDRepositories:
                 db,
                 obj_in={
                     "name": "CRUD Room",
-                    
+
                     "status": RoomStatus.ACTIVE,
                     "max_participants": 4,
                 },

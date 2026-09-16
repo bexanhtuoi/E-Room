@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import time
 from typing import Optional
@@ -8,6 +10,7 @@ from app.config import settings
 
 ALGORITHM = "HS256"
 TOKEN_TTL_SECONDS = 3600
+WEBHOOK_TOKEN_TTL_SECONDS = 300
 
 
 def create_token(
@@ -44,10 +47,36 @@ def create_token(
     return jwt.encode(claims, settings.livekit_api_secret, algorithm=ALGORITHM)
 
 
-def verify_webhook(token: str) -> Optional[dict]:
+def body_digest(raw_body: bytes) -> str:
+    return hashlib.sha256(raw_body or b"").hexdigest()
+
+
+def create_webhook_token(raw_body: bytes) -> str:
+    now = int(time.time())
+
+    claims = {
+        "exp": now + WEBHOOK_TOKEN_TTL_SECONDS,
+        "iat": now,
+        "iss": settings.livekit_api_key,
+        "sub": "livekit-server",
+        "nbf": now,
+        "sha256": body_digest(raw_body),
+    }
+
+    return jwt.encode(claims, settings.livekit_api_secret, algorithm=ALGORITHM)
+
+
+def verify_webhook(token: str, raw_body: bytes) -> Optional[dict]:
     token = token.removeprefix("Bearer ").strip()
 
     try:
-        return jwt.decode(token, settings.livekit_api_secret, algorithms=[ALGORITHM])
+        claims = jwt.decode(token, settings.livekit_api_secret, algorithms=[ALGORITHM])
     except jwt.PyJWTError:
         return None
+
+    expected = claims.get("sha256") if isinstance(claims, dict) else None
+
+    if not expected or not hmac.compare_digest(str(expected), body_digest(raw_body)):
+        return None
+
+    return claims

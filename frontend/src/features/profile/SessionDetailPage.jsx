@@ -77,6 +77,13 @@ export function SessionDetailPage() {
   const [streaming, setStreaming] = useState(false);
   const [askError, setAskError] = useState('');
   const chatEndRef = useRef(null);
+  const logRef = useRef(null);
+
+  useEffect(() => {
+    if (streaming && logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [streaming, thinkingText, chat]);
 
   const detailQuery = useQuery({
     queryKey: ['session', sessionId],
@@ -242,7 +249,7 @@ export function SessionDetailPage() {
               <div className="portal-empty">No transcript in this session — nothing was said while you were inside, so AI has nothing to read.</div>
             ) : (
               <>
-                <div className="pf-chatlog pf-chatlog--roomy pf-chatlog--tall">
+                <div className="pf-chatlog pf-chatlog--roomy pf-chatlog--tall" ref={logRef}>
                   {chat.length === 0 && (
                     <div className="pf-greet">
                       <span className="portal-badge">AI</span>
@@ -256,8 +263,13 @@ export function SessionDetailPage() {
                     return (
                       <div key={i} className={`pf-chatlog__turn is-${turn.role}`}>
                         <span className="portal-badge">{turn.role === 'ai' ? 'AI' : 'YOU'}</span>
-                        <span className={`pf-chattext${showThinking ? ' portal-muted' : ''}`}>
-                          {showThinking ? (thinkingText || 'Thinking…') : turn.text}
+                        <span className={`pf-chattext${showThinking ? ' pf-thinking' : ''}`}>
+                          {showThinking ? (
+                            <>
+                              <span className="pf-typing" aria-hidden="true"><span /><span /><span /></span>
+                              <span className="pf-thinking__text">{thinkingText || 'Thinking…'}</span>
+                            </>
+                          ) : turn.text}
                           {turn.role === 'ai' && isLive && !showThinking && <span className="pf-caret" aria-hidden="true" />}
                         </span>
                       </div>

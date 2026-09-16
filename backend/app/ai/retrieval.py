@@ -1,12 +1,15 @@
 ﻿import asyncio
 from functools import lru_cache
-from app.config import settings
-from app.ai.vector_store import init_vector_store
+
+from qdrant_client.http.models import Fusion, FusionQuery, Prefetch
+from qdrant_client.models import FieldCondition, MatchValue
+from qdrant_client.models import Filter as QdrantFilter
+
 from app.ai.dense import get_embedding_model
-from app.ai.sparse import text_to_sparse
 from app.ai.reranker import rerank_documents
-from qdrant_client.models import Filter as QdrantFilter, FieldCondition, MatchValue
-from qdrant_client.http.models import Prefetch, FusionQuery, Fusion
+from app.ai.sparse import text_to_sparse
+from app.ai.vector_store import init_vector_store
+from app.config import settings
 
 
 @lru_cache(maxsize=1)

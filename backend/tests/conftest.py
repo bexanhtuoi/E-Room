@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_eroom.db"
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["SECRET_KEY"] = "test-secret-key-32-characters-minimum!"
 os.environ["LIVEKIT_MODE"] = "local"
 os.environ["LIVEKIT_LOCAL_API_KEY"] = "testkey"
@@ -32,6 +33,13 @@ def _create_test_tables():
 
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
+
+    try:
+        from app.integration.redis import get_redis_client
+
+        get_redis_client().flushdb()
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="session")

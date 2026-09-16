@@ -20,15 +20,15 @@ def apply_noise_filter(text: str) -> str:
     for pattern in NOISE_PATTERNS:
         text = pattern.sub("", text)
     lines = text.split("\n")
-    filtered = [l for l in lines if not re.match(r"^\s*\d+\s*$", l)]
+    filtered = [line for line in lines if not re.match(r"^\s*\d+\s*$", line)]
     return "\n".join(filtered).strip()
 
 
 def normalize_text(text: str) -> str:
     lines = text.split("\n")
     cleaned = []
-    for l in lines:
-        collapsed = re.sub(r"\s+", " ", l)
+    for line in lines:
+        collapsed = re.sub(r"\s+", " ", line)
         if collapsed.strip():
             cleaned.append(collapsed)
         elif not collapsed:
@@ -62,7 +62,7 @@ def rebuild_text(raw: dict) -> str:
                                 chars.append(" ")
                     chars.append(ch)
             lines_text.append("".join(chars).strip())
-        filtered = [l for l in lines_text if l]
+        filtered = [line for line in lines_text if line]
         if filtered:
             blocks_text.append("\n".join(filtered))
     return "\n\n".join(blocks_text)

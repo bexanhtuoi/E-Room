@@ -224,25 +224,26 @@ class TestParticipants:
 
 
 class TestLivekitWebhook:
-    def _post_webhook(self, client: TestClient, token: str, payload: dict):
+    def _post_webhook(self, client: TestClient, payload: dict, token: str = ""):
+        import json
+
+        from app.integration.livekit import create_webhook_token
+
+        raw = json.dumps(payload).encode()
         return client.post(
             "/api/v1/rooms/livekit/webhook",
-            headers={"Authorization": token},
-            json=payload,
+            headers={"Authorization": token or create_webhook_token(raw), "Content-Type": "application/json"},
+            content=raw,
         )
 
     def test_join_then_left_updates_participants_and_idles_room(self, client: TestClient, alice: dict):
-        from app.integration.livekit import create_token
-
         room = create_room(client, f"hook-room-{alice['id']}")
         room_id = str(room["id"])
         key = f"room:{room_id}:participants"
-        webhook_token = create_token("webhook-internal", "livekit-server")
 
         try:
             joined = self._post_webhook(
                 client,
-                webhook_token,
                 {"event": "participant_joined", "room": {"name": room_id}, "participant": {"identity": "77"}},
             )
             assert joined.status_code == 200
@@ -250,13 +251,11 @@ class TestLivekitWebhook:
 
             self._post_webhook(
                 client,
-                webhook_token,
                 {"event": "participant_joined", "room": {"name": room_id}, "participant": {"identity": "88"}},
             )
 
             left_first = self._post_webhook(
                 client,
-                webhook_token,
                 {"event": "participant_left", "room": {"name": room_id}, "participant": {"identity": "77"}},
             )
             assert left_first.status_code == 200
@@ -264,7 +263,6 @@ class TestLivekitWebhook:
 
             self._post_webhook(
                 client,
-                webhook_token,
                 {"event": "participant_left", "room": {"name": room_id}, "participant": {"identity": "88"}},
             )
 
@@ -276,37 +274,56 @@ class TestLivekitWebhook:
             redis_delete(key)
 
     def test_ai_identity_is_ignored(self, client: TestClient, alice: dict):
-        from app.integration.livekit import create_token
-
         room = create_room(client, f"ai-room-{alice['id']}")
         room_id = str(room["id"])
         key = f"room:{room_id}:participants"
-        webhook_token = create_token("webhook-internal", "livekit-server")
 
         try:
             for identity in ("ai_assistant", "ai_observer"):
                 self._post_webhook(
                     client,
-                    webhook_token,
                     {"event": "participant_joined", "room": {"name": room_id}, "participant": {"identity": identity}},
                 )
             assert smembers(key) == set()
         finally:
             redis_delete(key)
 
+    def test_client_token_cannot_sign_webhook(self, client: TestClient, alice: dict):
+        from app.integration.livekit import create_token
+
+        response = self._post_webhook(
+            client,
+            {"event": "participant_joined", "room": {"name": "1"}, "participant": {"identity": "9"}},
+            token=create_token("1", alice["id"]),
+        )
+        assert response.status_code == 401
+
+    def test_tampered_body_returns_401(self, client: TestClient, alice: dict):
+        import json
+
+        from app.integration.livekit import create_webhook_token
+
+        signed = {"event": "participant_joined", "room": {"name": "1"}, "participant": {"identity": "9"}}
+        token = create_webhook_token(json.dumps(signed).encode())
+        tampered = dict(signed)
+        tampered["event"] = "participant_left"
+        response = client.post(
+            "/api/v1/rooms/livekit/webhook",
+            headers={"Authorization": token, "Content-Type": "application/json"},
+            content=json.dumps(tampered).encode(),
+        )
+        assert response.status_code == 401
+
     def test_invalid_webhook_token_returns_401(self, client: TestClient, alice: dict):
         response = self._post_webhook(
             client,
-            "not-a-valid-token",
             {"event": "participant_joined", "room": {"name": "1"}, "participant": {"identity": "9"}},
+            token="not-a-valid-token",
         )
         assert response.status_code == 401
 
     def test_event_without_room_name_is_ignored(self, client: TestClient, alice: dict):
-        from app.integration.livekit import create_token
-
-        webhook_token = create_token("webhook-internal", "livekit-server")
-        response = self._post_webhook(client, webhook_token, {"event": "participant_joined"})
+        response = self._post_webhook(client, {"event": "participant_joined"})
         assert response.status_code == 200
         assert response.json()["status"] == "ignored"
 
@@ -340,8 +357,9 @@ class TestRoomMatch:
         assert "cinema" in haystack
 
     def test_match_requires_auth(self):
-        from app.main import app
         from fastapi.testclient import TestClient as RawClient
+
+        from app.main import app
 
         raw = RawClient(app)
         assert raw.post("/api/v1/rooms/match", json={}).status_code == 403

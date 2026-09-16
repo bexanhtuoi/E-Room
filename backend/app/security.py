@@ -40,12 +40,13 @@ def decode_token(token: str) -> Optional[dict[str, Any]]:
     return payload
 
 
-def set_auth_cookie(response: JSONResponse | RedirectResponse, token: str) -> None:
+def set_auth_cookie(response: JSONResponse | RedirectResponse, token: str, expires: timedelta) -> None:
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        secure=False,
+        secure=settings.app_env.lower() == "production",
         samesite="lax",
+        max_age=int(expires.total_seconds()),
     )
 

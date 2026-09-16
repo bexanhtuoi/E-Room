@@ -1,5 +1,4 @@
 import json
-import time
 from functools import lru_cache
 from typing import Any, Optional, Set
 
@@ -129,6 +128,19 @@ end
 return 1
 """
 
+CLAIM_SEAT_SCRIPT = """
+if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[2])
+    return 1
+end
+if redis.call('SCARD', KEYS[1]) >= tonumber(ARGV[3]) then
+    return 0
+end
+redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return 1
+"""
+
 
 def compare_delete(key: str, value: str) -> bool:
     client = get_redis_client()
@@ -153,3 +165,9 @@ def release_slot(name: str) -> None:
     client = get_redis_client()
     script = client.register_script(RELEASE_SLOT_SCRIPT)
     script(keys=[f"eroom:slots:{name}"])
+
+
+def claim_seat(key: str, identity: str, limit: int, ttl: int) -> bool:
+    client = get_redis_client()
+    script = client.register_script(CLAIM_SEAT_SCRIPT)
+    return bool(script(keys=[key], args=[identity, ttl, limit]))

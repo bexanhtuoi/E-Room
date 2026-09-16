@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -7,7 +8,6 @@ from fastapi.testclient import TestClient
 from app.ai.prompt import get_main_prompt, room_system_prompt, room_tag_rule
 from app.models import DocumentKind
 from tests.conftest import make_user, register, switch_to, unique_email
-from types import SimpleNamespace
 
 
 def make_private_room(client: TestClient, alice: dict, name: str, emails=None) -> dict:

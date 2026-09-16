@@ -2741,9 +2741,40 @@ a.portal-row:hover .portal-row__go {
   justify-content: center;
 }
 
-.pf-chatlog__turn .pf-chattext.portal-muted {
+.pf-chatlog__turn {
+  animation: pf-turn-in 0.25s ease-out;
+}
+
+@keyframes pf-turn-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pf-chatlog__turn .pf-chattext.pf-thinking {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 12px;
   font-style: italic;
+  min-height: 33px;
+}
+
+.pf-chatlog__turn .pf-chattext.pf-thinking .pf-typing {
+  flex: none;
+  padding-top: 5px;
+}
+
+.pf-thinking__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-chatlog__turn,
+  .pf-caret,
+  .pf-typing span {
+    animation: none;
+  }
 }
 
 .pf-caret {
@@ -3132,6 +3163,8 @@ a.portal-row:hover .portal-row__go {
 .pf-chatlog {
   display: grid;
   gap: 10px;
+  align-content: start;
+  align-items: start;
   max-height: 900px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -3143,7 +3176,7 @@ a.portal-row:hover .portal-row__go {
 }
 
 .pf-chatlog--tall {
-  min-height: 700px;
+  min-height: 440px;
 }
 
 .pf-chatlog__turn {
@@ -3295,7 +3328,7 @@ a.portal-row:hover .portal-row__go {
 }
 
 .pf-chatlog--roomy {
-  max-height: 420px;
+  max-height: 600px;
 }
 
 .pf-typing {

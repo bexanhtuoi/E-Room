@@ -103,11 +103,12 @@ async def google_callback(code: str, db: Session = Depends(get_session)):
     elif not db_user.avatar_url and info.get("picture"):
         user_crud.update(db, db_obj=db_user, obj_in={"avatar_url": info.get("picture")})
 
+    access_token_expires = timedelta(minutes=settings.access_token_expires_minutes)
     jwt_token = create_access_token(
         data=db_user.id,
-        expires_delta=timedelta(minutes=settings.access_token_expires_minutes),
+        expires_delta=access_token_expires,
     )
 
     response = frontend_redirect(ok=True)
-    set_auth_cookie(response, jwt_token)
+    set_auth_cookie(response, jwt_token, access_token_expires)
     return response

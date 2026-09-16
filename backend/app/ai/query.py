@@ -1,9 +1,10 @@
 from collections.abc import AsyncIterable
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from langchain_core.messages import AIMessage
 
 from app.ai import get_agent
+from app.ai.prompt import MEMORIES_HEADER
 from app.utils.retry import aresilient
 
 THINKING_LABELS = {
@@ -94,7 +95,24 @@ def split_payload(payload: Any) -> tuple:
     return None, None
 
 
-async def run_query(query: str, agent: Any = None, system_extra: str = "") -> str:
+def build_chat_input(query: Union[str, List[Dict[str, str]]]) -> Dict[str, List[Dict[str, str]]]:
+    if isinstance(query, str):
+        return {"messages": [{"role": "user", "content": query}]}
+
+    return {"messages": [{"role": item.get("role", "user"), "content": item.get("content", "")} for item in query]}
+
+
+def build_room_messages(history_lines: list, tail: str) -> list:
+    if not history_lines:
+        return [{"role": "user", "content": tail}]
+
+    return [
+        {"role": "assistant", "content": f"{MEMORIES_HEADER}\n" + "\n".join(history_lines)},
+        {"role": "user", "content": tail},
+    ]
+
+
+async def run_query(query: Union[str, List[Dict[str, str]]], agent: Any = None, system_extra: str = "") -> str:
     parts = []
 
     async for event in stream_events(query, agent=agent, system_extra=system_extra):
@@ -105,13 +123,13 @@ async def run_query(query: str, agent: Any = None, system_extra: str = "") -> st
 
 
 @aresilient()
-async def stream_events(query: str, agent: Any = None, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
+async def stream_events(query: Union[str, List[Dict[str, str]]], agent: Any = None, system_extra: str = "") -> AsyncIterable[Dict[str, str]]:
     agent = agent or get_agent(system_extra=system_extra)
     announced = set()
     sent = [""]
 
     stream = agent.astream(
-        {"messages": [{"role": "user", "content": query}]},
+        build_chat_input(query),
         stream_mode=["messages", "updates"],
     )
 

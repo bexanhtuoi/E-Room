@@ -1,6 +1,6 @@
 ﻿from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
@@ -10,12 +10,24 @@ from app.database import get_session
 from app.schemas import UserCreateSchema, UserResponse
 from app.security import create_access_token, hash_password, set_auth_cookie, verify_password
 from app.services import user_crud
+from app.utils.rate_limit import check_rate_limit
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_in: UserCreateSchema, db: Session = Depends(get_session)) -> UserResponse:
+def register(
+    user_in: UserCreateSchema,
+    request: Request,
+    db: Session = Depends(get_session),
+) -> UserResponse:
+    check_rate_limit(
+        request,
+        "register",
+        settings.rate_limit_register_attempts,
+        settings.rate_limit_register_window_seconds,
+    )
+
     db_user = user_crud.get_one(db, email=user_in.email)
 
     if db_user:
@@ -33,9 +45,17 @@ def register(user_in: UserCreateSchema, db: Session = Depends(get_session)) -> U
 
 @router.post("/login", status_code=status.HTTP_200_OK)
 def login(
+    request: Request,
     db: Session = Depends(get_session),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> JSONResponse:
+    check_rate_limit(
+        request,
+        "login",
+        settings.rate_limit_login_attempts,
+        settings.rate_limit_login_window_seconds,
+    )
+
     db_user = user_crud.get_one(db, email=form_data.username)
 
     if not db_user:
@@ -54,7 +74,7 @@ def login(
     access_token = create_access_token(data=db_user.id, expires_delta=access_token_expires)
 
     response = JSONResponse(content={"message": "Login successful"})
-    set_auth_cookie(response, access_token)
+    set_auth_cookie(response, access_token, access_token_expires)
 
     return response
 

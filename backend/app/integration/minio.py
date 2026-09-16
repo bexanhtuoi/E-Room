@@ -1,6 +1,7 @@
 from functools import lru_cache
 from io import BytesIO
 from uuid import uuid4
+
 from minio import Minio
 
 from app.config import settings

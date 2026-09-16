@@ -30,7 +30,7 @@ def health() -> bool:
 
 
 def ensure_database() -> None:
-    
+
     url = settings.database_url
     if url.startswith("sqlite"):
         return

@@ -1,19 +1,22 @@
 ﻿from uuid import uuid4
-from app.config import settings
-from app.ai.dense import get_embedding_model, batch_embed
-from app.ai.sparse import text_to_sparse
-from app.ai.chunking import chunking_file
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
-    Filter as QdrantFilter,
     FieldCondition,
     MatchValue,
-    PointStruct,
-    SparseVectorParams,
-    SparseIndexParams,
     Modifier,
+    PointStruct,
+    SparseIndexParams,
+    SparseVectorParams,
+)
+from qdrant_client.models import (
+    Filter as QdrantFilter,
 )
 
+from app.ai.chunking import chunking_file
+from app.ai.dense import batch_embed, get_embedding_model
+from app.ai.sparse import text_to_sparse
+from app.config import settings
 
 collection_initialized = False
 qdrant_client: QdrantClient | None = None
@@ -54,7 +57,7 @@ def init_vector_store(timeout: int = 300) -> QdrantClient:
 async def process_document(content: bytes, filename: str, tag: str, doc_id: int, chunk_size: int = 1000, chunk_overlap: int = 50):
     try:
         chunks = await chunking_file(tag=tag, file_path=filename, file_bytes=content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    except Exception as e:
+    except Exception:
         raise
 
     texts = [c["text"] for c in chunks]
@@ -67,7 +70,7 @@ async def process_document(content: bytes, filename: str, tag: str, doc_id: int,
     try:
         client = init_vector_store()
         embed_model = get_embedding_model()
-    except Exception as e:
+    except Exception:
         raise
 
     try:
@@ -82,7 +85,7 @@ async def process_document(content: bytes, filename: str, tag: str, doc_id: int,
             for i in range(len(texts))
         ]
         client.upsert(collection_name=settings.qdrant_collection, points=points)
-    except Exception as e:
+    except Exception:
         raise
 
 

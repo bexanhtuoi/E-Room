@@ -12,7 +12,6 @@ from app.ai.tasks import (
     mark_room_activity,
     stream_ai_response,
 )
-from app.config import settings
 from app.database import engine
 from app.models import RoomStatus
 from app.services import room_crud

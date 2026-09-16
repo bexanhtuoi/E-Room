@@ -45,7 +45,7 @@ class TestSessionTracking:
         assert mine[0]["message_count"] >= 1
 
         assert client.post(f"/api/v1/rooms/{room['id']}/leave").status_code == 200
-        closed = client.get(f"/api/v1/sessions/mine").json()["sessions"]
+        closed = client.get("/api/v1/sessions/mine").json()["sessions"]
         closed = [s for s in closed if s["room"]["id"] == room["id"]]
 
         assert closed[0]["session"]["left_at"] is not None
@@ -86,7 +86,9 @@ class TestSessionAI:
         assert response.status_code == 200, response.text
         assert "hello" in response.json()["answer"]
 
-        assert mock_run.call_args[0] == ("What was said?",)
+        sent_messages = mock_run.call_args[0][0]
+        assert sent_messages[-1]["role"] == "user"
+        assert "What was said?" in sent_messages[-1]["content"]
         assert mock_run.call_args[1].get("agent") is not None
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")
@@ -172,8 +174,8 @@ class TestSessionAI:
 
         data = client.get(f"/api/v1/sessions/{session_id}/messages").json()
         assert data["chat"] == [
-            {"role": "user", "text": "Remember me?"},
-            {"role": "ai", "text": "Saved answer."},
+            {"role": "user", "text": "Remember me?", "user_id": alice["id"]},
+            {"role": "ai", "text": "Saved answer.", "user_id": None},
         ]
         # Transcript van sach — Q&A khong tron vao context session
         assert "Remember me?" not in data["transcript"]

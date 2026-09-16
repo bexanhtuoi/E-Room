@@ -11,34 +11,47 @@ from app.services import document_crud
 router = APIRouter()
 
 
+def document_scope(request: Request) -> dict:
+    current_user = request.state.current_user
+
+    if current_user.role == "admin":
+        return {}
+
+    return {"user_id": current_user.id}
+
+
 @router.get("/", response_model=List[DocumentResponse])
 def get_documents(
+    request: Request,
     db: Session = Depends(get_session),
     pagination: tuple[int, int] = Depends(get_pagination_params),
     _: str = Depends(require_auth),
 ) -> List[DocumentResponse]:
     skip, limit = pagination
-    documents = document_crud.get_many(db, skip=skip, limit=limit)
+    documents = document_crud.get_many(db, skip=skip, limit=limit, **document_scope(request))
     return documents
 
 
 @router.get("/count")
 def count_documents(
+    request: Request,
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    return {"count": document_crud.count(db)}
+    return {"count": document_crud.count(db, **document_scope(request))}
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
     db_document = document_crud.get_one(db, id=document_id)
     if not db_document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    authorize_owner(db_document.user_id, request)
     return db_document
 
 

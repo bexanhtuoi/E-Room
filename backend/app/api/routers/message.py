@@ -6,6 +6,7 @@ from sqlmodel import Session
 from app.ai.tasks import enqueue_ai_job, mark_room_activity
 from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.database import get_session
+from app.log import get_logger
 from app.models import MessageRole
 from app.schemas import MessageCreateSchema, MessageResponse
 from app.services import message_crud, room_crud
@@ -13,6 +14,8 @@ from app.services.session import is_session_chat
 from app.utils.chat import scrub_meta, strip_ai_mention
 
 router = APIRouter()
+
+log = get_logger("app.api")
 
 
 @router.get("/", response_model=List[MessageResponse])
@@ -31,6 +34,16 @@ def get_messages(
         db_room = room_crud.get_one(db, id=room_id)
         if db_room is not None:
             authorize_room_access(db_room, request)
+
+    current_user = request.state.current_user
+    is_self_lookup = user_id is not None and str(user_id) == str(current_user.id)
+
+    if user_id is not None and room_id is None:
+        if not is_self_lookup and current_user.role != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    if room_id is None and not is_self_lookup and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="room_id is required")
 
     filter_kwargs = {}
     if room_id is not None:
@@ -60,6 +73,8 @@ def count_messages(
             authorize_room_access(db_room, request)
 
     current_user = request.state.current_user
+    if room_id is None and user_id is None and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="room_id or user_id is required")
     if user_id is not None and room_id is None:
         if str(user_id) != str(current_user.id) and current_user.role != "admin":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
@@ -110,15 +125,18 @@ def create_message(
     obj_in_data["meta_data"] = scrub_meta(obj_in_data.get("meta_data"))
     new_message = message_crud.create(db, obj_in=obj_in_data)
 
-    mark_room_activity(message_in.room_id)
-    query = strip_ai_mention(message_in.text)
-    if query:
-        enqueue_ai_job(
-            message_in.room_id,
-            "answer",
-            query,
-            new_message.id,
-        )
+    try:
+        mark_room_activity(message_in.room_id)
+        query = strip_ai_mention(message_in.text)
+        if query:
+            enqueue_ai_job(
+                message_in.room_id,
+                "answer",
+                query,
+                new_message.id,
+            )
+    except Exception as error:
+        log.warning("Message post-processing skipped | room_id=%s error=%s", message_in.room_id, error)
 
     return new_message
 
