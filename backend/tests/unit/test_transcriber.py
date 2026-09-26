@@ -265,6 +265,25 @@ class TestSTTFunctions:
             res = transcribe_audio(audio, provider="groq")
             assert res == {"text": "cloud text"}
 
+    def test_cloud_whisper_tolerates_null_words(self):
+        audio = np.zeros(16000, dtype=np.int16)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "hello", "language": "en", "duration": 1.0, "words": None}
+
+        with patch("httpx.Client.post", return_value=mock_response):
+            result = transcribe_cloud_whisper(audio_data=audio, api_key="key", base_url="http://x/v1")
+
+        assert result is not None
+        assert result["text"] == "hello"
+        assert result["words"] == []
+
+    def test_dispatcher_registers_custom_api(self):
+        from app.ai import stt as stt_module
+
+        assert stt_module.STT_PROVIDERS["custom_api"] is transcribe_cloud_whisper
+
     def test_resolve_stt_language_order(self):
         assert resolve_stt_language("vi") == "vi"
         assert resolve_stt_language("AUTO") == "auto"

@@ -299,7 +299,7 @@ def transcribe_cloud_whisper(
             return None
 
         words_data: List[Dict[str, Any]] = []
-        if "words" in result_json:
+        if result_json.get("words"):
             for w in result_json["words"]:
                 words_data.append(
                     {
@@ -330,6 +330,7 @@ STT_PROVIDERS: Dict[str, Callable] = {
     "openai": transcribe_cloud_whisper,
     "groq": transcribe_cloud_whisper,
     "cloud": transcribe_cloud_whisper,
+    "custom_api": transcribe_cloud_whisper,
 }
 
 
