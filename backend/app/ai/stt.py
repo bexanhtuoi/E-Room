@@ -552,7 +552,7 @@ def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued:
     effective = "whisper_server" if (name == "auto" and is_stt_server_alive()) else name
     if (
         queued >= 4
-        and effective == "whisper_server"
+        and effective in ("whisper_server", "faster_whisper", "local")
         and str((kwargs or {}).get("language") or "en").lower() == "en"
         and settings.stt_cloud_api_key
     ):
