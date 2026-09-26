@@ -1,6 +1,6 @@
 # E-Room — Features
 
-> Version: v2.0.0 · Mọi mục dưới đây đều đã chạy thật (trừ phần ghi rõ "chưa có API").
+> Version: v2.1.0 · Mọi mục dưới đây đều đã chạy thật (trừ phần ghi rõ "chưa có API").
 
 ## 1. Rooms (phòng)
 
@@ -48,30 +48,52 @@ Video grid lọc `ai_*`; max 4 seats chỉ tính người thật.
 - Đáp án lưu DB kèm `source_message_id` để quote.
 - Giới hạn thật: LLM CPU ~3.7 tok/s (đáp án dài ~1 phút), job RAG nặng có thể chạm trần worker 300s.
 
-## 6. Heartbeat (chống im lặng)
+## 6. Chấm điểm phát âm AI
+
+- Luồng `raw → sửa → chấm → nhận xét`: STT lưu raw (`pronunciation=None`) → user sửa `corrected_text` (`PATCH`, sửa sau khi chấm thì reset điểm) → `POST .../score` chấm trên bản đã sửa + audio ĐẦU–CUỐI lượt nói → `POST .../feedback` xin góp ý AI (LLM local, chưa chấm thì `409`).
+- Kết quả: điểm tổng + 4 tiêu chí (Sounds / Stress / Fluency / Completeness). **Điểm từng chữ ẩn mặc định** — bấm **Thống kê điểm số** mới mở bảng riêng (Chữ · Điểm · Trạng thái · IPA + lỗi âm nổi bật); nút **Nhận xét AI** độc lập.
+- Máy host tự tính (wav2vec2 + phoneme GOP local), chấm tuần tự (`SCORING_MAX_PARALLEL=1`) chống OOM khi 3-4 người bấm dồn. Điểm lưu DB (`pronunciation_scores`), JSONL giữ làm log raw/audio.
+- Xem trực tiếp ở mục Assessment. Chi tiết: `reading-score.md`.
+
+## 7. Assessment (chấm điểm theo session)
+
+- Mục Assessment (`/assessment`) = session mới nhất của bạn (chọn lại được): AI feedbacks cả session (gọn ~120 từ, chỉ nêu từ sai/mất hơi + tip + 3 bước luyện) + điểm từng câu + transcript kèm loa.
+- Trang session (`/session/:id`) giữ nguyên bản classic: transcript + hỏi đáp AI.
+
+## 8. TTS giọng Kokoro
+
+- Server Kokoro riêng (`:8002`, OpenAI-compatible), 4 giọng: Heart (nữ Mỹ), Adam (nam Mỹ), Emma (nữ Anh), George (nam Anh).
+- Mỗi dòng *What was said* có nút loa nghe mẫu đọc đúng (cache theo giọng+câu) + chọn giọng chung. Giọng chỉ ảnh hưởng phần nghe, **không đổi điểm**.
+
+## 9. STT auto (host sống thì dùng, chết thì local)
+
+- `STT_PROVIDER=auto` (mặc định): ping `/health` host `:8001` (cache 60s) — sống thì dùng host (`large-v3-turbo`, GPU), chết hoặc trả rỗng thì fallback whisper local cũ (`small`, CPU). Không bao giờ câm.
+- Ép cứng: `whisper_server` (chỉ host) hoặc `faster_whisper` (chỉ local). Hàng đợi ≥4 job vẫn tràn sang cloud như cũ (khi host sống).
+
+## 10. Heartbeat (chống im lặng)
 
 - Beat 15s quét phòng `active` ≥2 người + hết `heartbeat_interval_seconds` im lặng → enqueue job hỏi 1 câu gợi chuyện.
 - Phòng trống lâu (`ROOM_EMPTY_END_SECONDS`, mặc định 24h) → `ended` cho gọn list.
 - Beat 60s `ensure-room-workers`: phòng live thiếu transcriber/observer (vd sau restart) thì enqueue lại — tự hồi không cần sờ tay.
 
-## 7. Presence (ai đang trong phòng)
+## 11. Presence (ai đang trong phòng)
 
 - Nguồn thật: Redis set `room:{room_id}:participants`, ghi bởi **webhook LiveKit** (bỏ qua `ai_*`) + **endpoint leave trực tiếp** (chống miss webhook khi tab đóng đột ngột).
 - Hết người → phòng về `open` (vẫn hiện list để vào lại).
 
-## 8. Auth / Onboarding / Profile
+## 12. Auth / Onboarding / Profile
 
 - Đăng ký/đăng nhập (cookie HttpOnly, session 7 ngày) + Google OAuth (cần OAuth Client ID; service-account dùng không được).
 - Onboarding wizard (level, topics), Profile (sửa tên, hoạt động gần đây thật).
 
-## 9. Trang public
+## 13. Trang public
 
 Home / Pricing / Blog / Contact + Login 1 card + Rooms. Navbar: Home–Pricing–Blog–Contact + Go to Rooms + profile/sign-out.
 
-## 10. Documents & Notifications (có API)
+## 14. Documents & Notifications (có API)
 
 - Upload tài liệu RAG (`/documents/`), thông báo user (`/notifications/`).
 
-## 11. Các trang UI chưa có API (mở được nhưng báo lỗi, chờ backend)
+## 15. Các trang UI chưa có API (mở được nhưng báo lỗi, chờ backend)
 
-Sessions, SessionDetail, Notes, NoteDetail, Series, Leaderboard, Payment/subscription, Tags (`/tags/*`), Onboarding tag-picker dùng `/tags/*`. Đừng demo các trang này cho người ngoài cho tới khi có API.
+Notes, NoteDetail, Series, Leaderboard, Payment/subscription, Tags (`/tags/*`), Onboarding tag-picker dùng `/tags/*`. Đừng demo các trang này cho người ngoài cho tới khi có API. (Sessions/SessionDetail/Assessment đã có API + UI đầy đủ.)

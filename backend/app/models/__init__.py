@@ -3,6 +3,7 @@ from app.models.message import Message, MessageRole
 from app.models.notification import Notification, NotificationType
 from app.models.room import Room, RoomStatus
 from app.models.session import Session
+from app.models.pronunciation_score import PronunciationScore
 from app.models.user import EnglishLevel, RoleEnum, User
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "MessageRole",
     "Notification",
     "NotificationType",
+    "PronunciationScore",
     "RoleEnum",
     "Room",
     "RoomStatus",

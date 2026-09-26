@@ -2,7 +2,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libsndfile1 && rm -rf /var/lib/apt/lists/*
 
 # Layer 1 — install uv (rarely changes)
 RUN pip install uv

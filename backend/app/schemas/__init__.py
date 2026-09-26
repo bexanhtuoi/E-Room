@@ -4,6 +4,18 @@ from app.schemas.document import (
     DocumentUpdateSchema,
 )
 from app.schemas.message import MessageCreateSchema, MessageResponse
+from app.schemas.speech import SpeechLogUpdateSchema, SpeechSummaryLine, SpeechUtterance
+from app.schemas.scoring import (
+    FeedbackResult,
+    PriorityError,
+    ReferenceInfo,
+    ScoringReport,
+    Scores,
+    SpeakingAttempt,
+    TextInfo,
+    WhisperWord,
+)
+from app.schemas.tts import TTSSpeakRequest, TTSVoiceOption
 from app.schemas.notification import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
 from app.schemas.room import (
     RoomCreateSchema,
@@ -28,6 +40,19 @@ __all__ = [
     "DocumentUpdateSchema",
     "MessageCreateSchema",
     "MessageResponse",
+    "SpeechLogUpdateSchema",
+    "SpeechSummaryLine",
+    "SpeechUtterance",
+    "FeedbackResult",
+    "PriorityError",
+    "ReferenceInfo",
+    "ScoringReport",
+    "Scores",
+    "SpeakingAttempt",
+    "TextInfo",
+    "WhisperWord",
+    "TTSSpeakRequest",
+    "TTSVoiceOption",
     "NotificationCreateSchema",
     "NotificationResponse",
     "NotificationUpdateSchema",

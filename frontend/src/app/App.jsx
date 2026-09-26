@@ -13,7 +13,7 @@ const PaymentPage = lazy(() => import('./pages/PaymentPage').then(m => ({ defaul
 const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const RoomPage = lazy(() => import('../features/rooms/RoomPage').then(m => ({ default: m.RoomPage })));
 const RoomConfigPage = lazy(() => import('../features/rooms/RoomConfigPage').then(m => ({ default: m.RoomConfigPage })));
-const SessionDetailPage = lazy(() => import('../features/profile/SessionDetailPage').then(m => ({ default: m.SessionDetailPage })));
+const SessionDetailPage = lazy(() => import('../features/profile/SessionScoringView').then(m => ({ default: m.SessionScoringView })));
 const OnboardingWizard = lazy(() => import('../features/onboarding/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
 const BlogPage = lazy(() => import('./pages/BlogPage').then(m => ({ default: m.BlogPage })));
 const BlogDetailPage = lazy(() => import('./pages/BlogDetailPage').then(m => ({ default: m.BlogDetailPage })));

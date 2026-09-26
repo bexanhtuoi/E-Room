@@ -2,6 +2,7 @@ from app.services.base import CRUDRepository
 from app.services.document import document_crud
 from app.services.message import message_crud
 from app.services.notification import notification_crud
+from app.services.pronunciation_score import pronunciation_score_crud
 from app.services.room import room_crud
 from app.services.session import session_crud
 from app.services.user import user_crud
@@ -11,6 +12,7 @@ __all__ = [
     "document_crud",
     "message_crud",
     "notification_crud",
+    "pronunciation_score_crud",
     "room_crud",
     "session_crud",
     "user_crud",

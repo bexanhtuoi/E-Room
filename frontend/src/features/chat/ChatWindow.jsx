@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { HiChatBubbleLeftRight, HiMicrophone, HiPaperAirplane } from 'react-icons/hi2';
 import { useRoomContext } from '@livekit/components-react';
 import { RoomEvent } from 'livekit-client';
+import { TTSPlayer } from './TTSPlayer';
+import { VoicePicker } from './VoicePicker';
+import { getStoredVoice } from './voiceApi';
 
 function ThinkingDots() {
   return (
@@ -13,7 +16,7 @@ function ThinkingDots() {
   );
 }
 
-function Row({ item, mine, quote }) {
+function Row({ item, mine, quote, voice }) {
   if (item.kind === 'transcript') {
     // Giong msg thuong, chi them icon mic sau ten de biet la voice
     return (
@@ -49,6 +52,11 @@ function Row({ item, mine, quote }) {
         <div style={{ fontSize: 14, color: '#111', marginTop: 4, whiteSpace: 'pre-wrap' }}>
           {thinking ? (<span style={{ color: '#666' }}>AI is thinking<ThinkingDots /></span>) : item.text}
         </div>
+        {!thinking && item.text && (
+          <div style={{ marginTop: 6 }}>
+            <TTSPlayer text={item.text} voice={voice} />
+          </div>
+        )}
       </div>
     );
   }
@@ -67,6 +75,7 @@ export function ChatWindow({ chat, visible, onClose, currentUserId }) {
   const scrollRef = useRef(null);
   // stuck = dang dinh day: tin moi tu cuon xuong. Khong stuck thi hien pill.
   const [stuck, setStuck] = useState(true);
+  const [voice, setVoice] = useState(() => getStoredVoice());
   const byId = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
 
   function scrollToBottom(smooth) {
@@ -109,7 +118,10 @@ export function ChatWindow({ chat, visible, onClose, currentUserId }) {
     <aside style={{ width: 340, maxWidth: '90vw', background: '#fff', borderLeft: '2px solid #111', display: 'flex', flexDirection: 'column', minHeight: 0 }} aria-label="Room chat">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '2px solid #111' }}>
         <strong style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}><HiChatBubbleLeftRight size={16} /> Room chat</strong>
-        <button onClick={onClose} aria-label="Close chat" style={{ background: '#fff', border: '1px solid #111', width: 30, height: 30, fontWeight: 800, cursor: 'pointer' }}>✕</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <VoicePicker value={voice} onChange={setVoice} />
+          <button onClick={onClose} aria-label="Close chat" style={{ background: '#fff', border: '1px solid #111', width: 30, height: 30, fontWeight: 800, cursor: 'pointer' }}>✕</button>
+        </div>
       </div>
 
       <div ref={scrollRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} className="er-chat-scroll" style={{ position: 'relative', flex: 1, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
@@ -125,6 +137,7 @@ export function ChatWindow({ chat, visible, onClose, currentUserId }) {
             item={item}
             mine={item.userId != null && currentUserId != null && String(item.userId) === String(currentUserId)}
             quote={item.kind === 'ai' && item.sourceId != null ? byId.get(item.sourceId) || null : null}
+            voice={voice}
           />
         ))}
         {!stuck && items.length > 0 && (

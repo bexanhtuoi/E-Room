@@ -55,7 +55,9 @@ def is_session_chat(message) -> bool:
         return False
 
 
-def session_lines(db: Session, db_session, limit: int = 500) -> list:
+def session_lines(db: Session, db_session, limit: int = 500, with_ids: bool = False) -> list:
+    """with_ids=True thêm message_id/user_id mỗi dòng (cho UI sửa câu).
+    Agent/tools dùng mặc định False — shape cũ không đổi."""
     messages = message_crud.get_many(db, room_id=db_session.room_id, order_by="id", limit=limit)
     start = as_naive_utc(db_session.joined_at)
     end = as_naive_utc(db_session.left_at) if db_session.left_at is not None else None
@@ -82,6 +84,10 @@ def session_lines(db: Session, db_session, limit: int = 500) -> list:
             speaker = "AI"
         else:
             speaker = names.get(message.user_id, f"User {message.user_id}")
-        lines.append({"speaker": speaker, "text": message.text})
+        line = {"speaker": speaker, "text": message.text}
+        if with_ids:
+            line["message_id"] = message.id
+            line["user_id"] = message.user_id
+        lines.append(line)
 
     return lines

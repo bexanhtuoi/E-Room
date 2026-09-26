@@ -69,6 +69,20 @@ beforeEach(() => {
         ],
       };
     }
+    if (path === '/sessions/101') {
+      return {
+        session: { id: 101, user_id: 9, room_id: 3, joined_at: '2026-08-20T11:00:00Z', left_at: '2026-08-20T11:30:00Z', duration_seconds: 1800, summary: null },
+        room: ROOMS[2],
+        message_count: 1,
+      };
+    }
+    if (path === '/sessions/101/messages') {
+      return {
+        session_id: 101, message_count: 1, transcript: 'An Nguyen: it was great',
+        transcript_lines: [{ speaker: 'An Nguyen', text: 'it was great' }], chat: [],
+      };
+    }
+    if (path === '/rooms/3/speech-logs/me') return [];
     return [];
   });
 });
@@ -165,9 +179,11 @@ describe('ProfilePage portal', () => {
     expect(screen.getByText(/1 invited/)).toBeTruthy();
   });
 
-  it('shows assessment review list from joined rooms', async () => {
+  it('shows assessment session scoring view for latest session', async () => {
     renderPortal('assessment');
     expect(await screen.findByText('Replay what you said, level up how you say it.')).toBeTruthy();
+    expect(await screen.findByText('AI feedbacks')).toBeTruthy();
+    expect(await screen.findByText('My pronunciation scores')).toBeTruthy();
     expect(await screen.findByText('Old Session')).toBeTruthy();
   });
 

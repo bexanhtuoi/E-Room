@@ -32,10 +32,8 @@ dependencies = [
     "httpx>=0.28.1",
     "python-dotenv>=1.2.1",
     "stripe>=15.1.0",
-    "torch>=2.6.0",
     "numpy>=2.0.0",
     "soundfile>=0.13.1",
-    "faster-whisper>=1.2.1",
     "gtts>=2.5.4",
     "colorlog>=6.12.0",
     "passlib>=1.7.4",
@@ -46,6 +44,18 @@ dependencies = [
     "pymupdf>=1.28.2",
     "tavily-python>=0.7.27",
     "livekit>=1.1.14",
+    # STT local fallback (whisper small chay trong worker khi whisper-server
+    # host chet). Nang hon (~500MB ctranslate2) nhung dam bao khong câm.
+    "faster-whisper>=1.2.1",
+    # Scorer phat am local (port tu demo/pronun-app): torch CPU + transformers +
+    # librosa + CMUdict/g2p-en. May chay backend gánh compute.
+    "torch>=2.2",
+    "transformers>=4.44",
+    "librosa>=0.10",
+    "pronouncing>=0.3.0",
+    "g2p-en>=2.1.0",
+    "nltk>=3.8",
+    "phonemizer>=3.2.0",
 ]
 
 [project.scripts]
@@ -53,6 +63,15 @@ backend = "backend:main"
 
 [tool.uv]
 package = false
+
+# Torch lay tu PyTorch CPU index (nhe hon CUDA ~2GB, du cho scorer).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
 
 [build-system]
 requires = ["uv_build>=0.9.27,<0.10.0"]

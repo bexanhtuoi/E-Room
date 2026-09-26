@@ -4,6 +4,8 @@ from app.api.routers.message import router as message
 from app.api.routers.notification import router as notification
 from app.api.routers.room import router as room
 from app.api.routers.session import router as session
+from app.api.routers.speech import router as speech
+from app.api.routers.tts import router as tts
 from app.api.routers.user import router as user
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     "notification",
     "room",
     "session",
+    "speech",
+    "tts",
     "user",
 ]

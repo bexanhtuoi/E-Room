@@ -36,15 +36,18 @@ def reasoning_body(base_url: str) -> Dict[str, object]:
     }
 
 
-def get_llm(timeout: Optional[int] = None) -> ChatOpenAI:
+def get_llm(timeout: Optional[int] = None, model: Optional[str] = None,
+            temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> ChatOpenAI:
     base_url = settings.llm_base_url
 
     return ChatOpenAI(
         base_url=base_url,
-        model=settings.llm_model,
+        model=(model or "").strip() or settings.llm_model,
         api_key=settings.llm_api_key or "not-needed",
         timeout=timeout if timeout is not None else settings.llm_call_timeout_seconds,
         extra_body=reasoning_body(base_url),
+        **({"temperature": temperature} if temperature is not None else {}),
+        **({"max_tokens": max_tokens} if max_tokens is not None else {}),
     )
 
 

@@ -12,7 +12,7 @@ import { OverviewSection } from '../../features/profile/OverviewSection';
 import { RoomsSection } from '../../features/profile/RoomsSection';
 import { SessionsSection } from '../../features/profile/SessionsSection';
 import { ScheduleSection } from '../../features/profile/ScheduleSection';
-import { AssessmentSection } from '../../features/profile/AssessmentSection';
+import { SessionAssessmentSection } from '../../features/profile/SessionAssessmentSection';
 import { ProfileInfoSection } from '../../features/profile/ProfileInfoSection';
 import { NotificationsPopup } from '../../features/profile/NotificationsPopup';
 import '../../styles/ProfilePage.css';
@@ -250,7 +250,7 @@ export function ProfilePage({ section = 'overview' }) {
           <ScheduleSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user?.id} userEmail={user?.email} />
         )}
         {section === 'assessment' && (
-          <AssessmentSection rooms={rooms} messagesByRoom={messagesByRoom} userId={user.id} />
+          <SessionAssessmentSection />
         )}
         {section === 'me' && (
           <ProfileInfoSection

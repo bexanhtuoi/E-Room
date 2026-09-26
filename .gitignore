@@ -1,6 +1,7 @@
 # root
 .DS_Store
 Thumbs.db
+node_modules/
 
 # backend
 backend/.venv/
@@ -36,3 +37,4 @@ temp.json
 # local secrets (copy from *.example, never commit real values)
 backend/.env.docker
 backend/livekit.yaml
+stt.env

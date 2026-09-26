@@ -86,21 +86,64 @@ class Settings:
     reranker_base_url: str = os.getenv("RERANKER_BASE_URL", "")
     reranker_api_key: str = os.getenv("RERANKER_API_KEY", "")
 
-    # ─── STT ────────────────────────────────────────
-    stt_provider: str = os.getenv("STT_PROVIDER", "faster_whisper")  # faster_whisper | openai | groq | custom_api
+    # ─── STT (whisper-server rieng, OpenAI-compatible) ────────────────────
+    # auto: whisper host (:8001) song thi dung, chet thi fallback local cu.
+    stt_provider: str = os.getenv("STT_PROVIDER", "auto")  # auto | whisper_server | faster_whisper | local | openai | groq | cloud
     stt_model_size: str = os.getenv("STT_MODEL_SIZE", "small")
-    stt_language: str = os.getenv("STT_LANGUAGE", "en")  # en | vi | auto
     stt_device: str = os.getenv("STT_DEVICE", "cpu")
     stt_compute_type: str = os.getenv("STT_COMPUTE_TYPE", "int8")
+    stt_cpu_threads: int = int(os.getenv("STT_CPU_THREADS", 2))
+    stt_beam_size: int = int(os.getenv("STT_BEAM_SIZE", 3))
+    # Timeout cho health-check whisper host (auto mode). Ngan de chet nhanh fallback local.
+    stt_server_alive_timeout: float = float(os.getenv("STT_SERVER_ALIVE_TIMEOUT", 3.0))
+    stt_server_alive_ttl: float = float(os.getenv("STT_SERVER_ALIVE_TTL", 60.0))
+    stt_language: str = os.getenv("STT_LANGUAGE", "en")  # en | vi | auto
     stt_cloud_api_key: str = os.getenv("STT_CLOUD_API_KEY", "")
     stt_cloud_base_url: str = os.getenv("STT_CLOUD_BASE_URL", "https://api.openai.com/v1")
     stt_cloud_model: str = os.getenv("STT_CLOUD_MODEL", "whisper-1")
+    # faster-whisper-server riêng (OpenAI-compatible, chạy :8001 để tránh đụng api :8000)
+    stt_server_base_url: str = os.getenv("STT_SERVER_BASE_URL", "http://localhost:8001/v1")
+    stt_server_api_key: str = os.getenv("STT_SERVER_API_KEY", "cant-be-empty")
+    stt_server_model: str = os.getenv("STT_SERVER_MODEL", "mobiuslabsgmbh/faster-whisper-large-v3-turbo")
+    stt_server_timeout: float = float(os.getenv("STT_SERVER_TIMEOUT", 30.0))
     stt_vad_silence_seconds: float = float(os.getenv("STT_VAD_SILENCE_SECONDS", 2.0))
     stt_vad_min_speech_seconds: float = float(os.getenv("STT_VAD_MIN_SPEECH_SECONDS", 0.5))
     stt_vad_max_speech_seconds: float = float(os.getenv("STT_VAD_MAX_SPEECH_SECONDS", 20.0))
     stt_vad_energy_threshold: float = float(os.getenv("STT_VAD_ENERGY_THRESHOLD", 0.01))
-    stt_cpu_threads: int = int(os.getenv("STT_CPU_THREADS", 2))
-    stt_beam_size: int = int(os.getenv("STT_BEAM_SIZE", 3))
+
+    # ─── TTS (Kokoro server rieng, OpenAI-compatible, :8002) ───────────────
+    tts_base_url: str = os.getenv("TTS_BASE_URL", "http://localhost:8002/v1")
+    tts_model: str = os.getenv("TTS_MODEL", "kokoro")
+    tts_voice: str = os.getenv("TTS_VOICE", "af_heart")
+    tts_speed: float = float(os.getenv("TTS_SPEED", 0.9))
+    tts_timeout: float = float(os.getenv("TTS_TIMEOUT", 30.0))
+
+    # ─── Pronun scorer (demo/pronun-app, :8005, chay tren MAY AI) ─────────
+    # De trong = dung heuristic noi bo. Co URL = goi scorer that (wav2vec2 + GOP).
+    # May AI chay `docker compose -f docker-compose.stt.yml up -d` (service `pronun`).
+    pronun_base_url: str = os.getenv("PRONUN_BASE_URL", "")
+    pronun_timeout: float = float(os.getenv("PRONUN_TIMEOUT", 300.0))
+    # May host web yeu (3-4 nguoi cham cung luc): serialize inference local
+    # de khong spike RAM/VRAM. 1 = tuan tu hoan toan (khuyen nghi).
+    scoring_max_parallel: int = max(1, int(os.getenv("SCORING_MAX_PARALLEL", "1") or 1))
+
+    # ─── Scorer local (ruot scorer port vao backend: wav2vec2 + phoneme GOP) ──
+    # May chay backend gánh compute. Model tai 1 lan vao HF cache.
+    wav2vec_model_id: str = os.getenv("WAV2VEC_MODEL_ID", "facebook/wav2vec2-base-960h")
+    phoneme_model_id: str = os.getenv("PHONEME_MODEL_ID", "facebook/wav2vec2-xlsr-53-espeak-cv-ft")
+
+    # ─── LLM feedback (LLM local qua get_llm, chi doc ScoringReport) ───────
+    # Khong can key rieng — dung chung LLM_BASE_URL/LLM_MODEL.
+
+    # ─── Speech logs (per-user transcript files cho summary + pronunciation) ─
+    speech_log_dir: str = os.getenv("SPEECH_LOG_DIR", "log/speech")
+    speech_log_save_audio: bool = os.getenv("SPEECH_LOG_SAVE_AUDIO", "true").lower() in ("true", "1", "yes")
+
+    # ─── Raw attempt recording (song song VAD, ghi TOÀN BỘ audio liên tục) ──
+    speech_raw_enabled: bool = os.getenv("SPEECH_RAW_ENABLED", "true").lower() in ("true", "1", "yes")
+    speech_raw_end_silence_seconds: float = float(os.getenv("SPEECH_RAW_END_SILENCE_SECONDS", 8.0))
+    speech_raw_max_attempt_seconds: float = float(os.getenv("SPEECH_RAW_MAX_ATTEMPT_SECONDS", 300.0))
+    speech_raw_flush_bytes: int = int(os.getenv("SPEECH_RAW_FLUSH_BYTES", 65536))
 
     # ─── Qdrant ─────────────────────────────────────
     qdrant_host: str = os.getenv("QDRANT_HOST", "localhost")

@@ -1,6 +1,6 @@
 # E-Room — Overview
 
-> Version tài liệu: v2.0.0 · Cập nhật: 09/2026
+> Version tài liệu: v2.1.0 · Cập nhật: 09/2026
 
 ## 1. E-Room là gì?
 
@@ -9,6 +9,8 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 - **Video call real-time** (LiveKit WebRTC): mic/cam/share màn hình (desktop), hand-raise, emoji reactions.
 - **Transcript live từng người nói**: worker nghe audio mỗi participant, VAD cắt câu, STT chuyển thành chữ, hiện ngay trong chat kèm icon mic.
 - **Trợ lý AI `@ai`**: mention `@ai` trong chat **hoặc nói "@ai ..." vào mic** → đáp án **stream từng từ** về browser, kèm **thinking của model** (reasoning) và quote lại câu hỏi gốc.
+- **Chấm điểm phát âm AI**: điểm tổng + 4 tiêu chí, điểm từng chữ ẩn mặc định (xem `reading-score.md`); máy host tự tính, lưu DB.
+- **Assessment**: session mới nhất kèm AI feedbacks + điểm từng câu + loa mẫu đọc (Kokoro 4 giọng).
 - **RAG + web search**: agent tự tra tài liệu upload (Qdrant + reranker) và Tavily web search khi câu hỏi cần.
 - **Heartbeat**: phòng live mà im lặng quá lâu → AI gợi chuyện.
 - Tất cả AI chạy **local** (llama.cpp), dữ liệu on-premise (TiDB/Qdrant/MinIO chạy Docker).
@@ -27,7 +29,10 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 |---|---|
 | Frontend | React 19, Vite 6, react-router-dom 7, TanStack Query 5, LiveKit components-react 2 + livekit-client 2, i18next, Zustand |
 | Backend | Python 3.13, FastAPI, SQLModel, Uvicorn, Alembic, `uv` |
-| AI | LangChain 1.x + LangGraph (agent), llama.cpp (Gemma text-gen + Qwen3 embedding), faster-whisper STT (local), Qwen3 reranker, Tavily search |
+| AI | LangChain 1.x + LangGraph (agent), llama.cpp (Gemma text-gen + Qwen3 embedding), Qwen3 reranker, Tavily search |
+| STT | faster-whisper-server `:8001` (GPU, large-v3-turbo) + `STT_PROVIDER=auto` fallback whisper-small local khi host chết |
+| TTS | Kokoro server `:8002` (OpenAI-compatible), 4 giọng Heart/Adam/Emma/George |
+| Chấm phát âm | Scorer wav2vec2 + phoneme GOP local trên máy host (chấm tuần tự) + nhận xét AI qua LLM local (prompt ở `app/ai/prompts/feedback.md`) |
 | Realtime | LiveKit (video/audio/**data channel**) — data channel chở transcript + AI stream |
 | Jobs | Celery (queues: `ai`, `ai_observer`, `ai_transcriber`) + beat, Redis |
 | Data | TiDB (MySQL-compatible), Qdrant (vectors), MinIO (S3 files) |
@@ -131,4 +136,6 @@ E-Room/
 4. **Mic/cam cần HTTPS** (trừ localhost) — test mobile/LAN phải dùng bản HTTPS.
 5. **Model AI nặng (CPU ~3.7 tok/s)** — đáp án dài ~1 phút là bình thường; RAG nặng có thể chạm trần worker 300s.
 6. **Test DB sqlite dùng chung file** — chạy lẻ thấy lỗi constraint lạ thì xóa `backend/test_eroom.db` chạy lại.
-7. Xem tiếp: `features.md` (tính năng), `workflow.md` (các luồng), `setup.md` (cài đặt).
+7. **Redis là hạ tầng bắt buộc** — Celery queues + presence phòng + heartbeat + công tắc STT đều qua Redis. Tắt container redis là mất transcript live + AI.
+8. **Chấm điểm chạy tuần tự** — `SCORING_MAX_PARALLEL=1`, điểm lưu DB `pronunciation_scores` (xem `reading-score.md`).
+9. Xem tiếp: `features.md` (tính năng), `workflow.md` (các luồng), `setup.md` (cài đặt).

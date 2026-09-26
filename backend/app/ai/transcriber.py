@@ -7,6 +7,7 @@ from sqlmodel import Session
 
 from app.ai.audio_vad import create_user_audio_state, process_audio_frame
 from app.ai.participant import live_humans
+from app.ai.raw_recorder import RawAttemptRecorder, UtteranceRef
 from app.ai.stt import transcribe_audio_async
 from app.config import settings
 from app.database import engine
@@ -25,13 +26,20 @@ MAX_PARALLEL_STT = 2
 stt_gate = asyncio.Semaphore(MAX_PARALLEL_STT)
 
 
-async def guarded_transcribe(room, room_id: int, user_identity: str, audio_data) -> None:
+async def guarded_transcribe(
+    room,
+    room_id: int,
+    user_identity: str,
+    audio_data,
+    raw_ctx: Optional[UtteranceRef] = None,
+) -> None:
     async with stt_gate:
         await handle_speech_completion(
             room=room,
             room_id=room_id,
             user_identity=user_identity,
             audio_data=audio_data,
+            raw_ctx=raw_ctx,
         )
 
 
@@ -83,6 +91,7 @@ async def handle_speech_completion(
     room_id: int,
     user_identity: str,
     audio_data,
+    raw_ctx: Optional[UtteranceRef] = None,
 ) -> None:
     try:
         # 1. Goi STT transcribe audio non-blocking (ngon ngu theo phong)
@@ -120,6 +129,42 @@ async def handle_speech_completion(
         )
         if message_id is None:
             return
+
+        # 2a. Attach message_id/text vao raw attempt metadata (best-effort, song song)
+        if raw_ctx is not None:
+            try:
+                raw_ctx.attach(message_id, text)
+            except Exception:
+                log.exception(
+                    "Raw attempt attach failed | room_id=%s user=%s",
+                    room_id,
+                    user_identity,
+                )
+
+        # 2b. Log riêng từng người ra file JSONL (text + audio truoc).
+        # Cham diem phat am la BUOC RIENG ve sau (POST .../speech-logs/{id}/score),
+        # khong cham inline o day de transcript hien ngay lap tuc.
+        # Best-effort: lỗi ghi file không được chặn broadcast/publish bên dưới.
+        try:
+            from app.ai.speech_log import append_utterance
+
+            append_utterance(
+                room_id=room_id,
+                user_id=user_id,
+                user_name=user_name,
+                message_id=message_id,
+                text=text,
+                language=detected_language,
+                duration=duration,
+                confidence=confidence,
+                avg_logprob=avg_logprob,
+                words=words,
+                provider=result.get("provider", "whisper_server"),
+                audio_data=audio_data,
+                sample_rate=16000,
+            )
+        except Exception:
+            log.exception("Speech log append failed | room_id=%s user=%s", room_id, user_identity)
 
         # 3. Broadcast len LiveKit de cac user khac nhan duoc transcript
         payload = build_transcript_payload(
@@ -164,23 +209,37 @@ async def process_user_audio_stream(
     stt_tasks: set,
 ) -> None:
     audio_stream = rtc.AudioStream(track, sample_rate=16000, num_channels=1)
+    raw = RawAttemptRecorder(room_id=room_id, user_identity=user_identity)
 
     try:
         async for event in audio_stream:
             pcm_data = event.frame.data
+            pos_before = raw.samples_written
+            was_speaking = user_state["is_speaking"]
+
+            raw.write_frame(pcm_data)
             completed_speech = process_audio_frame(user_state, pcm_data)
 
+            if (not was_speaking) and user_state["is_speaking"]:
+                raw.begin_utterance(pos_before)
+
             if completed_speech is not None:
+                raw_ctx = raw.end_utterance(len(completed_speech))
                 pending = asyncio.create_task(
                     guarded_transcribe(
                         room=room,
                         room_id=room_id,
                         user_identity=user_identity,
                         audio_data=completed_speech,
+                        raw_ctx=raw_ctx,
                     )
                 )
                 stt_tasks.add(pending)
                 pending.add_done_callback(stt_tasks.discard)
+            elif was_speaking and (not user_state["is_speaking"]):
+                raw.abandon_utterance()
+
+            raw.check_limits()
     except Exception as error:
         log.error(
             "Audio stream closed or failed | room_id=%s user=%s error=%s",
@@ -188,6 +247,8 @@ async def process_user_audio_stream(
             user_identity,
             error,
         )
+    finally:
+        raw.close(reason="stream_end")
 
 
 async def run_room_transcriber(room_id: int, task_id: str = "") -> None:

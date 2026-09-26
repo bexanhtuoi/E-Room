@@ -24,7 +24,7 @@ from app.ai.stt import (
     transcribe_audio,
     transcribe_audio_async,
     transcribe_cloud_whisper,
-    transcribe_faster_whisper,
+    transcribe_whisper_server,
 )
 from app.ai.transcriber import (
     build_transcript_payload,
@@ -167,21 +167,28 @@ class TestSTTFunctions:
         assert wav_bytes[8:12] == b"WAVE"
 
     def test_transcribe_faster_whisper_with_mock_model(self):
-        mock_segment = MagicMock()
-        mock_segment.text = " Hello world from Vietnam "
-        mock_segment.avg_logprob = -0.18
-        mock_segment.words = [
-            MagicMock(word="Hello", start=0.0, end=0.5, probability=0.95),
-            MagicMock(word="world", start=0.5, end=1.0, probability=0.92),
-        ]
-        mock_info = MagicMock(language="en", duration=1.5)
+        # Local model đã xóa — test server parse verbose_json thay thế.
+        payload = {
+            "text": "Hello world from Vietnam",
+            "language": "en",
+            "duration": 1.5,
+            "segments": [
+                {
+                    "avg_logprob": -0.18,
+                    "words": [
+                        {"word": "Hello", "start": 0.0, "end": 0.5, "probability": 0.95},
+                        {"word": "world", "start": 0.5, "end": 1.0, "probability": 0.92},
+                    ],
+                }
+            ],
+        }
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = payload
 
-        mock_model = MagicMock()
-        mock_model.transcribe.return_value = ([mock_segment], mock_info)
-
-        # 1s audio
         audio = np.zeros(16000, dtype=np.int16)
-        result = transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model)
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_response
+            result = transcribe_whisper_server(audio, sample_rate=16000, language="en")
 
         assert result is not None
         assert result["text"] == "Hello world from Vietnam"
@@ -211,28 +218,28 @@ class TestSTTFunctions:
         assert is_prompt_echo("What is said?", auto_prompt) is False
 
     def test_transcribe_drops_prompt_echo(self):
-        mock_segment = MagicMock()
-        mock_segment.text = " Transcribe exactly what is said, word for word. "
-        mock_segment.avg_logprob = -0.2
-        mock_segment.words = []
-
-        mock_model = MagicMock()
-        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="en", duration=2.0))
+        echo_text = build_stt_prompt("auto")
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"text": echo_text, "language": "en", "duration": 2.0, "segments": []}
 
         audio = np.zeros(32000, dtype=np.int16)
-        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model, language="auto") is None
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_response
+            assert transcribe_whisper_server(audio, sample_rate=16000, language="auto") is None
 
     def test_transcribe_drops_repetitive_hallucination(self):
-        mock_segment = MagicMock()
-        mock_segment.text = " thank you thank you thank you thank you "
-        mock_segment.avg_logprob = -0.1
-        mock_segment.words = []
-
-        mock_model = MagicMock()
-        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="en", duration=2.0))
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {
+            "text": "thank you thank you thank you thank you",
+            "language": "en",
+            "duration": 2.0,
+            "segments": [],
+        }
 
         audio = np.zeros(32000, dtype=np.int16)
-        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model) is None
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_response
+            assert transcribe_whisper_server(audio, sample_rate=16000) is None
 
     def test_transcribe_cloud_whisper_success(self):
         audio = np.zeros(16000, dtype=np.int16)
@@ -297,30 +304,33 @@ class TestSTTFunctions:
         assert build_stt_prompt("auto") == build_stt_prompt("xx")
 
     def test_faster_whisper_auto_omits_language_param(self):
-        mock_model = MagicMock()
-        mock_model.transcribe.return_value = ([], MagicMock(language="vi", duration=1.0))
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"text": "xin chao", "language": "vi", "duration": 1.0, "segments": []}
 
         audio = np.zeros(16000, dtype=np.int16)
-        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model, language="auto") is None
-
-        _, kwargs = mock_model.transcribe.call_args
-        assert "language" not in kwargs
-
-    def test_faster_whisper_pins_language_param(self):
-        mock_segment = MagicMock()
-        mock_segment.text = " xin chao "
-        mock_segment.avg_logprob = -0.2
-        mock_segment.words = []
-        mock_model = MagicMock()
-        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="vi", duration=1.0))
-
-        audio = np.zeros(16000, dtype=np.int16)
-        result = transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model, language="vi")
+        with patch("httpx.Client") as mock_client_cls:
+            post = mock_client_cls.return_value.__enter__.return_value.post
+            post.return_value = mock_response
+            result = transcribe_whisper_server(audio, sample_rate=16000, language="auto")
 
         assert result is not None and result["text"] == "xin chao"
-        _, kwargs = mock_model.transcribe.call_args
-        assert kwargs["language"] == "vi"
-        assert "tiếng Việt" in kwargs["initial_prompt"]
+        _, kwargs = post.call_args
+        assert "language" not in kwargs.get("data", {})
+
+    def test_faster_whisper_pins_language_param(self):
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"text": "xin chao", "language": "vi", "duration": 1.0, "segments": []}
+
+        audio = np.zeros(16000, dtype=np.int16)
+        with patch("httpx.Client") as mock_client_cls:
+            post = mock_client_cls.return_value.__enter__.return_value.post
+            post.return_value = mock_response
+            result = transcribe_whisper_server(audio, sample_rate=16000, language="vi")
+
+        assert result is not None and result["text"] == "xin chao"
+        _, kwargs = post.call_args
+        assert kwargs["data"]["language"] == "vi"
+        assert "tiếng Việt" in kwargs["data"]["prompt"]
 
     def test_overflow_valve_routes_english_to_cloud(self):
         # Patch dung settings object ma choose_stt_provider dang doc
@@ -429,16 +439,22 @@ class TestTranscriberFunctions:
         cancel_user_stream(registry, "nobody")
 
     def test_transcribe_drops_low_confidence_segment(self):
-        mock_segment = MagicMock()
-        mock_segment.text = " Genteel. No. No. "
-        mock_segment.avg_logprob = -2.5
-        mock_segment.words = []
-
-        mock_model = MagicMock()
-        mock_model.transcribe.return_value = ([mock_segment], MagicMock(language="en", duration=2.0))
+        # Server path: logprob thap -> van tra text nhung confidence ~0.
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {
+            "text": "Genteel. No. No.",
+            "language": "en",
+            "duration": 2.0,
+            "segments": [{"avg_logprob": -2.5, "words": []}],
+        }
 
         audio = np.zeros(32000, dtype=np.int16)
-        assert transcribe_faster_whisper(audio, sample_rate=16000, model_override=mock_model) is None
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value.post.return_value = mock_response
+            result = transcribe_whisper_server(audio, sample_rate=16000)
+
+        assert result is not None
+        assert result["confidence"] == pytest.approx(0.0)
 
     def test_save_transcript_drops_recent_duplicate(self):
         import uuid
