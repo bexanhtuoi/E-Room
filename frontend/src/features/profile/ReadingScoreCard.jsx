@@ -3,14 +3,12 @@ import React from 'react';
 /**
  * ReadingScoreCard — thẻ kết quả chấm điểm đọc bằng AI.
  *
- * Quy ước UX (đã khóa):
- * 1. Sau khi chấm xong, mặc định CHỈ hiện điểm tổng + 4 tiêu chí
- *    (Sounds / Stress / Fluency / Completeness). Điểm từng chữ (word_details)
- *    BỊ ẨN hoàn toàn — không tô màu chữ, không badge số trên câu.
- * 2. Muốn xem điểm từng chữ: bấm nút "Thống kê điểm số" -> mở BẢNG RIÊNG
- *    liệt kê word | điểm | trạng thái | IPA (collapsible, đóng mặc định).
- * 3. Nút "Nhận xét AI" là nút ĐỘC LẬP: gọi POST .../feedback (chỉ chạy khi
- *    đã có pronunciation.report, backend trả 409 nếu chưa chấm).
+ * Quy ước UX:
+ * 1. Chưa chấm: đúng 1 nút "Chấm điểm AI".
+ * 2. Đã chấm: mặc định CHỈ hiện điểm tổng + 4 tiêu chí (gọn, không rườm rà).
+ *    Chi tiết (bảng từng chữ, nhận xét AI) ẩn sau 2 nút toggle
+ *    "Thống kê điểm số" / "Nhận xét AI" — ai tò mò thì mở.
+ * 3. Thêm 1 nút "Chấm lại" để chấm lại điểm (backend reset feedback cũ).
  * 4. Sửa corrected_text sau khi chấm -> backend reset pronunciation + feedback
  *    về None (xem app/ai/speech_log.py::update_corrected_text), UI phải quay
  *    về trạng thái "chưa chấm".
@@ -28,6 +26,7 @@ export function statusLabel(status) {
   if (status === 'ok') return 'Ổn';
   if (status === 'pronunciation_error') return 'Cần luyện';
   if (status === 'no_evidence') return 'Không nghe rõ';
+  if (status === 'misaligned') return 'Khớp lệch';
   if (status === 'missing_span') return 'Thiếu mốc giờ';
   return status || '—';
 }
@@ -62,12 +61,12 @@ export function ReadingScoreCard({
   const pron = utterance?.pronunciation || null;
   const feedback = utterance?.feedback || null;
   const report = pron?.report || null;
+  const scoredText = pron?.scored_text || report?.texts?.user_corrected || null;
 
   const [showStats, setShowStats] = React.useState(false);
   const [showFeedback, setShowFeedback] = React.useState(false);
 
-  // Reset 2 panel khi chấm lại (điểm mới về) để giữ quy ước "ẩn mặc định".
-  const scoredText = pron?.scored_text || report?.texts?.user_corrected || null;
+  // Đóng 2 panel khi chấm lại (điểm mới về) để giữ quy ước gọn mặc định.
   React.useEffect(() => {
     setShowStats(false);
     setShowFeedback(false);
@@ -101,6 +100,12 @@ export function ReadingScoreCard({
   const topErrors = report?.top_errors || details.top_errors || [];
   const warnings = report?.warnings || details.warnings || [];
 
+  const isHeuristic = pron.method === 'heuristic-v1';
+  // Heuristic = không đủ bằng chứng audio để chấm thật (không có report).
+  // Hiện hướng dẫn thay vì thanh điểm gây hiểu lầm; nhận xét AI chỉ tự
+  // chạy khi có report (effect ở trên đã chặn khi report null).
+  const heuristicReason = pron.reason || 'unknown';
+
   const canAskFeedback = Boolean(report);
 
   return (
@@ -117,12 +122,27 @@ export function ReadingScoreCard({
         {pron.scored_text || utterance?.corrected_text || utterance?.text}
       </p>
 
-      {/* 4 tiêu chí + tổng — luôn hiện sau khi chấm. */}
+      {/* Heuristic (thiếu audio / scorer lỗi): hiện hướng dẫn thay vì thanh điểm.
+          4 tiêu chí + tổng chỉ hiện sau khi chấm thật. */}
+      {isHeuristic ? (
+        <div className="er-alert er-alert--warn" style={{ marginTop: 12 }} data-testid="reading-heuristic">
+          {heuristicReason === 'no_audio'
+            ? 'Chưa chấm được vì thiếu audio của lượt nói này (bản ghi âm chưa có hoặc đã mất). Hãy vào phòng nói lại câu này rồi chấm lại.'
+            : heuristicReason === 'scorer_failed'
+              ? 'Máy chấm AI gặp sự cố nên chỉ ước lượng tạm. Hãy bấm Chấm lại để thử lại với scorer thật.'
+              : 'Điểm này chỉ là ước lượng tạm (thiếu dữ liệu chấm). Hãy chấm lại khi có audio.'}
+          <div style={{ marginTop: 8 }}>
+            <button type="button" className="er-btn" disabled={scoring || scoreDisabled} onClick={onScore}>
+              {scoring ? 'Đang chấm…' : 'Chấm lại'}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div style={{ marginTop: 12 }} data-testid="reading-overall">
-        <ScoreBar label="Sounds (âm)" value={scores.sounds} />
-        <ScoreBar label="Stress (nhấn)" value={scores.stress} />
-        <ScoreBar label="Fluency (trôi chảy)" value={scores.fluency} />
-        <ScoreBar label="Completeness (đủ chữ)" value={scores.completeness} />
+        <ScoreBar label="Phát âm (Sounds)" value={scores.sounds} />
+        <ScoreBar label="Trọng âm (Stress)" value={scores.stress} />
+        <ScoreBar label="Độ lưu loát (Fluency)" value={scores.fluency} />
+        <ScoreBar label="Độ hoàn thiện (Completeness)" value={scores.completeness} />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, marginTop: 6 }}>
           <span>Tổng</span>
           <span style={{ color: scoreColor(scores.overall ?? pron.score) }}>
@@ -130,6 +150,7 @@ export function ReadingScoreCard({
           </span>
         </div>
       </div>
+      )}
 
       {warnings.length > 0 && (
         <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
@@ -137,7 +158,7 @@ export function ReadingScoreCard({
         </p>
       )}
 
-      {/* 2 nút độc lập — không gộp chung. */}
+      {/* 2 nút toggle + 1 nút chấm lại. */}
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <button
           type="button"
@@ -153,7 +174,7 @@ export function ReadingScoreCard({
           className="er-btn"
           aria-expanded={showFeedback}
           disabled={!canAskFeedback || feedbackLoading}
-          title={canAskFeedback ? '' : 'Chấm điểm trước rồi mới xin nhận xét'}
+          title={canAskFeedback ? '' : (isHeuristic ? 'Bản heuristic thiếu audio nên chưa xin nhận xét được — hãy chấm lại với scorer thật' : 'Chấm điểm trước rồi mới xin nhận xét')}
           onClick={() => {
             if (feedback) {
               setShowFeedback((v) => !v);
@@ -166,11 +187,21 @@ export function ReadingScoreCard({
         >
           {feedbackLoading ? 'AI đang nhận xét…' : feedback ? (showFeedback ? 'Ẩn nhận xét AI' : 'Nhận xét AI') : 'Nhận xét AI'}
         </button>
+        <button
+          type="button"
+          className="er-btn"
+          disabled={scoring || scoreDisabled}
+          title={scoreDisabled ? 'Đang có 1 lượt chấm chạy — đợi xong rồi chấm tiếp' : 'Chấm lại điểm cho câu này'}
+          onClick={onScore}
+          data-testid="btn-rescore"
+        >
+          {scoring ? 'Đang chấm…' : 'Chấm lại'}
+        </button>
       </div>
 
       {/* Bảng điểm từng chữ — panel RIÊNG, chỉ render khi user mở. */}
       {showStats && (
-        <div style={{ marginTop: 12 }} data-testid="word-stats-table">
+      <div style={{ marginTop: 12 }} data-testid="word-stats-table">
           <h3 style={{ fontSize: 14, marginBottom: 8 }}>Điểm từng chữ ({words.length})</h3>
           {words.length === 0 ? (
             <div className="portal-empty">Chưa có chi tiết từng chữ (bản heuristic không có word_details).</div>
@@ -223,18 +254,18 @@ export function ReadingScoreCard({
         </div>
       )}
 
-      {/* Nhận xét AI — panel RIÊNG, độc lập với bảng điểm. */}
+      {/* Nhận xét AI — panel RIÊNG, chỉ render khi user mở. */}
       {showFeedback && (
-        <div style={{ marginTop: 12 }} data-testid="ai-feedback-panel">
-          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Nhận xét AI</h3>
-          {!feedback ? (
-            <div className="portal-empty">
-              {feedbackLoading ? 'AI đang đọc bảng điểm của bạn…' : 'Bấm “Nhận xét AI” để xin góp ý — AI chỉ đọc bảng điểm đã lưu, không chấm lại.'}
-            </div>
-          ) : (
-            <AIFeedbackBody feedback={feedback} />
-          )}
-        </div>
+      <div style={{ marginTop: 12 }} data-testid="ai-feedback-panel">
+        <h3 style={{ fontSize: 14, marginBottom: 8 }}>Nhận xét AI</h3>
+        {!feedback ? (
+          <div className="portal-empty">
+            {feedbackLoading ? 'AI đang đọc bảng điểm của bạn…' : 'Bấm “Nhận xét AI” để xin góp ý — AI chỉ đọc bảng điểm đã lưu, không chấm lại.'}
+          </div>
+        ) : (
+          <AIFeedbackBody feedback={feedback} />
+        )}
+      </div>
       )}
     </div>
   );

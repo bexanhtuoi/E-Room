@@ -12,7 +12,8 @@ Luồng chấm điểm raw -> sửa -> chấm:
 - PATCH /rooms/{room_id}/speech-logs/{message_id} -> sửa corrected_text của mình
 - POST /rooms/{room_id}/speech-logs/{message_id}/score -> chấm phát âm lại
 - POST /rooms/{room_id}/speech-logs/{message_id}/feedback -> xin nhận xét AI
-  (chỉ sau khi đã có điểm; feedback đọc ScoringReport đã lưu, không chấm lại)
+  cho 1 lượt nói đã chấm (đọc ScoringReport đã lưu, không chấm lại).
+  Nhận xét cấp session vẫn có riêng: POST /sessions/{session_id}/feedback.
 """
 
 from typing import Any, Dict, List, Optional
@@ -203,8 +204,14 @@ def feedback_utterance(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> SpeechUtterance:
-    """Xin nhận xét AI cho 1 câu đã chấm. Đọc ScoringReport đã lưu,
-    không chấm lại, không nhận audio."""
+    """Xin nhận xét AI cho 1 lượt nói đã chấm. Đọc ScoringReport đã lưu
+    (điểm cả lượt + word_details từng chữ), không chấm lại, không nhận audio.
+
+    An toàn:
+    - Chưa chấm (không có report, vd bản heuristic thiếu audio) -> 409.
+    - LLM chết -> request_pronun_feedback trả gợi ý theo quy tắc
+      (fallback từ word_details/top_errors), API vẫn 200.
+    """
     _get_room_or_404(db, room_id, request)
     current = request.state.current_user
     target_uid: Any = user_id if user_id is not None else current.id
@@ -225,17 +232,14 @@ def feedback_utterance(
             detail="Chưa có điểm phát âm — chấm điểm trước (POST .../score).",
         )
     opts = body or SpeechFeedbackRequest()
-    try:
-        feedback = request_pronun_feedback(
-            scoring_report=report,
-            model=opts.model or "",
-            temperature=opts.temperature if opts.temperature is not None else 0.6,
-            max_tokens=opts.max_tokens if opts.max_tokens is not None else 1200,
-        )
-    except NotImplementedError as error:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error))
-    except Exception as error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Pronun feedback lỗi: {error}")
+    # request_pronun_feedback không raise khi LLM chết (trả fallback
+    # rule-based từ word_details/top_errors) nên API luôn 200 khi đã có report.
+    feedback = request_pronun_feedback(
+        scoring_report=report,
+        model=opts.model or "",
+        temperature=opts.temperature if opts.temperature is not None else 0.6,
+        max_tokens=opts.max_tokens if opts.max_tokens is not None else 1200,
+    )
     updated = attach_feedback(room_id, target_uid, message_id, feedback)
     # Write-through feedback vào DB (khớp dòng điểm đã lưu ở POST .../score).
     try:

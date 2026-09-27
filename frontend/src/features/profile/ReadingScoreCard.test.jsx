@@ -18,13 +18,14 @@ const DEMO_PRONUNCIATION = {
 const DEMO_FEEDBACK = { summary: 'Fix /θ/ in think.', error_words: [], practice_plan: [] };
 
 describe('ReadingScoreCard', () => {
-  it('hiện nút chấm khi chưa có điểm', () => {
+  it('hiện đúng 1 nút chấm khi chưa có điểm', () => {
     render(<ReadingScoreCard utterance={{ text: DEMO_TEXT }} onScore={vi.fn()} onFeedback={vi.fn()} />);
     expect(screen.getByTestId('reading-unscored')).toBeTruthy();
     expect(screen.getAllByText('Chấm điểm AI').length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('btn-rescore')).toBeNull();
   });
 
-  it('ẩn điểm từng chữ mặc định sau khi chấm', () => {
+  it('đã chấm: tổng + 4 tiêu chí hiện, chi tiết ẩn, đủ 3 nút', () => {
     render(
       <ReadingScoreCard
         utterance={{ text: DEMO_TEXT, corrected_text: DEMO_TEXT, pronunciation: DEMO_PRONUNCIATION }}
@@ -32,15 +33,15 @@ describe('ReadingScoreCard', () => {
         onFeedback={vi.fn()}
       />,
     );
-    // Tổng + 4 tiêu chí hiện…
     expect(screen.getByTestId('reading-overall')).toBeTruthy();
-    expect(screen.getByTestId('btn-word-stats')).toBeTruthy();
-    expect(screen.getByTestId('btn-ai-feedback')).toBeTruthy();
-    // …nhưng bảng từng chữ ẨN.
+    expect(screen.getByTestId('reading-scored-text').textContent).toBe(DEMO_TEXT);
+    // Bảng + panel ẩn mặc định (gọn).
     expect(screen.queryByTestId('word-stats-table')).toBeNull();
     expect(screen.queryByTestId('ai-feedback-panel')).toBeNull();
-    // Câu chấm hiển thị trơn, không kèm số điểm từng chữ.
-    expect(screen.getByTestId('reading-scored-text').textContent).toBe(DEMO_TEXT);
+    // 2 nút toggle + 1 nút chấm lại.
+    expect(screen.getByTestId('btn-word-stats')).toBeTruthy();
+    expect(screen.getByTestId('btn-ai-feedback')).toBeTruthy();
+    expect(screen.getByTestId('btn-rescore').textContent).toBe('Chấm lại');
   });
 
   it('bấm Thống kê điểm số mới mở bảng riêng', () => {
@@ -74,7 +75,65 @@ describe('ReadingScoreCard', () => {
     );
     fireEvent.click(screen.getByTestId('btn-ai-feedback'));
     expect(screen.getByTestId('ai-feedback-panel').textContent).toContain('think');
-    // Bảng điểm vẫn ẩn — 2 panel độc lập.
     expect(screen.queryByTestId('word-stats-table')).toBeNull();
+  });
+
+  it('nút Chấm lại gọi onScore', () => {
+    const onScore = vi.fn();
+    render(
+      <ReadingScoreCard
+        utterance={{ text: DEMO_TEXT, corrected_text: DEMO_TEXT, pronunciation: DEMO_PRONUNCIATION }}
+        onScore={onScore}
+        onFeedback={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('btn-rescore'));
+    expect(onScore).toHaveBeenCalledTimes(1);
+  });
+
+  it('bản heuristic hiện hướng dẫn thiếu audio thay vì thanh điểm', () => {
+    render(
+      <ReadingScoreCard
+        utterance={{
+          text: DEMO_TEXT,
+          corrected_text: DEMO_TEXT,
+          pronunciation: { score: 80.8, method: 'heuristic-v1', reason: 'no_audio', scored_text: DEMO_TEXT },
+        }}
+        onScore={vi.fn()}
+        onFeedback={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('reading-overall')).toBeNull();
+    expect(screen.getByTestId('reading-heuristic').textContent).toContain('thiếu audio');
+  });
+
+  it('chữ khớp lệch vẫn hiện điểm thật thay vì Không nghe rõ', () => {
+    render(
+      <ReadingScoreCard
+        utterance={{
+          text: DEMO_TEXT,
+          corrected_text: DEMO_TEXT,
+          pronunciation: {
+            score: 62.3, method: 'local-v2', scored_text: DEMO_TEXT,
+            report: {
+              scores: { sounds: 60, stress: 70, fluency: 80, completeness: 100, overall: 62.3 },
+              word_details: [
+                { word: 'Hello', score: 32.2, status: 'misaligned', expected_ipa: '/hʌloʊ/' },
+                { word: 'everyone', score: 74.1, status: 'ok', expected_ipa: '/ɛvriwʌn/' },
+              ],
+              top_errors: [],
+              warnings: [],
+            },
+          },
+        }}
+        onScore={vi.fn()}
+        onFeedback={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('btn-word-stats'));
+    const table = screen.getByTestId('word-stats-table');
+    expect(table.textContent).toContain('Khớp lệch');
+    expect(table.textContent).toContain('32.2');
+    expect(table.textContent).not.toContain('Không nghe rõ');
   });
 });

@@ -3177,6 +3177,18 @@ a.portal-row:hover .portal-row__go {
 
 .pf-chatlog--tall {
   min-height: 440px;
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+
+.pf-chatlog--tall::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+
+.pf-chatlog--tall::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 99px;
 }
 
 .pf-chatlog__turn {

@@ -39,12 +39,46 @@ function formatShortDateTime(iso) {
   return `${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function inWindow(iso, startIso, endIso) {
+// Backend lưu joined_at/left_at dạng naive UTC ("2026-09-26 21:59:07",
+// không suffix timezone), còn utterance.created_at là ISO có +00:00.
+// Date.parse chuỗi naive theo giờ LOCAL của browser (+07) sẽ lệch 7 tiếng
+// và lọc sai (câu 21:59 UTC bị coi là sau left_at) — nên ép naive về UTC
+// cho khớp cách backend so sánh (as_naive_utc).
+export function parseSessionTime(value) {
+  if (!value) return NaN;
+  let s = String(value).trim().replace(' ', 'T');
+  if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+  return Date.parse(s);
+}
+
+export function inWindow(iso, startIso, endIso) {
   const t = Date.parse(iso || '');
   if (Number.isNaN(t)) return false;
-  if (startIso && t < Date.parse(startIso)) return false;
-  if (endIso && t > Date.parse(endIso)) return false;
+  if (startIso) {
+    const s = parseSessionTime(startIso);
+    if (!Number.isNaN(s) && t < s) return false;
+  }
+  if (endIso) {
+    const e = parseSessionTime(endIso);
+    if (!Number.isNaN(e) && t > e) return false;
+  }
   return true;
+}
+
+// Nhiều utterance cùng 1 attempt được chấm chung 1 bản điểm
+// (backend dùng raw.wav + toàn bộ text của attempt). Gộp hiển thị
+// còn 1 thẻ cho gọn — giữ utterance đầu tiên của mỗi attempt.
+export function dedupeByAttempt(list) {
+  const seen = new Set();
+  const out = [];
+  for (const u of Array.isArray(list) ? list : []) {
+    const aid = u?.pronunciation?.attempt_id;
+    const key = aid != null ? `attempt:${aid}` : `msg:${u?.message_id ?? u?.created_at}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(u);
+  }
+  return out;
 }
 
 // Cache object URL theo giọng + câu để bấm loa lần 2 không gọi TTS lại.
@@ -143,7 +177,8 @@ export function SessionScoringView({ sessionId: propSessionId }) {
   const myUtterances = useMemo(() => {
     const list = Array.isArray(speechQuery.data) ? speechQuery.data : [];
     if (!session) return [];
-    return list.filter((u) => inWindow(u?.created_at, session.joined_at, session?.left_at));
+    const inSession = list.filter((u) => inWindow(u?.created_at, session.joined_at, session?.left_at));
+    return dedupeByAttempt(inSession);
   }, [speechQuery.data, session]);
 
   function changeVoice(next) {
@@ -254,7 +289,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       <div className="portal-app portal-app--page">
         <main className="portal-main pf-center--wide">
           <div className="er-alert er-alert--err">Session not found or you have no access.</div>
-          <Link className="er-btn" style={{ textDecoration: 'none', marginTop: 12 }} to="/session"><HiArrowLeft size={14} /> Sessions</Link>
+          <Link className="er-btn" style={{ textDecoration: 'none', marginTop: 12 }} to="/assessment"><HiArrowLeft size={14} /> Assessment</Link>
         </main>
       </div>
     );
@@ -268,7 +303,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       <main className="portal-main pf-center--wide">
         <div className="portal-pagehead">
           <div>
-            <div className="pf-crumb"><Link to="/session">Sessions</Link> / #{session.id}</div>
+            <div className="pf-crumb"><Link to="/assessment">Assessment</Link> / #{session.id} · <Link to={`/session/${session.id}`}>View session</Link></div>
           </div>
         </div>
 

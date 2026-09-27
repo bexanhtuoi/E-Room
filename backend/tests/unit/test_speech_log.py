@@ -213,6 +213,20 @@ class TestPronunciation:
         )
         assert 0 <= result["score"] <= 100
 
+    def test_fallback_reason_no_audio(self):
+        # Thiếu audio -> heuristic kèm reason để frontend hiện hướng dẫn đúng.
+        assert score_pronunciation(audio_path=None, reference_text="hello")["reason"] == "no_audio"
+        assert score_pronunciation(audio_path="/khong/ton/tai.wav", reference_text="hello")["reason"] == "no_audio"
+
+    def test_fallback_reason_scorer_failed(self):
+        # Có audio nhưng scorer lỗi -> reason khác để phân biệt với thiếu audio.
+        import app.ai.pronunciation as pron_module
+
+        with patch.object(pron_module, "score_with_wav2vec2", side_effect=RuntimeError("boom")):
+            result = score_pronunciation(audio_path=__file__, reference_text="hello")
+        assert result["method"] == "heuristic-v1"
+        assert result["reason"] == "scorer_failed"
+
 
 class TestWhisperServerProvider:
     def test_success_parses_verbose_json(self):

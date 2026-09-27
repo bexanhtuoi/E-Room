@@ -5,9 +5,10 @@ import { fetchJson } from '../../lib/api';
 import { SessionScoringView } from './SessionScoringView';
 
 /**
- * Mục Assessment (thay thế AssessmentSection cũ): chấm điểm + nhận xét AI
- * trên session — mặc định session mới nhất, chọn lại được.
- * Nội dung chấm điểm dùng chung SessionScoringView với trang session.
+ * Mục Assessment: chấm điểm phát âm + nhận xét AI ngay tại chỗ.
+ * Mặc định session mới nhất, chọn lại được qua dropdown.
+ * Scoring (nút Chấm điểm AI, 4 tiêu chí, Nhận xét AI, sửa câu, loa mẫu)
+ * CHỈ nằm ở đây — trang Session không có scoring.
  */
 export function SessionAssessmentSection() {
   const mineQuery = useQuery({
@@ -37,6 +38,12 @@ export function SessionAssessmentSection() {
 
       {mineQuery.isLoading ? (
         <section className="portal-panel"><div className="portal-skeleton"><span /><span /></div></section>
+      ) : mineQuery.isError ? (
+        <section className="portal-panel">
+          <div className="er-alert er-alert--err">
+            Could not load sessions. <button type="button" onClick={() => mineQuery.refetch()} className="portal-linkbtn">Try again</button>
+          </div>
+        </section>
       ) : sessions.length === 0 ? (
         <section className="portal-panel">
           <div className="portal-empty">Chưa có session nào — vào phòng nói vài câu rồi quay lại.</div>

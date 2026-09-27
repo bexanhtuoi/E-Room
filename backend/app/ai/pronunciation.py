@@ -1060,8 +1060,13 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
             blank_ratio = 1.0
         has_frames = any(phone_ok[p0:p1])
         if not has_frames:
+            # Thật sự không có frame nào khớp -> thiếu bằng chứng.
             status = "no_evidence"
         elif blank_ratio > BLANK_RATIO_MISALIGNED:
+            # Model espeak-xlsr cho posterior peaky (blank 0.7-0.9 ngay cả
+            # với từ đọc rõ) nên KHÔNG loại từ này: vẫn chấm bằng GOP
+            # (posterior thấp tự cho điểm thấp trung thực), chỉ đánh dấu
+            # để UI hiện "Khớp lệch" thay vì "Không nghe rõ".
             status = "misaligned"
         else:
             status = "scored"
@@ -1070,13 +1075,13 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
             # GOP: mean log-posterior; no_evidence -> -inf
             g = phone_lp[pi] if phone_ok[pi] else float("-inf")
             s100 = round(max(0.0, min(100.0, math.exp(max(g, -10.0)) * 100.0)), 1) if math.isfinite(g) else 0.0
-            if status == "scored":
+            if status in ("scored", "misaligned"):
                 pscores.append(s100)
             disp_ob = ob if ob != "-" else None
             phonemes.append({"word": w, "expected": exp, "observed": disp_ob,
                              "type": typ, "gop": round(g, 3) if math.isfinite(g) else None,
-                             "score": s100 if status == "scored" else 0.0})
-            if typ == "substitution" and status == "scored":
+                             "score": s100 if status in ("scored", "misaligned") else 0.0})
+            if typ == "substitution" and status in ("scored", "misaligned"):
                 pat = f"/{exp}/ -> /{ob}/"
                 e = err_counter.setdefault(pat, {"pattern": pat, "count": 0, "examples": []})
                 e["count"] += 1
@@ -1085,7 +1090,7 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
         wscore = round(sum(pscores) / len(pscores), 1) if pscores else 0.0
         pron = get_pronunciation(w, accent)
         wdetails.append({"word": w, "score": wscore,
-                         "status": "ok" if status == "scored" else "no_evidence",
+                         "status": "ok" if status == "scored" else status,
                          "start_s": round(f0 * FRAME_STRIDE_S, 2) if f0 >= 0 else 0.0,
                          "end_s": round((f1 + 1) * FRAME_STRIDE_S, 2) if f1 >= 0 else 0.0,
                          "acoustic_confidence": None, "expected_ipa": pron["ipa"],
@@ -1094,7 +1099,7 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
         wdetails.append({"word": w, "score": 0.0, "status": "no_evidence",
                          "start_s": 0.0, "end_s": 0.0, "acoustic_confidence": None,
                          "expected_ipa": "", "blank_ratio": 1.0})
-    ok_w = [d for d in wdetails if d["status"] == "ok"]
+    ok_w = [d for d in wdetails if d["status"] in ("ok", "misaligned")]
     sounds = round(sum(d["score"] for d in ok_w) / len(ok_w), 1) if ok_w else 0.0
     # vowel/consonant split theo ARPAbet gốc
     return {"sounds": sounds, "word_details": wdetails, "phonemes": phonemes,
@@ -1320,7 +1325,8 @@ def request_pronun_feedback(
     """Xin nhận xét AI: LLM local qua get_llm (llama.cpp).
     Chỉ gửi ScoringReport (không audio, không tự tính điểm — đúng luật đã khóa).
     system_prompt != "" cho phép caller (vd session feedback) dùng prompt gọn
-    chuyên biệt thay vì prompt mặc định. Raise khi LLM lỗi."""
+    chuyên biệt thay vì prompt mặc định. LLM chết -> gợi ý theo quy tắc
+    (không raise, API vẫn 200)."""
     import asyncio
 
     try:
@@ -1328,26 +1334,40 @@ def request_pronun_feedback(
             scoring_report, model, temperature, max_tokens, system_prompt, user_label,
         ))
     except Exception as error:
-        raise RuntimeError(f"feedback LLM lỗi: {error}")
+        log.warning("feedback LLM lỗi (%s) — dùng gợi ý theo quy tắc", error)
+        return build_fallback_feedback(scoring_report, user_label)
     if "error" in out:
-        raise RuntimeError(out["error"])
+        log.warning("feedback LLM lỗi (%s) — dùng gợi ý theo quy tắc", out["error"])
+        return build_fallback_feedback(scoring_report, user_label)
     return out
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Part 11 — Nhận xét AI: gọi LLM local (get_llm), prompt ở prompts/feedback.md
-# (1 file, 2 mục ## utterance / ## session). Trả dict JSON nếu parse được,
-# không thì {"feedback_raw": ...} — frontend render được cả hai.
+# Part 11 — Nhận xét AI: gọi LLM local (get_llm), prompt riêng từng loại:
+# - prompts/feedback_utterance.md: nhận xét 1 câu đã chấm
+# - prompts/assessment.md: nhận xét AI cấp assessment/session
+# (fallback: feedback.md cũ với 2 mục ## utterance / ## session).
+# Trả dict JSON nếu parse được, không thì {"feedback_raw": ...} —
+# frontend render được cả hai.
 # ═══════════════════════════════════════════════════════════════════
 
 def _load_feedback_prompts() -> Dict[str, str]:
-    """Cắt feedback.md theo dòng ## utterance / ## session."""
+    """Đọc 2 prompt md riêng. Fallback feedback.md cũ nếu file mới thiếu."""
     from app.ai.prompt import load_prompt
 
     out = {"utterance": "", "session": ""}
+    utterance = load_prompt("feedback_utterance")
+    session = load_prompt("assessment")
+    if utterance:
+        out["utterance"] = utterance
+    if session:
+        out["session"] = session
+    if out["utterance"] and out["session"]:
+        return out
+    # Fallback: feedback.md cũ (1 file, 2 mục ## utterance / ## session).
     text = load_prompt("feedback")
     if not text:
-        log.warning("prompt feedback.md thieu/trong — feedback se chay prompt rong")
+        log.warning("prompt feedback thieu/trong — feedback se chay prompt rong")
         return out
     current = None
     buf: list[str] = []
@@ -1366,7 +1386,7 @@ def _load_feedback_prompts() -> Dict[str, str]:
     if current:
         out[current] = "\n".join(buf).strip()
     if not out["utterance"] or not out["session"]:
-        log.warning("feedback.md thieu muc ## utterance/## session")
+        log.warning("thieu prompt feedback_utterance/assessment")
     return out
 
 
@@ -1409,13 +1429,96 @@ async def generate_feedback(scoring_report: dict, model: str = "",
             {"role": "user", "content": user_msg},
         ])
     except Exception as error:
-        return {"error": f"LLM local lỗi ({settings.llm_base_url}): {error}"}
+        log.warning("LLM feedback không reachable (%s) — dùng gợi ý theo quy tắc", error)
+        return build_fallback_feedback(scoring_report, user_label)
     content = getattr(msg, "content", "") or ""
     parsed = _extract_json(content if isinstance(content, str) else str(content))
     if parsed:
         parsed.setdefault("model", (model or "").strip() or settings.llm_model)
         return parsed
     return {"feedback_raw": content, "model": (model or "").strip() or settings.llm_model, "usage": {}}
+
+
+def _fallback_tip(word: str, issue: str) -> str:
+    """Mẹo luyện chung theo loại lỗi (tiếng Việt, không cần LLM)."""
+    low = (issue or "").lower()
+    if "no_evidence" in low or "nuốt" in low or "không nghe" in low:
+        return f"Đọc rõ phụ âm cuối của '{word}' — đừng nuốt âm, giữ hơi đến hết chữ."
+    if "->" in issue:
+        return f"Luyện cặp âm tối thiểu chứa '{word}': đọc chậm, soi gương vị trí lưỡi/môi."
+    if "stress" in low or "nhấn" in low:
+        return f"Nhấn mạnh âm tiết chính của '{word}', đọc nhẹ các âm còn lại."
+    return f"Đọc chậm '{word}' từng âm, ghi âm lại rồi so với mẫu."
+
+
+def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_report") -> dict:
+    """Gợi ý theo quy tắc từ điểm đã chấm (không cần LLM).
+    Dùng khi LLM local chết — API vẫn 200, không 502. Bao đủ keys cho cả
+    2 frontend (utterance: pronunciation_feedback/priority_errors/...;
+    session: error_words)."""
+    report = scoring_report or {}
+    utts = report.get("utterances")
+    if isinstance(utts, list):
+        # Dạng session_scores: [{text, overall, bad_words, top_errors}]
+        entries = []
+        for u in utts:
+            bad = u.get("bad_words") or []
+            for b in bad[:5]:
+                w = b.get("word") or "?"
+                entries.append({"word": w, "issue": f"{b.get('status', '')} {b.get('expected_ipa', '')}".strip(),
+                                "score": b.get("score")})
+            for t in (u.get("top_errors") or [])[:3]:
+                entries.append({"word": ", ".join(t.get("examples", [])[:2]) or "?",
+                                "issue": str(t.get("pattern", "")), "score": None})
+        scored = [u for u in utts if isinstance(u.get("overall"), (int, float))]
+        avg = round(sum(u["overall"] for u in scored) / len(scored), 1) if scored else 0.0
+        n = len(utts)
+    else:
+        # Dạng scoring_report 1 câu: {scores, word_details, top_errors}
+        entries = []
+        for w in report.get("word_details") or []:
+            if (w.get("status") or "ok") != "ok":
+                entries.append({"word": w.get("word") or "?",
+                                "issue": f"{w.get('status', '')} {w.get('expected_ipa', '')}".strip(),
+                                "score": w.get("score")})
+        for t in (report.get("top_errors") or [])[:3]:
+            entries.append({"word": ", ".join(t.get("examples", [])[:2]) or "?",
+                            "issue": str(t.get("pattern", "")), "score": None})
+        overall = ((report.get("scores") or {}).get("overall"))
+        avg = round(float(overall), 1) if isinstance(overall, (int, float)) else 0.0
+        n = 1
+    # Gom trùng từ, giữ tối đa 3 lỗi chính.
+    seen, top = set(), []
+    for e in entries:
+        if e["word"] not in seen:
+            seen.add(e["word"])
+            top.append(e)
+        if len(top) >= 3:
+            break
+    if top:
+        listed = "; ".join(f"'{e['word']}' ({e['issue']})" for e in top)
+        summary = f"Chấm {n} câu, điểm trung bình {avg}. Cần sửa nhất: {listed}."
+    else:
+        summary = f"Chấm {n} câu, điểm trung bình {avg}. Không phát hiện lỗi âm rõ rệt — giữ phong độ."
+    error_words = [{"word": e["word"], "issue": e["issue"] or "cần luyện thêm",
+                    "tip": _fallback_tip(e["word"], e["issue"])} for e in top]
+    return {
+        "summary": summary,
+        "pronunciation_feedback": summary,
+        "stress_feedback": "",
+        "intonation_feedback": "",
+        "fluency_feedback": "",
+        "priority_errors": [{"word": e["word"], "issue": e["issue"]} for e in top],
+        "error_words": error_words,
+        "practice_plan": [
+            "Đọc chậm từng từ sai, ghi âm và so với mẫu 3 lần.",
+            "Luyện câu đầy đủ với nhịp đều, không nuốt âm cuối.",
+            "Nói lại cả đoạn ở tốc độ tự nhiên rồi chấm lại để kiểm tra.",
+        ],
+        "model": "rule-based-fallback",
+        "fallback": True,
+        "usage": {},
+    }
 
 
 def score_pronunciation(
@@ -1432,20 +1535,36 @@ def score_pronunciation(
 
     Thử local scorer -> pronun service (nếu có audio + text), fallback heuristic.
     Không bao giờ raise — luôn trả dict score.
+    Heuristic kèm `reason`: "no_audio" (không có file audio để chấm) hoặc
+    "scorer_failed" (có audio nhưng scorer lỗi) — frontend dùng để hiện
+    hướng dẫn đúng thay vì điểm số gây hiểu lầm.
     """
     words = words or []
+
+    def _heuristic(reason: str) -> Dict[str, Any]:
+        result = heuristic_score(
+            confidence=confidence,
+            avg_logprob=avg_logprob,
+            duration=duration,
+            words_count=len(words),
+        )
+        result["reason"] = reason
+        return result
+
     if prefer_wav2vec and audio_path and reference_text.strip():
         try:
             path = Path(audio_path)
             if path.exists():
                 return score_with_wav2vec2(path, reference_text, language)
-        except NotImplementedError:
-            pass
+            log.warning("scoring thiếu audio (file không tồn tại: %s) — fallback heuristic", audio_path)
+            return _heuristic("no_audio")
+        except NotImplementedError as error:
+            log.warning("local scoring failed và chưa cấu hình pronun service — fallback heuristic | err=%s", error)
+            return _heuristic("scorer_failed")
         except Exception as error:
             log.warning("wav2vec2 scoring failed, fallback heuristic | err=%s", error)
-    return heuristic_score(
-        confidence=confidence,
-        avg_logprob=avg_logprob,
-        duration=duration,
-        words_count=len(words),
-    )
+            return _heuristic("scorer_failed")
+    if prefer_wav2vec and reference_text.strip():
+        log.warning("scoring thiếu audio (audio_path=%r) — fallback heuristic", audio_path)
+        return _heuristic("no_audio")
+    return _heuristic("heuristic")
