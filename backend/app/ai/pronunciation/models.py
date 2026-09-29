@@ -50,20 +50,27 @@ def acoustic_model_id() -> str:
 
 def get_acoustic_model():
     global ctc_processor, acoustic_model
+
     if acoustic_model is not None:
         return ctc_processor, acoustic_model
+
     with acoustic_lock:
+
         if acoustic_model is not None:
             return ctc_processor, acoustic_model
+
         torch = load_torch()
         from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
         mid = acoustic_model_id()
+
         ctc_processor = Wav2Vec2Processor.from_pretrained(mid)
         acoustic_model = Wav2Vec2ForCTC.from_pretrained(mid)
         acoustic_model.eval()
+
         if torch.cuda.is_available():
             acoustic_model.to("cuda")
+
     return ctc_processor, acoustic_model
 
 
@@ -104,19 +111,27 @@ def load_vocab() -> dict[str, int]:
 
 def get_phone_model():
     global phone_fe, phone_model
+
     if phone_model is not None:
         return phone_fe, phone_model
+
     with phone_lock:
+
         if phone_model is not None:
             return phone_fe, phone_model
+
         torch = load_torch()
         from transformers import AutoFeatureExtractor, Wav2Vec2ForCTC
+
         phone_fe = AutoFeatureExtractor.from_pretrained(PHONE_MODEL_ID)
         phone_model = Wav2Vec2ForCTC.from_pretrained(PHONE_MODEL_ID)
         phone_model.eval()
+
         if torch.cuda.is_available():
             phone_model.to("cuda")
+
         load_vocab()
+
     return phone_fe, phone_model
 
 
@@ -124,67 +139,87 @@ def arpa_to_espeak(arpa: list[str]) -> tuple[list[str], list[int]]:
     vocab = load_vocab()
     toks: list[str] = []
     back: list[int] = []
+
     for i, ph in enumerate(arpa):
         base = ph.rstrip("012")
-        for t in ARPA_TO_ESPEAK.get(base, ()):
-            if t in vocab:
-                toks.append(t)
+
+        for token in ARPA_TO_ESPEAK.get(base, ()):
+            if token in vocab:
+                toks.append(token)
                 back.append(i)
+
     return toks, back
 
 
 def ctc_forced_align(log_probs, target_ids: list[int], blank_id: int):
     torch = load_torch()
-    T = log_probs.shape[0]
-    L = len(target_ids)
-    if L == 0 or T == 0:
-        return [0] * T, float("-inf")
+    num_frames = log_probs.shape[0]
+    num_targets = len(target_ids)
+
+    if num_targets == 0 or num_frames == 0:
+        return [0] * num_frames, float("-inf")
+
     ext = [blank_id]
+
     for tid in target_ids:
         ext.append(int(tid))
         ext.append(blank_id)
-    S = len(ext)
-    NEG = -1e9
+
+    num_states = len(ext)
+    neg_inf = -1e9
     ext_t = torch.tensor(ext, dtype=torch.long)
-    lp = log_probs[:, ext_t]  # [T, S]
-    trellis = torch.full((T, S), NEG)
-    choice = torch.zeros((T, S), dtype=torch.long)  # 0=stay, 1=+1, 2=+2
+    lp = log_probs[:, ext_t]
+
+    trellis = torch.full((num_frames, num_states), neg_inf)
+    choice = torch.zeros((num_frames, num_states), dtype=torch.long)
+
     trellis[0, 0] = lp[0, 0]
-    if S > 1:
+
+    if num_states > 1:
         trellis[0, 1] = lp[0, 1]
-    skip_ok = torch.zeros(S, dtype=torch.bool)
-    for s in range(2, S):
+
+    skip_ok = torch.zeros(num_states, dtype=torch.bool)
+
+    for s in range(2, num_states):
         if ext[s] != blank_id and ext[s] != ext[s - 2]:
             skip_ok[s] = True
-    neg_col = torch.full((S,), NEG)
-    for t in range(1, T):
+
+    neg_col = torch.full((num_states,), neg_inf)
+
+    for t in range(1, num_frames):
         prev = trellis[t - 1]
         stay = prev
         plus1 = torch.cat([neg_col[:1], prev[:-1]])
+
         if skip_ok.any():
             plus2 = torch.cat([neg_col[:2], prev[:-2]])
             plus2 = torch.where(skip_ok, plus2, neg_col)
             cand = torch.stack([stay, plus1, plus2], dim=0)
         else:
             cand = torch.stack([stay, plus1], dim=0)
+
         best, idx = cand.max(dim=0)
         trellis[t] = best + lp[t]
         choice[t] = idx
-    last = S - 1
-    if S > 1 and trellis[T - 1, S - 2] > trellis[T - 1, S - 1]:
-        last = S - 2
-    align = [0] * T
+
+    last = num_states - 1
+
+    if num_states > 1 and trellis[num_frames - 1, num_states - 2] > trellis[num_frames - 1, num_states - 1]:
+        last = num_states - 2
+
+    align = [0] * num_frames
     s = last
-    for t in range(T - 1, -1, -1):
+
+    for t in range(num_frames - 1, -1, -1):
         align[t] = s
+
         if t > 0:
-            c = int(choice[t, s])
-            s = s if c == 0 else (s - 1 if c == 1 else s - 2)
-    return align, float(trellis[T - 1, last])
+            move = int(choice[t, s])
+            s = s if move == 0 else (s - 1 if move == 1 else s - 2)
+
+    return align, float(trellis[num_frames - 1, last])
 
 
 FRAME_STRIDE_S = 0.02  # wav2vec2 downsample 320x @16kHz ~= 20ms/frame
-
-
 BLANK_RATIO_MISALIGNED = 0.70  # blank >70% word span -> misalignment, không phải lỗi phát âm
 

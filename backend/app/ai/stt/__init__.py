@@ -15,6 +15,7 @@ from app.ai.stt.helpers import (
     is_prompt_echo,
     is_repetitive_hallucination,
     normalize_pcm_int16,
+    normalize_word_entry,
     normalize_words,
     resolve_stt_language,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "is_repetitive_hallucination",
     "is_stt_server_alive",
     "normalize_pcm_int16",
+    "normalize_word_entry",
     "normalize_words",
     "resolve_stt_language",
     "settings",

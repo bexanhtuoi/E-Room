@@ -111,9 +111,9 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
     inputs = processor(wav, sampling_rate=16000, return_tensors="pt", padding=True)
     input_values = inputs.input_values.to(device)
     with torch.no_grad():
-        logits = model(input_values).logits[0].cpu()  # [T, V]
+        logits = model(input_values).logits[0].cpu()
     log_probs = torch.log_softmax(logits, dim=-1)
-    T, V = log_probs.shape
+    total_frames, num_classes = log_probs.shape
 
     vocab = set(processor.tokenizer.get_vocab().keys())
     vocab.discard(processor.tokenizer.pad_token or "<pad>")
@@ -129,13 +129,13 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
     align, path_score = ctc_forced_align(log_probs, list(target_ids), int(blank_id))
     pred_ids: list[int] = torch.argmax(logits, dim=-1).tolist()
 
-    L = len(target_ids)
+    num_targets = len(target_ids)
     char_lp: list[float] = []
     char_span: list[tuple[int, int]] = []
     char_ok: list[bool] = []
     for i, tid in enumerate(target_ids):
         s = 2 * i + 1
-        frames = [t for t in range(T) if align[t] == s]
+        frames = [t for t in range(total_frames) if align[t] == s]
         if frames:
             vals = [float(log_probs[t, int(tid)]) for t in frames]
             char_lp.append(sum(vals) / len(vals))
@@ -198,8 +198,8 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
 
     try:
         ctc = torch.nn.CTCLoss(blank=int(blank_id), zero_infinity=True)
-        input_lengths = torch.tensor([T])
-        target_lengths = torch.tensor([L])
+        input_lengths = torch.tensor([total_frames])
+        target_lengths = torch.tensor([num_targets])
         loss = float(ctc(log_probs.unsqueeze(1), torch.tensor([target_ids]), input_lengths, target_lengths))
     except Exception:
         loss = float("nan")
@@ -209,7 +209,14 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
     except Exception:
         greedy = ""
 
-    level = "Xuất sắc" if overall >= 85 else ("Tốt" if overall >= 70 else ("Trung bình" if overall >= 50 else "Cần luyện thêm"))
+    if overall >= 85:
+        level = "Xuất sắc"
+    elif overall >= 70:
+        level = "Tốt"
+    elif overall >= 50:
+        level = "Trung bình"
+    else:
+        level = "Cần luyện thêm"
 
     return {
         "transcript_norm": ref_norm,
@@ -219,27 +226,13 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
         "level": level,
         "avg_log_prob": round(float(avg_lp_all), 4),
         "ctc_loss": loss,
-        "num_frames": T,
+        "num_frames": total_frames,
         "duration_s": round(duration_s, 2),
         "model": acoustic_model_id(),
         "n_scored": len(scored),
         "n_no_evidence": len(no_ev),
         "words": words_out,
     }
-
-
-
-# - KHÔNG dùng tokenizer của transformers (nó đòi binary espeak) — đọc thẳng
-#   vocab.json trong HF cache, tokenize thủ công.
-# - user_corrected -> CMUdict (full) -> ARPAbet -> espeak phones.
-# - 1 pass forced alignment (Viterbi, tái dùng ctc_forced_align) trên full audio.
-# - GOP(phone) = mean log-posterior trên các frame align vào phone đó (Witt & Young).
-# - Observed phones = greedy decode phone model (free phone recognition, không LM)
-#   -> align Needleman canonical vs observed -> substitution thật (/th/->/s/).
-# - Char-level (Part 4+6) KHÔNG được gọi là GOP nữa — chỉ fallback khi
-#   model phoneme chưa tải được (ghi rõ trong warnings).
-
-# ARPAbet (đã strip số stress) -> espeak phone token. Mọi token đều có trong vocab.
 
 
 # Deterministic pipeline — LLM feedback KHÔNG được gọi ở đây.
@@ -277,9 +270,9 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
     fl = score_fluency(len(wav)/sr, len([w for w in aligned if w["alignment"] != "deletion"]),
                        pauses, whisper_raw)
 
-    _details = snd["word_details"]
-    _no_ev = sum(1 for d in _details if d.get("status") == "no_evidence")
-    cp = score_completeness(original_text, user_corrected, mode, _details)
+    details = snd["word_details"]
+    no_evidence_count = sum(1 for d in details if d.get("status") == "no_evidence")
+    cp = score_completeness(original_text, user_corrected, mode, details)
     if mode != "read_aloud" and cp.get("missing_words"):
         names = ", ".join(cp["missing_words"][:6])
         warnings.append(f"{len(cp['missing_words'])} từ chưa hoàn thiện, 0 điểm hoặc không tìm thấy ({names}).")
@@ -300,8 +293,8 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
         "alignment": aligned, "speech_segments": segs,
         "scorer_version": "scorer-v2-mvp",
         "gop_model": gop_model,
-        "n_scored": len(_details) - _no_ev,
-        "n_no_evidence": _no_ev,
+        "n_scored": len(details) - no_evidence_count,
+        "n_no_evidence": no_evidence_count,
         "warnings": warnings,
         "compute_s": round(time.time() - t0, 2),
     }
@@ -369,23 +362,32 @@ def score_local(
     language: str = "en",
 ) -> Dict[str, Any]:
     raw = Path(audio_path).read_bytes()
+
     if len(raw) > 100 * 1024 * 1024:
         raise ValueError("Audio > 100MB.")
+
     queued_at = time.monotonic()
+
     with scoring_gate:
         waited = time.monotonic() - queued_at
+
         if waited > 1.0:
             log.info("scoring queued %.1fs (nhieu nguoi cham cung luc)", waited)
+
         wav, sr = load_wav_16k(raw)
         r = score_utterance(wav, int(sr), reference_text)
+
         if "error" in r and "words" not in r:
             raise RuntimeError(f"local scorer: {r.get('error')}")
+
         report = score_attempt_v2(
             wav, sr, "", reference_text, "free_speaking", None, "en-US",
             None, r.get("words", []), r.get("greedy_decoded", ""),
         )
+
     if "error" in report and "scores" not in report:
         raise RuntimeError(f"local scorer: {report.get('error')}")
+
     return report_to_hook(report, "local-v2")
 
 

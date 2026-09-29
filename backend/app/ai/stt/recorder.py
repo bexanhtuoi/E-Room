@@ -302,8 +302,9 @@ class RawAttemptRecorder:
             path = metadata_path(ref.room_id, ref.attempt_id)
             if not path.exists():
                 return
-            with open(path, encoding="utf-8") as fh:
-                meta = json.load(fh)
+            meta = read_attempt_metadata(path)
+            if meta is None:
+                return
             for utt in meta.get("utterances", []):
                 if utt.get("index") == ref.index:
                     utt["message_id"] = message_id
@@ -362,6 +363,14 @@ class RawAttemptRecorder:
         os.replace(tmp, path)
 
 
+def read_attempt_metadata(meta_file: Path) -> Optional[dict]:
+    try:
+        with open(meta_file, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def find_attempt_by_message(
     room_id: int, user_id: Any, message_id: int
 ) -> Optional[Dict[str, Any]]:
@@ -371,23 +380,21 @@ def find_attempt_by_message(
         return None
     uid = str(user_id) if user_id is not None else None
     for meta_file in sorted(root.glob("*/metadata.json")):
-        try:
-            with open(meta_file, encoding="utf-8") as fh:
-                meta = json.load(fh)
-        except (OSError, json.JSONDecodeError):
+        meta = read_attempt_metadata(meta_file)
+        if meta is None:
             continue
         if uid is not None and str(meta.get("user_id")) != uid:
-            # user_identity dạng khác id số vẫn chấp nhận nếu khớp identity
             if str(meta.get("user_identity")) != uid:
                 continue
         utts = meta.get("utterances", []) or []
-        mids = [u.get("message_id") for u in sorted(utts, key=lambda x: x.get("index", 0))]
+        ordered = sorted(utts, key=lambda x: x.get("index", 0))
+        mids = [u.get("message_id") for u in ordered]
         if message_id in mids:
             raw = meta_file.parent / "raw.wav"
             return {
                 "attempt_id": meta.get("attempt_id") or meta_file.parent.name,
                 "raw_path": raw if raw.exists() else None,
-                "utterances": sorted(utts, key=lambda x: x.get("index", 0)),
+                "utterances": ordered,
                 "message_ids": mids,
             }
     return None

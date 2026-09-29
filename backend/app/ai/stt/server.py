@@ -1,3 +1,4 @@
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -30,44 +31,47 @@ STT_URL_CACHE_TTL = 30.0
 STT_ALIVE_CACHE: Dict[str, Any] = {"value": False, "expires": 0.0}
 
 
-def get_stt_server_url_override() -> Optional[str]:
-    import time
-
+def cached_value(cache: Dict[str, Any], ttl_seconds: float, loader) -> Any:
     now = time.monotonic()
-    if now < float(STT_URL_CACHE.get("expires", 0.0)):
-        return STT_URL_CACHE.get("value")
-    value: Optional[str] = None
-    try:
-        from app.integration.redis import get as redis_get
 
-        raw = redis_get(STT_SERVER_URL_OVERRIDE_KEY)
-        value = raw.strip().rstrip("/") if raw and raw.strip() else None
-    except Exception as error:
-        log.warning("STT override read failed, using env | err=%s", error)
-    STT_URL_CACHE["value"] = value
-    STT_URL_CACHE["expires"] = now + STT_URL_CACHE_TTL
+    if now < float(cache.get("expires", 0.0)):
+        return cache.get("value")
+
+    value = loader()
+    cache["value"] = value
+    cache["expires"] = now + ttl_seconds
     return value
 
 
-def is_stt_server_alive() -> bool:
-    import time
+def get_stt_server_url_override() -> Optional[str]:
+    def load_override() -> Optional[str]:
+        try:
+            from app.integration.redis import get as redis_get
 
-    now = time.monotonic()
-    if now < float(STT_ALIVE_CACHE.get("expires", 0.0)):
-        return bool(STT_ALIVE_CACHE.get("value", False))
-    alive = False
-    try:
-        url = (get_stt_server_url_override() or settings.stt_server_base_url).rstrip("/")
-        # /health nằm ở root (:8001/health), không phải dưới /v1.
-        root = url[:-3] if url.endswith("/v1") else url
-        with httpx.Client(timeout=settings.stt_server_alive_timeout) as client:
-            resp = client.get(f"{root}/health")
-            alive = resp.status_code == 200
-    except Exception as error:
-        log.warning("Whisper host unreachable, fallback local | err=%s", str(error)[:150])
-    STT_ALIVE_CACHE["value"] = alive
-    STT_ALIVE_CACHE["expires"] = now + float(settings.stt_server_alive_ttl)
-    return alive
+            raw = redis_get(STT_SERVER_URL_OVERRIDE_KEY)
+            return raw.strip().rstrip("/") if raw and raw.strip() else None
+        except Exception as error:
+            log.warning("STT override read failed, using env | err=%s", error)
+            return None
+
+    return cached_value(STT_URL_CACHE, STT_URL_CACHE_TTL, load_override)
+
+
+def is_stt_server_alive() -> bool:
+    def probe() -> bool:
+        try:
+            url = (get_stt_server_url_override() or settings.stt_server_base_url).rstrip("/")
+            # /health nằm ở root (:8001/health), không phải dưới /v1.
+            root = url[:-3] if url.endswith("/v1") else url
+            with httpx.Client(timeout=settings.stt_server_alive_timeout) as client:
+                resp = client.get(f"{root}/health")
+                return resp.status_code == 200
+        except Exception as error:
+            log.warning("Whisper host unreachable, fallback local | err=%s", str(error)[:150])
+            return False
+
+    cached = cached_value(STT_ALIVE_CACHE, float(settings.stt_server_alive_ttl), probe)
+    return bool(cached)
 
 
 def transcribe_whisper_server(

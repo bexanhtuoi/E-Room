@@ -181,33 +181,48 @@ def get_room_transcript_for_summary(room_id: int) -> List[Dict[str, Any]]:
     ]
 
 
+def rewrite_user_log(path: Path, entries: list) -> None:
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        for entry in entries:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    tmp.replace(path)
+
+
+def update_log_entry(room_id: int, user_id: Any, message_id: int, mutate) -> Optional[Dict[str, Any]]:
+    path = user_log_path(room_id, user_id)
+    entries = read_jsonl(path)
+    updated: Optional[Dict[str, Any]] = None
+
+    for entry in entries:
+        if entry.get("message_id") == message_id:
+            mutate(entry)
+            updated = entry
+            break
+
+    if updated is None:
+        return None
+
+    rewrite_user_log(path, entries)
+    return updated
+
+
 def update_corrected_text(
     room_id: int,
     user_id: Any,
     message_id: int,
     corrected_text: str,
 ) -> Optional[Dict[str, Any]]:
-    path = user_log_path(room_id, user_id)
-    entries = read_jsonl(path)
-    updated: Optional[Dict[str, Any]] = None
     now = utcnow_iso()
-    for entry in entries:
-        if entry.get("message_id") == message_id:
-            if entry.get("corrected_text") != corrected_text:
-                entry["corrected_text"] = corrected_text
-                entry["edited_at"] = now
-                entry["pronunciation"] = None
-                entry["feedback"] = None
-            updated = entry
-            break
-    if updated is None:
-        return None
-    tmp = path.with_suffix(".tmp")
-    with open(tmp, "w", encoding="utf-8") as fh:
-        for entry in entries:
-            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    tmp.replace(path)
-    return updated
+
+    def refresh(entry: dict) -> None:
+        if entry.get("corrected_text") != corrected_text:
+            entry["corrected_text"] = corrected_text
+            entry["edited_at"] = now
+            entry["pronunciation"] = None
+            entry["feedback"] = None
+
+    return update_log_entry(room_id, user_id, message_id, refresh)
 
 
 def attach_pronunciation(
@@ -216,22 +231,10 @@ def attach_pronunciation(
     message_id: int,
     score: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    path = user_log_path(room_id, user_id)
-    entries = read_jsonl(path)
-    updated: Optional[Dict[str, Any]] = None
-    for entry in entries:
-        if entry.get("message_id") == message_id:
-            entry["pronunciation"] = score
-            updated = entry
-            break
-    if updated is None:
-        return None
-    tmp = path.with_suffix(".tmp")
-    with open(tmp, "w", encoding="utf-8") as fh:
-        for entry in entries:
-            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    tmp.replace(path)
-    return updated
+    def attach(entry: dict) -> None:
+        entry["pronunciation"] = score
+
+    return update_log_entry(room_id, user_id, message_id, attach)
 
 
 def attach_feedback(
@@ -240,22 +243,10 @@ def attach_feedback(
     message_id: int,
     feedback: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    path = user_log_path(room_id, user_id)
-    entries = read_jsonl(path)
-    updated: Optional[Dict[str, Any]] = None
-    for entry in entries:
-        if entry.get("message_id") == message_id:
-            entry["feedback"] = feedback
-            updated = entry
-            break
-    if updated is None:
-        return None
-    tmp = path.with_suffix(".tmp")
-    with open(tmp, "w", encoding="utf-8") as fh:
-        for entry in entries:
-            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    tmp.replace(path)
-    return updated
+    def attach(entry: dict) -> None:
+        entry["feedback"] = feedback
+
+    return update_log_entry(room_id, user_id, message_id, attach)
 
 
 def resolve_audio_path(room_id: int, audio_file: Optional[str]) -> Optional[Path]:

@@ -1,4 +1,5 @@
 import io
+import re
 import wave
 from typing import List
 
@@ -8,15 +9,6 @@ from app.config import settings
 
 SPOKEN_LANGUAGES = ("en", "vi", "auto")
 MIN_SEGMENT_LOGPROB = -1.0
-
-
-def normalize_word_entry(word: dict) -> dict:
-    return {
-        "word": str(word.get("word", "")).strip(),
-        "start": float(word.get("start", 0.0)),
-        "end": float(word.get("end", 0.0)),
-        "probability": float(word.get("probability", 1.0)),
-    }
 
 STT_PROMPTS = {
     "en": (
@@ -43,8 +35,16 @@ def build_stt_prompt(language: str) -> str:
     return STT_PROMPTS.get(language, STT_PROMPTS["auto"])
 
 
-def normalize_pcm_int16(audio_data) -> np.ndarray:
+def normalize_word_entry(word: dict) -> dict:
+    return {
+        "word": str(word.get("word", "")).strip(),
+        "start": float(word.get("start", 0.0)),
+        "end": float(word.get("end", 0.0)),
+        "probability": float(word.get("probability", 1.0)),
+    }
 
+
+def normalize_pcm_int16(audio_data) -> np.ndarray:
     if isinstance(audio_data, np.ndarray):
         if audio_data.dtype == np.int16:
             return audio_data
@@ -72,8 +72,6 @@ def convert_audio_to_wav_bytes(audio_data: np.ndarray | bytes, sample_rate: int 
 
 
 def normalize_words(text: str) -> List[str]:
-    import re
-
     return re.findall(r"[a-zà-ỹ0-9]+", text.lower())
 
 
@@ -92,7 +90,6 @@ def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
 
 
 def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
-
     words = normalize_words(text)
     if len(words) < phrase_words * 2:
         return False
@@ -108,7 +105,6 @@ def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
 
 
 def is_prompt_echo(text: str, prompt: str) -> bool:
-
     text_words = normalize_words(text)
     prompt_words = normalize_words(prompt)
     if not text_words or not prompt_words:
