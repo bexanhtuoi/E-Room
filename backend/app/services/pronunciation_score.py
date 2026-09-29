@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, or_, select
 
 from app.models.pronunciation_score import PronunciationScore
 from app.services.base import CRUDRepository
@@ -73,18 +73,22 @@ class PronunciationScoreCrud(CRUDRepository):
         )
 
     def scored_in_window(
-        self, db: Session, room_id: int, user_id: int, start, end=None
+        self, db: Session, room_id: int, user_id: int, start, end=None, session_id=None
     ) -> List[PronunciationScore]:
-        """Các dòng đã chấm của user trong khoảng session (DB là nguồn thật)."""
+        """Các dòng đã chấm của user trong khoảng session (DB là nguồn thật).
+        Batch chấm sau call gắn session_id nên match cả khi created_at ngoài window."""
+        time_match = PronunciationScore.created_at >= start
+        if end is not None:
+            time_match = time_match & (PronunciationScore.created_at <= end)
+        if session_id is not None:
+            time_match = or_(PronunciationScore.session_id == session_id, time_match)
         stmt = (
             select(PronunciationScore)
             .where(PronunciationScore.room_id == room_id)
             .where(PronunciationScore.user_id == user_id)
-            .where(PronunciationScore.created_at >= start)
+            .where(time_match)
             .order_by(PronunciationScore.id.asc())
         )
-        if end is not None:
-            stmt = stmt.where(PronunciationScore.created_at <= end)
         return list(db.exec(stmt).all())
 
 

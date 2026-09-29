@@ -21,6 +21,10 @@ class SessionCrud(CRUDRepository):
     def get_mine(self, db: Session, user_id: int, limit: int = 100) -> List[SessionModel]:
         return self.get_many(db, user_id=user_id, order_by="id", desc=True, limit=limit)
 
+    def get_latest(self, db: Session, user_id: int, room_id: int) -> Optional[SessionModel]:
+        rows = self.get_many(db, user_id=user_id, room_id=room_id, order_by="id", desc=True, limit=1)
+        return rows[0] if rows else None
+
     def open(self, db: Session, room_id: int, user_id: int | None) -> None:
         if user_id is None:
             return

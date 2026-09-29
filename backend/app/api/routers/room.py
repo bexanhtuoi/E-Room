@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from redis.exceptions import RedisError
 from sqlmodel import Session
 
-from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity
+from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity, score_room_utterances
 from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
 from app.config import settings
 from app.database import get_session
@@ -537,6 +537,11 @@ def drop_participant_from_room(db: Session, room_name: str, participant_identity
         room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.IDLE})
 
     session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
+
+    try:
+        score_room_utterances.apply_async(args=[room_id_int], queue=settings.ai_queue_name)
+    except Exception as error:
+        log.warning("Room scoring not enqueued | room_id=%s error=%s", room_id_int, error)
 
 
 @router.post("/livekit/webhook")

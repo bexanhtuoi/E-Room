@@ -201,6 +201,17 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     }
   }
 
+  async function waitForScore(messageId, timeoutMs = 10 * 60 * 1000) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      await new Promise((resolve) => { setTimeout(resolve, 3000); });
+      const { data } = await speechQuery.refetch();
+      const list = Array.isArray(data) ? data : [];
+      if (list.some((u) => u?.message_id === messageId && u?.pronunciation)) return;
+      if (Date.now() > deadline) throw new Error('Chấm điểm quá lâu — thử lại sau.');
+    }
+  }
+
   async function scoreUtterance(entry) {
     const key = entry?.message_id ?? entry?.created_at ?? Math.random();
     if (busyScoreKey !== null || entry?.message_id == null) {
@@ -210,7 +221,10 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     setBusyScoreKey(key);
     setScoreError('');
     try {
-      await fetchJson(`/rooms/${room.id}/speech-logs/${entry.message_id}/score`, { method: 'POST' });
+      const res = await fetchJson(`/rooms/${room.id}/speech-logs/${entry.message_id}/score`, { method: 'POST' });
+      if (res?.status === 'queued') {
+        await waitForScore(entry.message_id);
+      }
       await speechQuery.refetch();
     } catch (error) {
       setScoreError(error?.message || 'Chấm điểm thất bại');
@@ -506,7 +520,10 @@ function SessionFeedbackBody({ feedback }) {
           <div style={{ fontSize: 13, fontWeight: 800 }}>Words to fix</div>
           <ul style={{ fontSize: 14, paddingLeft: 18, margin: '4px 0 0' }}>
             {errors.map((e, i) => (
-              <li key={i}><b>{e.word}</b> — {e.issue}{e.tip ? ` → ${e.tip}` : ''}</li>
+              <li key={i}>
+                <b>{e.word}</b>{e.vi ? ` (“${e.vi}”)` : ''} — {e.issue}
+                {e.how_to ? <div style={{ color: '#555' }}>Cách sửa: {e.how_to}</div> : (e.tip ? ` → ${e.tip}` : '')}
+              </li>
             ))}
           </ul>
         </div>

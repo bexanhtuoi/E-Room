@@ -128,9 +128,11 @@ export function ReadingScoreCard({
         <div className="er-alert er-alert--warn" style={{ marginTop: 12 }} data-testid="reading-heuristic">
           {heuristicReason === 'no_audio'
             ? 'Chưa chấm được vì thiếu audio của lượt nói này (bản ghi âm chưa có hoặc đã mất). Hãy vào phòng nói lại câu này rồi chấm lại.'
-            : heuristicReason === 'scorer_failed'
-              ? 'Máy chấm AI gặp sự cố nên chỉ ước lượng tạm. Hãy bấm Chấm lại để thử lại với scorer thật.'
-              : 'Điểm này chỉ là ước lượng tạm (thiếu dữ liệu chấm). Hãy chấm lại khi có audio.'}
+            : heuristicReason === 'quiet_audio'
+              ? 'Âm thanh quá nhỏ nên AI không nghe rõ để chấm. Hãy nói to hơn, gần mic hơn rồi bấm Chấm lại.'
+              : heuristicReason === 'scorer_failed'
+                ? 'Máy chấm AI gặp sự cố nên chỉ ước lượng tạm. Hãy bấm Chấm lại để thử lại với scorer thật.'
+                : 'Điểm này chỉ là ước lượng tạm (thiếu dữ liệu chấm). Hãy chấm lại khi có audio.'}
           <div style={{ marginTop: 8 }}>
             <button type="button" className="er-btn" disabled={scoring || scoreDisabled} onClick={onScore}>
               {scoring ? 'Đang chấm…' : 'Chấm lại'}
@@ -298,7 +300,10 @@ function AIFeedbackBody({ feedback }) {
           <div style={{ fontSize: 13, fontWeight: 800 }}>Ưu tiên sửa</div>
           <ul style={{ fontSize: 14, paddingLeft: 18, margin: '4px 0 0' }}>
             {feedback.priority_errors.map((e, i) => (
-              <li key={i}><b>{e.word}</b> — {e.issue}{e.advice ? ` (${e.advice})` : ''}</li>
+              <li key={i}>
+                <b>{e.word}</b>{e.vi ? ` (“${e.vi}”)` : ''} — {e.issue}
+                {e.advice ? <div style={{ color: '#555' }}>Cách sửa: {e.advice}</div> : null}
+              </li>
             ))}
           </ul>
         </div>

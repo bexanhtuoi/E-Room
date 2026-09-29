@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.config import settings
 from app.ai.pronunciation import SESSION_FEEDBACK_PROMPT
+from app.config import settings
 
 
 def _make_room_and_session(client: TestClient, alice: dict) -> tuple[dict, int]:
@@ -104,6 +104,25 @@ class TestSessionFeedback:
 
 
 class TestScoreDbWriteThrough:
+    def test_audio_utterance_returns_202_and_enqueues(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
+        """Có audio -> viec nang -> 202 + enqueue, khong cham sync (het 504)."""
+        import numpy as np
+
+        from app.ai.speech_log import append_utterance
+
+        monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
+        room, _ = _make_room_and_session(client, alice)
+        append_utterance(
+            room["id"], alice["id"], "Tester", message_id=2, text="slow heavy sentence",
+            audio_data=np.zeros(16000, dtype=np.int16),
+        )
+
+        with patch("app.api.routers.speech.score_single_utterance") as mock_task:
+            resp = client.post(f"/api/v1/rooms/{room['id']}/speech-logs/2/score")
+            assert resp.status_code == 202, resp.text
+            assert resp.json()["status"] == "queued"
+            mock_task.apply_async.assert_called_once()
+
     def test_heuristic_rescore_writes_db(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
         """Không audio -> heuristic (nhẹ, không cần model) nhưng vẫn write-through DB."""
         from sqlmodel import Session as DBSession

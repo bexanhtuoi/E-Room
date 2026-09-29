@@ -107,6 +107,22 @@ describe('ReadingScoreCard', () => {
     expect(screen.getByTestId('reading-heuristic').textContent).toContain('thiếu audio');
   });
 
+  it('bản heuristic quiet_audio hiện hướng dẫn nói to hơn', () => {
+    render(
+      <ReadingScoreCard
+        utterance={{
+          text: DEMO_TEXT,
+          corrected_text: DEMO_TEXT,
+          pronunciation: { score: 40.0, method: 'heuristic-v1', reason: 'quiet_audio', scored_text: DEMO_TEXT },
+        }}
+        onScore={vi.fn()}
+        onFeedback={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('reading-overall')).toBeNull();
+    expect(screen.getByTestId('reading-heuristic').textContent).toContain('nói to hơn');
+  });
+
   it('chữ khớp lệch vẫn hiện điểm thật thay vì Không nghe rõ', () => {
     render(
       <ReadingScoreCard

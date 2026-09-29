@@ -19,19 +19,20 @@ Luồng chấm điểm raw -> sửa -> chấm:
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
-from app.ai.pronunciation import request_pronun_feedback, score_pronunciation
+from app.ai.pronunciation import request_pronun_feedback
 from app.ai.speech_log import (
     attach_feedback,
-    attach_pronunciation,
     get_room_transcript_for_summary,
     read_room_logs,
     read_user_log,
-    resolve_audio_path,
     update_corrected_text,
 )
+from app.ai.tasks import score_room_utterance, score_single_utterance
 from app.api.dependencies import authorize_room_access, require_auth
+from app.config import settings
 from app.database import get_session
 from app.log import get_logger
 from app.schemas.speech import (
@@ -47,6 +48,27 @@ from app.services.session import session_crud
 router = APIRouter()
 
 log = get_logger("app.api.routers.speech")
+
+
+def utterance_needs_heavy_scoring(room_id: int, user_id: Any, message_id: Any, entry: Dict[str, Any]) -> bool:
+    if settings.pronun_base_url:
+        return False
+
+    try:
+        from app.ai.raw_recorder import find_attempt_by_message
+
+        attempt = find_attempt_by_message(room_id, user_id, message_id)
+        if attempt and attempt.get("raw_path") is not None:
+            return True
+    except Exception:
+        pass
+
+    try:
+        from app.ai.speech_log import resolve_audio_path
+
+        return resolve_audio_path(room_id, entry.get("audio_file")) is not None
+    except Exception:
+        return False
 
 
 def _get_room_or_404(db: Session, room_id: int, request: Request):
@@ -138,60 +160,34 @@ def rescore_utterance(
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utterance not found")
 
-    # LUẬT: chunk VAD chỉ cho Whisper realtime. Chấm điểm dùng audio ĐẦU-CUỐI:
-    # raw.wav của attempt chứa câu này + toàn bộ corrected_text của lượt nói
-    # (nối theo thứ tự utterance). Không có attempt (log cũ) mới rớt về wav VAD.
-    audio_path = None
-    reference = entry.get("corrected_text") or entry.get("text", "")
-    attempt_id: Any = None
-    try:
-        from app.ai.raw_recorder import find_attempt_by_message
+    open_session = session_crud.get_open(db, user_id=target_uid, room_id=room_id)
 
-        attempt = find_attempt_by_message(room_id, target_uid, message_id)
-    except Exception:
-        attempt = None
-    if attempt and attempt.get("raw_path") is not None:
-        by_id = {e.get("message_id"): e for e in entries}
-        parts = [
-            (by_id[mid].get("corrected_text") or by_id[mid].get("text", ""))
-            for mid in attempt.get("message_ids", [])
-            if mid in by_id and (by_id[mid].get("corrected_text") or by_id[mid].get("text", "")).strip()
-        ]
-        if parts:
-            audio_path = attempt["raw_path"]
-            reference = " ".join(parts)
-            attempt_id = attempt.get("attempt_id")
-    if audio_path is None:
-        # Fallback log cũ: wav VAD từng câu + text từng câu (khớp cặp, không mismatch)
-        audio_path = resolve_audio_path(room_id, entry.get("audio_file"))
-    score = score_pronunciation(
-        audio_path=audio_path,
-        reference_text=reference,
-        language=entry.get("language", "en"),
-        confidence=entry.get("confidence", 1.0),
-        avg_logprob=entry.get("avg_logprob", 0.0),
-        duration=entry.get("duration", 0.0),
-        words=entry.get("words", []),
-    )
-    score["scored_text"] = reference
-    if attempt_id is not None:
-        score["attempt_id"] = attempt_id
-    updated = attach_pronunciation(room_id, target_uid, message_id, score)
-    # Write-through DB (máy host tính, DB lưu kết quả cho đồng nhất).
-    # JSONL vẫn giữ làm log raw/audio. Lỗi DB không được làm rớt điểm vừa chấm.
-    try:
-        open_session = session_crud.get_open(db, user_id=target_uid, room_id=room_id)
-        pronunciation_score_crud.upsert_score(
-            db,
-            room_id=room_id,
-            user_id=target_uid,
-            message_id=message_id,
-            session_id=open_session.id if open_session else None,
-            score=score,
+    if utterance_needs_heavy_scoring(room_id, target_uid, message_id, entry):
+        try:
+            score_single_utterance.apply_async(
+                args=[room_id, target_uid, message_id, open_session.id if open_session else None],
+                queue=settings.ai_queue_name,
+            )
+        except Exception as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Scoring queue unavailable: {error}",
+            )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"status": "queued", "room_id": room_id, "message_id": message_id},
         )
-    except Exception as error:
-        log.warning("score DB write-through failed | room=%s msg=%s err=%s", room_id, message_id, error)
-    return SpeechUtterance(**(updated or {**entry, "pronunciation": score}))
+
+    updated = score_room_utterance(
+        db,
+        room_id,
+        target_uid,
+        message_id,
+        open_session.id if open_session else None,
+    )
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing to score")
+    return SpeechUtterance(**updated)
 
 
 @router.post("/{room_id}/speech-logs/{message_id}/feedback", response_model=SpeechUtterance)
@@ -238,7 +234,7 @@ def feedback_utterance(
         scoring_report=report,
         model=opts.model or "",
         temperature=opts.temperature if opts.temperature is not None else 0.6,
-        max_tokens=opts.max_tokens if opts.max_tokens is not None else 1200,
+        max_tokens=opts.max_tokens if opts.max_tokens is not None else 2000,
     )
     updated = attach_feedback(room_id, target_uid, message_id, feedback)
     # Write-through feedback vào DB (khớp dòng điểm đã lưu ở POST .../score).

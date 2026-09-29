@@ -5,6 +5,7 @@ from app.models import Room
 from app.services.base import CRUDRepository
 from app.services.document import document_crud, drop_doc_storage
 from app.services.message import message_crud
+from app.services.pronunciation_score import pronunciation_score_crud
 from app.services.session import session_crud
 
 
@@ -13,6 +14,9 @@ class RoomCrud(CRUDRepository):
         super().__init__(model=Room)
 
     def delete_cascade(self, db: Session, room_id: int, with_storage: bool = True) -> None:
+        for score in pronunciation_score_crud.get_many(db, room_id=room_id):
+            pronunciation_score_crud.delete(db, db_obj=score)
+
         for message in message_crud.get_many(db, room_id=room_id):
             message_crud.delete(db, db_obj=message)
 

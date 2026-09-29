@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 import numpy as np
 
+from app.ai.articulation import guide_for_word
 from app.config import settings
 from app.log import get_logger
 
@@ -70,6 +71,25 @@ def load_wav_16k(raw: bytes) -> tuple[np.ndarray, int]:
             wav = wav[idx]
         sr = 16000
     return wav, sr
+
+
+QUIET_PEAK_THRESHOLD = 0.08
+QUIET_RMS_THRESHOLD = 0.015
+
+
+def check_audio_quality(wav: np.ndarray, sr: int = 16000) -> Dict[str, Any]:
+    flat = np.asarray(wav, dtype=np.float64).reshape(-1)
+    peak = float(np.max(np.abs(flat))) if flat.size else 0.0
+    rms = float(np.sqrt(np.mean(flat ** 2))) if flat.size else 0.0
+    duration = float(len(flat)) / float(sr or 16000)
+    ok = not (peak < QUIET_PEAK_THRESHOLD and rms < QUIET_RMS_THRESHOLD)
+    return {
+        "ok": ok,
+        "peak": round(peak, 4),
+        "rms": round(rms, 4),
+        "duration_s": round(duration, 2),
+        "hint": "" if ok else "Âm thanh quá nhỏ — hãy nói to hơn, gần mic hơn rồi chấm lại.",
+    }
 
 
 def frame_rms(wav: np.ndarray, frame_len: int = 320) -> np.ndarray:
@@ -664,8 +684,29 @@ def score_fluency(duration_s: float, words_count: int, pauses: list[tuple[float,
             "score": round(max(0.0, min(100.0, s)),1)}
 
 
-def score_completeness(original: str | None, corrected: str, mode: str) -> dict:
-    if mode != "read_aloud" or not original:
+def score_completeness(
+    original: str | None,
+    corrected: str,
+    mode: str,
+    word_details: list[dict] | None = None,
+) -> dict:
+    if mode == "read_aloud" and original:
+        return _score_completeness_read_aloud(original, corrected, mode)
+    details = word_details or []
+    total = len(details)
+    if not total:
+        return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 0.0}
+    missing = [
+        str(d.get("word", ""))
+        for d in details
+        if d.get("status") == "no_evidence" or float(d.get("score") or 0.0) <= 0.0
+    ]
+    score = round(100.0 * (total - len(missing)) / total, 1)
+    return {"mode": mode, "missing_words": missing[:20], "extra_words": [], "wer_vs_original": None, "score": score}
+
+
+def _score_completeness_read_aloud(original: str | None, corrected: str, mode: str) -> dict:
+    if not original:
         return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 100.0}
     a, b = _tok_words(original), _tok_words(corrected)
     sa, sb = set(a), set(b)
@@ -1148,12 +1189,15 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
     segs, pauses = vad_segments(wav, sr)
     fl = score_fluency(len(wav)/sr, len([w for w in aligned if w["alignment"] != "deletion"]),
                        pauses, whisper_raw)
-    cp = score_completeness(original_text, user_corrected, mode)
+    _details = snd["word_details"]
+    _no_ev = sum(1 for d in _details if d.get("status") == "no_evidence")
+    cp = score_completeness(original_text, user_corrected, mode, _details)
+    if mode != "read_aloud" and cp.get("missing_words"):
+        names = ", ".join(cp["missing_words"][:6])
+        warnings.append(f"{len(cp['missing_words'])} từ chưa hoàn thiện, 0 điểm hoặc không tìm thấy ({names}).")
     f0 = extract_f0(wav, sr)
     monotone = f0["std_f0"] < 15 and f0["voiced_ratio"] > 0.1
     overall = calculate_overall(snd["sounds"], st["stress"], fl["score"], cp["score"])
-    _details = snd["word_details"]
-    _no_ev = sum(1 for d in _details if d.get("status") == "no_evidence")
     return {
         "scores": {"sounds": snd["sounds"], "stress": st["stress"], "fluency": fl["score"],
                    "completeness": cp["score"], "intonation": None, "overall": overall},
@@ -1395,9 +1439,17 @@ SYSTEM_PROMPT = _PROMPTS["utterance"]
 SESSION_FEEDBACK_PROMPT = _PROMPTS["session"]
 
 
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_reasoning(content: str) -> str:
+    """Bỏ khối reasoning (<think>...</think>) model đôi khi kèm theo."""
+    return _THINK_BLOCK_RE.sub("", content or "").strip()
+
+
 def _extract_json(content: str) -> Dict[str, Any] | None:
     """LLM local tra JSON (co the kem text). Boc tach object JSON dau tien."""
-    text = (content or "").strip()
+    text = _strip_reasoning(content)
     if not text:
         return None
     try:
@@ -1417,13 +1469,14 @@ def _extract_json(content: str) -> Dict[str, Any] | None:
 
 
 async def generate_feedback(scoring_report: dict, model: str = "",
-                            temperature: float = 0.6, max_tokens: int = 1200,
+                            temperature: float = 0.6, max_tokens: int = 2000,
                             system_prompt: str = "", user_label: str = "scoring_report") -> dict:
     from app.ai import get_llm
 
     user_msg = f"{user_label}:\n" + json.dumps(scoring_report, ensure_ascii=False)[:12000]
     try:
-        llm = get_llm(model=model, temperature=temperature, max_tokens=max_tokens)
+        llm = get_llm(model=model, temperature=temperature, max_tokens=max_tokens,
+                        reasoning="exclude")
         msg = await llm.ainvoke([
             {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
@@ -1439,23 +1492,18 @@ async def generate_feedback(scoring_report: dict, model: str = "",
     return {"feedback_raw": content, "model": (model or "").strip() or settings.llm_model, "usage": {}}
 
 
-def _fallback_tip(word: str, issue: str) -> str:
-    """Mẹo luyện chung theo loại lỗi (tiếng Việt, không cần LLM)."""
-    low = (issue or "").lower()
-    if "no_evidence" in low or "nuốt" in low or "không nghe" in low:
-        return f"Đọc rõ phụ âm cuối của '{word}' — đừng nuốt âm, giữ hơi đến hết chữ."
-    if "->" in issue:
-        return f"Luyện cặp âm tối thiểu chứa '{word}': đọc chậm, soi gương vị trí lưỡi/môi."
-    if "stress" in low or "nhấn" in low:
-        return f"Nhấn mạnh âm tiết chính của '{word}', đọc nhẹ các âm còn lại."
-    return f"Đọc chậm '{word}' từng âm, ghi âm lại rồi so với mẫu."
-
-
 def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_report") -> dict:
     """Gợi ý theo quy tắc từ điểm đã chấm (không cần LLM).
     Dùng khi LLM local chết — API vẫn 200, không 502. Bao đủ keys cho cả
     2 frontend (utterance: pronunciation_feedback/priority_errors/...;
     session: error_words)."""
+    def word_guide(word: str, issue: str) -> Dict[str, str]:
+        try:
+            arpa = get_pronunciation(word.split(",")[0].strip(), "en-US").get("arpa", [])
+        except Exception:
+            arpa = []
+        return guide_for_word(word, arpa, issue)
+
     report = scoring_report or {}
     utts = report.get("utterances")
     if isinstance(utts, list):
@@ -1465,11 +1513,14 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
             bad = u.get("bad_words") or []
             for b in bad[:5]:
                 w = b.get("word") or "?"
-                entries.append({"word": w, "issue": f"{b.get('status', '')} {b.get('expected_ipa', '')}".strip(),
-                                "score": b.get("score")})
+                issue = f"{b.get('status', '')} {b.get('expected_ipa', '')}".strip()
+                entries.append({"word": w, "issue": issue, "score": b.get("score"),
+                                **word_guide(w, issue)})
             for t in (u.get("top_errors") or [])[:3]:
-                entries.append({"word": ", ".join(t.get("examples", [])[:2]) or "?",
-                                "issue": str(t.get("pattern", "")), "score": None})
+                w = ", ".join(t.get("examples", [])[:2]) or "?"
+                issue = str(t.get("pattern", ""))
+                entries.append({"word": w, "issue": issue, "score": None,
+                                **word_guide(w, issue)})
         scored = [u for u in utts if isinstance(u.get("overall"), (int, float))]
         avg = round(sum(u["overall"] for u in scored) / len(scored), 1) if scored else 0.0
         n = len(utts)
@@ -1478,12 +1529,15 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
         entries = []
         for w in report.get("word_details") or []:
             if (w.get("status") or "ok") != "ok":
-                entries.append({"word": w.get("word") or "?",
-                                "issue": f"{w.get('status', '')} {w.get('expected_ipa', '')}".strip(),
-                                "score": w.get("score")})
+                word = w.get("word") or "?"
+                issue = f"{w.get('status', '')} {w.get('expected_ipa', '')}".strip()
+                entries.append({"word": word, "issue": issue, "score": w.get("score"),
+                                **word_guide(word, issue)})
         for t in (report.get("top_errors") or [])[:3]:
-            entries.append({"word": ", ".join(t.get("examples", [])[:2]) or "?",
-                            "issue": str(t.get("pattern", "")), "score": None})
+            w = ", ".join(t.get("examples", [])[:2]) or "?"
+            issue = str(t.get("pattern", ""))
+            entries.append({"word": w, "issue": issue, "score": None,
+                            **word_guide(w, issue)})
         overall = ((report.get("scores") or {}).get("overall"))
         avg = round(float(overall), 1) if isinstance(overall, (int, float)) else 0.0
         n = 1
@@ -1501,20 +1555,30 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
     else:
         summary = f"Chấm {n} câu, điểm trung bình {avg}. Không phát hiện lỗi âm rõ rệt — giữ phong độ."
     error_words = [{"word": e["word"], "issue": e["issue"] or "cần luyện thêm",
-                    "tip": _fallback_tip(e["word"], e["issue"])} for e in top]
+                    "tip": e["how_to"], "how_to": e["how_to"], "vi": e["vi"]} for e in top]
+    if top:
+        first = top[0]
+        practice_plan = [
+            f"Luyện từ khó nhất '{first['word']}' (đọc là “{first['vi']}”): {first['how_to']}",
+            "Đọc chậm từng từ sai, ghi âm và so với mẫu 3 lần.",
+            "Nói lại cả đoạn ở tốc độ tự nhiên rồi chấm lại để kiểm tra.",
+        ]
+    else:
+        practice_plan = [
+            "Đọc chậm từng từ sai, ghi âm và so với mẫu 3 lần.",
+            "Luyện câu đầy đủ với nhịp đều, không nuốt âm cuối.",
+            "Nói lại cả đoạn ở tốc độ tự nhiên rồi chấm lại để kiểm tra.",
+        ]
     return {
         "summary": summary,
         "pronunciation_feedback": summary,
         "stress_feedback": "",
         "intonation_feedback": "",
         "fluency_feedback": "",
-        "priority_errors": [{"word": e["word"], "issue": e["issue"]} for e in top],
+        "priority_errors": [{"word": e["word"], "issue": e["issue"],
+                             "advice": e["how_to"], "vi": e["vi"]} for e in top],
         "error_words": error_words,
-        "practice_plan": [
-            "Đọc chậm từng từ sai, ghi âm và so với mẫu 3 lần.",
-            "Luyện câu đầy đủ với nhịp đều, không nuốt âm cuối.",
-            "Nói lại cả đoạn ở tốc độ tự nhiên rồi chấm lại để kiểm tra.",
-        ],
+        "practice_plan": practice_plan,
         "model": "rule-based-fallback",
         "fallback": True,
         "usage": {},
@@ -1555,6 +1619,19 @@ def score_pronunciation(
         try:
             path = Path(audio_path)
             if path.exists():
+                try:
+                    probe_wav, probe_sr = load_wav_16k(path.read_bytes())
+                    quality = check_audio_quality(probe_wav, probe_sr)
+                except Exception:
+                    quality = {"ok": True, "peak": 0.0, "rms": 0.0, "duration_s": 0.0, "hint": ""}
+                if not quality["ok"]:
+                    log.info(
+                        "scoring skipped, audio too quiet | peak=%s rms=%s path=%s",
+                        quality["peak"], quality["rms"], path,
+                    )
+                    result = _heuristic("quiet_audio")
+                    result["audio_quality"] = quality
+                    return result
                 return score_with_wav2vec2(path, reference_text, language)
             log.warning("scoring thiếu audio (file không tồn tại: %s) — fallback heuristic", audio_path)
             return _heuristic("no_audio")

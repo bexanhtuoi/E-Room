@@ -303,7 +303,8 @@ def session_feedback(
     end = as_naive_utc(db_session.left_at) if db_session.left_at is not None else None
 
     rows = pronunciation_score_crud.scored_in_window(
-        db, db_session.room_id, db_session.user_id, start, end
+        db, db_session.room_id, db_session.user_id, start, end,
+        session_id=db_session.id,
     )
     summaries = []
     for row in rows:
@@ -346,7 +347,7 @@ def session_feedback(
             scoring_report=payload,
             model=opts.model or "",
             temperature=opts.temperature if opts.temperature is not None else 0.6,
-            max_tokens=opts.max_tokens if opts.max_tokens is not None else 1200,
+            max_tokens=opts.max_tokens if opts.max_tokens is not None else 2000,
             system_prompt=SESSION_FEEDBACK_PROMPT,
             user_label="session_scores",
         )

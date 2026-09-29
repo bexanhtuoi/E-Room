@@ -26,7 +26,11 @@ def is_openrouter(base_url: str) -> bool:
     return "openrouter" in (base_url or "").lower()
 
 
-def reasoning_body(base_url: str) -> Dict[str, object]:
+def reasoning_body(base_url: str, effort: str = "low") -> Dict[str, object]:
+    if (effort or "").strip().lower() in ("exclude", "none", "off"):
+        if is_openrouter(base_url):
+            return {"reasoning": {"exclude": True}}
+        return {}
     if is_openrouter(base_url):
         return {"reasoning": {"effort": "low"}}
 
@@ -37,7 +41,8 @@ def reasoning_body(base_url: str) -> Dict[str, object]:
 
 
 def get_llm(timeout: Optional[int] = None, model: Optional[str] = None,
-            temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> ChatOpenAI:
+            temperature: Optional[float] = None, max_tokens: Optional[int] = None,
+            reasoning: str = "low") -> ChatOpenAI:
     base_url = settings.llm_base_url
 
     return ChatOpenAI(
@@ -45,7 +50,7 @@ def get_llm(timeout: Optional[int] = None, model: Optional[str] = None,
         model=(model or "").strip() or settings.llm_model,
         api_key=settings.llm_api_key or "not-needed",
         timeout=timeout if timeout is not None else settings.llm_call_timeout_seconds,
-        extra_body=reasoning_body(base_url),
+        extra_body=reasoning_body(base_url, reasoning),
         **({"temperature": temperature} if temperature is not None else {}),
         **({"max_tokens": max_tokens} if max_tokens is not None else {}),
     )

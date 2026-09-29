@@ -8,6 +8,7 @@ from app.services.base import CRUDRepository
 from app.services.document import document_crud
 from app.services.message import message_crud
 from app.services.notification import notification_crud
+from app.services.pronunciation_score import pronunciation_score_crud
 from app.utils.datetime_utils import as_naive_utc, now_utc
 
 
@@ -47,6 +48,8 @@ class UserCrud(CRUDRepository):
             notification_crud.delete(db, db_obj=notif)
         for doc in document_crud.get_many(db, user_id=user_id):
             document_crud.delete(db, db_obj=doc)
+        for score in pronunciation_score_crud.get_many(db, user_id=user_id):
+            pronunciation_score_crud.delete(db, db_obj=score)
 
     def week_counts(self, db: Session, user_id: int) -> dict:
         now = as_naive_utc(now_utc())
