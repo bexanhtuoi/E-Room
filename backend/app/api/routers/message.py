@@ -1,21 +1,14 @@
 ﻿from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlmodel import Session
 
-from app.ai.tasks import enqueue_ai_job, mark_room_activity
-from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
+from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
-from app.log import get_logger
-from app.models import MessageRole
 from app.schemas import MessageCreateSchema, MessageResponse
-from app.services import message_crud, room_crud
-from app.services.session import is_session_chat
-from app.utils.chat import scrub_meta, strip_ai_mention
+from app.services import message as message_service
 
 router = APIRouter()
-
-log = get_logger("app.api")
 
 
 @router.get("/", response_model=List[MessageResponse])
@@ -30,32 +23,10 @@ def get_messages(
 ) -> List[MessageResponse]:
     skip, limit = pagination
 
-    if room_id is not None:
-        db_room = room_crud.get_one(db, id=room_id)
-        if db_room is not None:
-            authorize_room_access(db_room, request)
-
-    current_user = request.state.current_user
-    is_self_lookup = user_id is not None and str(user_id) == str(current_user.id)
-
-    if user_id is not None and room_id is None:
-        if not is_self_lookup and current_user.role != "admin":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-
-    if room_id is None and not is_self_lookup and current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="room_id is required")
-
-    filter_kwargs = {}
-    if room_id is not None:
-        filter_kwargs["room_id"] = room_id
-    if user_id is not None:
-        filter_kwargs["user_id"] = user_id
-    if role is not None:
-        filter_kwargs["role"] = role
-
-    messages = message_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True, **filter_kwargs)
-
-    return [message for message in messages if not is_session_chat(message)]
+    return message_service.list_messages(
+        db, request.state.current_user,
+        room_id=room_id, user_id=user_id, role=role, skip=skip, limit=limit,
+    )
 
 
 @router.get("/count")
@@ -67,27 +38,11 @@ def count_messages(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    if room_id is not None:
-        db_room = room_crud.get_one(db, id=room_id)
-        if db_room is not None:
-            authorize_room_access(db_room, request)
+    count = message_service.count_messages(
+        db, request.state.current_user, room_id=room_id, user_id=user_id, role=role,
+    )
 
-    current_user = request.state.current_user
-    if room_id is None and user_id is None and current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="room_id or user_id is required")
-    if user_id is not None and room_id is None:
-        if str(user_id) != str(current_user.id) and current_user.role != "admin":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-
-    filter_kwargs = {}
-    if room_id is not None:
-        filter_kwargs["room_id"] = room_id
-    if user_id is not None:
-        filter_kwargs["user_id"] = user_id
-    if role is not None:
-        filter_kwargs["role"] = role
-
-    return {"count": message_crud.count(db, **filter_kwargs)}
+    return {"count": count}
 
 
 @router.get("/{message_id}", response_model=MessageResponse)
@@ -97,14 +52,7 @@ def get_message(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> MessageResponse:
-    db_message = message_crud.get_one(db, id=message_id)
-    if not db_message:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
-
-    db_room = room_crud.get_one(db, id=db_message.room_id)
-    if db_room is not None:
-        authorize_room_access(db_room, request)
-    return db_message
+    return message_service.get_message_data(db, request.state.current_user, message_id)
 
 
 @router.post("/", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -114,31 +62,7 @@ def create_message(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> MessageResponse:
-    db_room = room_crud.get_one(db, id=message_in.room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-    authorize_room_access(db_room, request)
-
-    obj_in_data = message_in.model_dump()
-    obj_in_data["user_id"] = request.state.current_user.id
-    obj_in_data["role"] = MessageRole.USER
-    obj_in_data["meta_data"] = scrub_meta(obj_in_data.get("meta_data"))
-    new_message = message_crud.create(db, obj_in=obj_in_data)
-
-    try:
-        mark_room_activity(message_in.room_id)
-        query = strip_ai_mention(message_in.text)
-        if query:
-            enqueue_ai_job(
-                message_in.room_id,
-                "answer",
-                query,
-                new_message.id,
-            )
-    except Exception as error:
-        log.warning("Message post-processing skipped | room_id=%s error=%s", message_in.room_id, error)
-
-    return new_message
+    return message_service.create_message(db, request.state.current_user, message_in)
 
 
 @router.delete("/{message_id}", response_model=MessageResponse)
@@ -148,11 +72,4 @@ def delete_message(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> MessageResponse:
-    db_message = message_crud.get_one(db, id=message_id)
-    if not db_message:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
-
-    authorize_owner(db_message.user_id, request)
-
-    deleted_message = message_crud.delete(db, db_obj=db_message)
-    return deleted_message
+    return message_service.delete_message(db, request.state.current_user, message_id)

@@ -11,7 +11,7 @@ class TestGoogleLogin:
         assert "/login?google=error" in response.headers["location"]
 
     def test_login_redirects_to_google_when_configured(self, client: TestClient, monkeypatch):
-        import app.api.routers.google_auth as google_auth
+        import app.services.google_auth as google_auth
 
         monkeypatch.setattr(google_auth.settings, "google_client_id", "test-client-id.apps.googleusercontent.com")
         monkeypatch.setattr(google_auth.settings, "google_client_secret", "test-secret")

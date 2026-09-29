@@ -89,15 +89,13 @@ def switch_to(client: TestClient, user: dict) -> None:
 @pytest.fixture
 def ai_mocks():
     with (
-        patch("app.api.routers.message.enqueue_ai_job") as message_enqueue,
-        patch("app.api.routers.room.enqueue_room_observer") as observer_enqueue,
-        patch("app.api.routers.room.enqueue_room_transcriber") as transcriber_enqueue,
+        patch("app.ai.tasks.enqueue_room_observer") as observer_enqueue,
+        patch("app.ai.tasks.enqueue_room_transcriber") as transcriber_enqueue,
         patch("app.ai.tasks.enqueue_ai_job") as tasks_enqueue,
     ):
-        message_enqueue.return_value = "mock-task-id"
         tasks_enqueue.return_value = "mock-task-id"
         yield {
-            "message_enqueue": message_enqueue,
+            "message_enqueue": tasks_enqueue,
             "observer_enqueue": observer_enqueue,
             "transcriber_enqueue": transcriber_enqueue,
             "tasks_enqueue": tasks_enqueue,

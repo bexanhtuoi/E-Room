@@ -1,18 +1,12 @@
 ﻿import json
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
-from redis.exceptions import RedisError
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi.responses import Response
 from sqlmodel import Session
 
-from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity, score_room_utterances
-from app.api.dependencies import authorize_owner, authorize_room_access, get_pagination_params, require_auth
-from app.config import settings
+from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
-from app.integration.livekit import create_token, verify_webhook
-from app.integration.redis import claim_seat, expire, sadd, scard, smembers, srem
-from app.log import get_logger
-from app.models import DocumentKind, Notification, NotificationType, Room, RoomStatus, User
 from app.schemas import (
     DocumentResponse,
     RoomCreateSchema,
@@ -22,91 +16,9 @@ from app.schemas import (
     RoomTokenResponse,
     RoomUpdateSchema,
 )
-from app.schemas.room import emails_from_json, emails_to_json, topics_to_json
-from app.services import document_crud, notification_crud, room_crud, session_crud, user_crud
-from app.services.document import drop_doc_storage
-from app.utils.upload import media_type_for, read_upload
+from app.services import room as room_service
 
 router = APIRouter()
-
-log = get_logger("app.api")
-
-PRESENCE_TTL_SECONDS = 6 * 3600
-
-
-def presence_key(room_id: int) -> str:
-    return f"room:{room_id}:participants"
-
-
-def presence_members(room_id: int) -> set:
-    try:
-        return set(smembers(presence_key(room_id)))
-    except RedisError as error:
-        log.warning("Presence read failed | room_id=%s error=%s", room_id, error)
-        return set()
-
-
-def presence_count(room_id: int) -> Optional[int]:
-    try:
-        return scard(presence_key(room_id))
-    except RedisError as error:
-        log.warning("Presence count failed | room_id=%s error=%s", room_id, error)
-        return None
-
-
-def presence_add(room_id: int, identity: str) -> None:
-    try:
-        key = presence_key(room_id)
-        sadd(key, str(identity))
-        expire(key, PRESENCE_TTL_SECONDS)
-    except RedisError as error:
-        log.warning("Presence add failed | room_id=%s error=%s", room_id, error)
-
-
-def presence_remove(room_id: int, identity: str) -> Optional[int]:
-    try:
-        key = presence_key(room_id)
-        srem(key, str(identity))
-        return scard(key)
-    except RedisError as error:
-        log.warning("Presence remove failed | room_id=%s error=%s", room_id, error)
-        return None
-
-
-def room_is_full(room: Room, user_id: int) -> bool:
-    count = presence_count(room.id)
-
-    if count is None:
-        return False
-
-    if str(user_id) in presence_members(room.id):
-        return False
-
-    return count >= (room.max_participants or 4)
-
-
-def claim_room_seat(room: Room, identity: str) -> bool:
-    try:
-        return claim_seat(presence_key(room.id), str(identity), room.max_participants or 4, PRESENCE_TTL_SECONDS)
-    except RedisError as error:
-        log.warning("Seat claim skipped | room_id=%s error=%s", room.id, error)
-        return True
-
-
-def visible_rooms(rooms: List[Room], request: Request) -> List[Room]:
-
-    if getattr(request.state, "current_user", None) is None:
-        return [room for room in rooms if not room.is_private]
-
-    result = []
-    for room in rooms:
-        try:
-            authorize_room_access(room, request)
-        except HTTPException:
-            continue
-        result.append(room)
-
-    return result
 
 
 @router.get("/", response_model=List[RoomResponse])
@@ -117,11 +29,10 @@ def get_rooms(
     public_only: bool = Query(False, description="Only public rooms (for /rooms listing and home)"),
 ) -> List[RoomResponse]:
     skip, limit = pagination
-    rooms = room_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True)
-    if public_only:
-        return [room for room in rooms if not room.is_private]
 
-    return visible_rooms(rooms, request)
+    return room_service.list_rooms(
+        db, request.state.current_user, skip=skip, limit=limit, public_only=public_only,
+    )
 
 
 @router.get("/count")
@@ -129,14 +40,12 @@ def count_rooms(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    return {"count": room_crud.count(db)}
+    return {"count": room_service.count_rooms(db)}
 
 
 @router.get("/prompt-default")
 def get_default_prompt() -> dict:
-    from app.ai.prompt import get_main_prompt
-
-    return {"default_system_prompt": get_main_prompt()}
+    return room_service.get_default_prompt()
 
 
 @router.get("/{room_id}", response_model=RoomResponse)
@@ -146,11 +55,10 @@ def get_room(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> RoomResponse:
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-    authorize_room_access(db_room, request)
-    return db_room
+    room = room_service.get_room_or_404(db, room_id)
+    room_service.ensure_room_access(room, request.state.current_user)
+
+    return room
 
 
 @router.post("/", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -160,91 +68,17 @@ def create_room(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> RoomResponse:
-    db_room = room_crud.get_one(db, name=room_in.name)
-    if db_room:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Room name already exists")
-
-    obj_in_data = room_in.model_dump()
-    obj_in_data["host_id"] = request.state.current_user.id
-    obj_in_data["topics"] = topics_to_json(obj_in_data.get("topics"))
-    obj_in_data["allowed_emails"] = emails_to_json(obj_in_data.get("allowed_emails"))
-    new_room = room_crud.create(db, obj_in=obj_in_data)
-    notify_room_invites(db, new_room, emails_from_json(new_room.allowed_emails))
-
-    return new_room
-
-
-def notify_room_invites(db: Session, room, emails: list) -> int:
-    host_name = ""
-    if room.host_id:
-        host = user_crud.get_one(db, id=room.host_id)
-        host_name = (host.full_name if host else "") or ""
-
-    emails = [email for email in emails or []]
-    if not emails:
-        return 0
-
-    invited_map = {user.email: user for user in user_crud.get_many(db, User.email.in_(emails))}
-    invited_ids = [user.id for user in invited_map.values() if user.id != room.host_id]
-    sent_ids = set()
-    if invited_ids:
-        for notif in notification_crud.get_many(db, Notification.user_id.in_(invited_ids)):
-            if notif.notification_type == NotificationType.INVITE and f"room:{room.id}" in (notif.body or ""):
-                sent_ids.add(notif.user_id)
-
-    sent = 0
-    for email in emails:
-        invited = invited_map.get(email)
-        if not invited or invited.id == room.host_id or invited.id in sent_ids:
-            continue
-        notification_crud.create(
-            db,
-            obj_in={
-                "user_id": invited.id,
-                "title": f"You're invited to '{room.name}'",
-                "body": f"{host_name + ' invited you to ' if host_name else 'You are invited to '}room:{room.id}. Open Schedule to join on time.",
-                "notification_type": NotificationType.INVITE,
-            },
-        )
-        sent_ids.add(invited.id)
-        sent += 1
-
-    return sent
+    return room_service.create_room(db, request.state.current_user, room_in)
 
 
 @router.post("/match", response_model=RoomMatchResponse)
 def match_room(
     match_in: RoomMatchRequest,
-    request: Request,
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> RoomMatchResponse:
-    candidates = [
-        room
-        for room in room_crud.get_many(db, limit=200)
-        if room.status != RoomStatus.ENDED and not room.is_private
-    ]
+    best = room_service.match_room(db, match_in.topic)
 
-    topic_query = (match_in.topic or "").strip().lower()
-    if topic_query:
-        scored = []
-        for room in candidates:
-            haystack = " ".join(
-                [
-                    room.name or "",
-                    room.description or "",
-                    room.topics or "",
-                ]
-            ).lower()
-            if topic_query in haystack:
-                scored.append(room)
-        candidates = scored
-
-    if not candidates:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No open rooms right now. Try creating one!")
-
-    priority = {RoomStatus.ACTIVE: 0, RoomStatus.IDLE: 1}
-    best = sorted(candidates, key=lambda room: (priority.get(room.status, 3), room.id or 0))[0]
     return RoomMatchResponse(status="matched", room=best)
 
 
@@ -256,21 +90,7 @@ def update_room(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> RoomResponse:
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-
-    authorize_owner(db_room.host_id, request)
-
-    obj_in_data = room_in.model_dump(exclude_unset=True)
-    if "topics" in obj_in_data:
-        obj_in_data["topics"] = topics_to_json(obj_in_data.get("topics"))
-    if "allowed_emails" in obj_in_data:
-        obj_in_data["allowed_emails"] = emails_to_json(obj_in_data.get("allowed_emails"))
-    updated_room = room_crud.update(db, db_obj=db_room, obj_in=obj_in_data)
-    if "allowed_emails" in obj_in_data:
-        notify_room_invites(db, updated_room, emails_from_json(updated_room.allowed_emails))
-    return updated_room
+    return room_service.update_room(db, request.state.current_user, room_id, room_in)
 
 
 @router.delete("/{room_id}", response_model=RoomResponse)
@@ -280,28 +100,7 @@ def delete_room(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> RoomResponse:
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-
-    authorize_owner(db_room.host_id, request)
-
-    room_crud.delete_cascade(db, room_id)
-    return db_room
-
-
-def get_host_room(db: Session, room_id: int, request: Request):
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-
-    authorize_owner(db_room.host_id, request)
-
-    return db_room
-
-
-MAX_ROOM_FILE_BYTES = 10 * 1024 * 1024
-ROOM_FILE_TYPES = {"pdf", "md", "txt"}
+    return room_service.delete_room(db, request.state.current_user, room_id)
 
 
 @router.get("/{room_id}/documents", response_model=List[DocumentResponse])
@@ -311,8 +110,7 @@ def get_room_documents(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> List[DocumentResponse]:
-    db_room = get_host_room(db, room_id, request)
-    return document_crud.get_many(db, room_id=db_room.id, order_by="id", desc=True)
+    return room_service.get_room_documents(db, request.state.current_user, room_id)
 
 
 @router.post("/{room_id}/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -323,39 +121,7 @@ async def upload_room_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
-    db_room = get_host_room(db, room_id, request)
-
-    raw, suffix = await read_upload(file, ROOM_FILE_TYPES, MAX_ROOM_FILE_BYTES, "File")
-
-    from app.ai.vector_store import process_document
-    from app.integration.minio import delete_object, put_document
-
-    object_name = put_document(raw, file.filename or f"room-{room_id}.{suffix}")
-
-    new_doc = document_crud.create(
-        db,
-        obj_in={
-            "user_id": request.state.current_user.id,
-            "room_id": db_room.id,
-            "kind": DocumentKind.FILE,
-            "file_name": file.filename,
-            "file_type": suffix,
-            "file_path": object_name,
-            "metadata_json": f'{{"size": {len(raw)}}}',
-        },
-    )
-
-    try:
-        await process_document(raw, file.filename or object_name, f"room:{db_room.id}", new_doc.id)
-    except Exception as error:
-        document_crud.delete(db, db_obj=new_doc)
-        try:
-            delete_object(object_name)
-        except Exception:
-            pass
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Could not index document: {error}")
-
-    return new_doc
+    return await room_service.upload_room_document(db, request.state.current_user, room_id, file)
 
 
 @router.get("/{room_id}/documents/{document_id}/file")
@@ -366,28 +132,12 @@ def download_room_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ):
-    from fastapi.responses import Response
+    data = room_service.download_room_document(db, request.state.current_user, room_id, document_id)
 
-    db_room = get_host_room(db, room_id, request)
-
-    doc = document_crud.get_one(db, id=document_id, room_id=db_room.id)
-    if not doc or doc.kind != DocumentKind.FILE or not doc.file_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-
-    from app.integration.minio import get_object
-
-    try:
-        data = get_object(doc.file_path)
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in storage")
-
-    from urllib.parse import quote
-
-    safe_name = (doc.file_name or "file").replace('"', "")
     return Response(
-        content=data,
-        media_type=media_type_for(doc.file_type),
-        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(safe_name)}"},
+        content=data["data"],
+        media_type=data["media_type"],
+        headers={"Content-Disposition": data["filename"]},
     )
 
 
@@ -399,16 +149,7 @@ def delete_room_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
-    db_room = get_host_room(db, room_id, request)
-
-    doc = document_crud.get_one(db, id=document_id, room_id=db_room.id)
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    document_crud.delete(db, db_obj=doc)
-    drop_doc_storage(doc)
-
-    return doc
+    return room_service.delete_room_document(db, request.state.current_user, room_id, document_id)
 
 
 @router.post("/{room_id}/token", response_model=RoomTokenResponse)
@@ -418,28 +159,7 @@ def get_room_token(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> RoomTokenResponse:
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-
-    authorize_room_access(db_room, request)
-
-    current_user = request.state.current_user
-
-    if room_is_full(db_room, current_user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Room is full")
-
-    token = create_token(
-        room_name=str(db_room.id),
-        user_id=current_user.id,
-        user_name=current_user.full_name,
-    )
-
-    return RoomTokenResponse(
-        livekit_token=token,
-        livekit_url=settings.livekit_url,
-        room_name=str(db_room.id),
-    )
+    return RoomTokenResponse(**room_service.get_room_token_data(db, request.state.current_user, room_id))
 
 
 @router.get("/{room_id}/participants")
@@ -449,99 +169,7 @@ def get_room_participants(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-
-    authorize_room_access(db_room, request)
-
-    try:
-        participants = list(smembers(f"room:{room_id}:participants"))
-    except RedisError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Presence service unavailable",
-        )
-
-    return {
-        "room_id": room_id,
-        "count": len(participants),
-        "participants": participants,
-    }
-
-
-def coerce_user_id(participant_identity) -> int | None:
-    try:
-        return int(str(participant_identity))
-    except (TypeError, ValueError):
-        return None
-
-
-def parse_room_id(room_name: str) -> int | None:
-    try:
-        return int(room_name)
-    except (TypeError, ValueError):
-        return None
-
-
-def register_participant_join(db: Session, room_name: str, participant_identity: str, enforce_limit: bool = False) -> bool:
-    room_id_int = parse_room_id(room_name)
-
-    if room_id_int is None:
-        return False
-
-    db_room = room_crud.get_one(db, id=room_id_int)
-
-    if db_room is None:
-        presence_add(room_id_int, participant_identity)
-        return True
-
-    if enforce_limit and not claim_room_seat(db_room, participant_identity):
-        return False
-
-    presence_add(room_id_int, participant_identity)
-    mark_room_activity(room_id_int)
-
-    if db_room.status != RoomStatus.ACTIVE:
-        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.ACTIVE})
-
-    session_crud.open(db, room_id_int, coerce_user_id(participant_identity))
-
-    try:
-        enqueue_room_observer(room_id_int)
-        enqueue_room_transcriber(room_id_int)
-    except Exception as error:
-        log.warning("Room workers not enqueued | room_id=%s error=%s", room_id_int, error)
-
-    return True
-
-
-def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
-    room_id_int = parse_room_id(room_name)
-
-    if room_id_int is None:
-        return
-
-    remaining = presence_remove(room_id_int, participant_identity)
-
-    if remaining is None:
-        session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
-        return
-
-    if remaining > 0:
-        return
-
-    db_room = room_crud.get_one(db, id=room_id_int)
-
-    if db_room and db_room.status == RoomStatus.ACTIVE:
-        room_crud.update(db, db_obj=db_room, obj_in={"status": RoomStatus.IDLE})
-
-    session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
-
-    try:
-        score_room_utterances.apply_async(args=[room_id_int], queue=settings.ai_queue_name)
-    except Exception as error:
-        log.warning("Room scoring not enqueued | room_id=%s error=%s", room_id_int, error)
+    return room_service.get_participants_data(db, request.state.current_user, room_id)
 
 
 @router.post("/livekit/webhook")
@@ -551,9 +179,7 @@ async def handle_livekit_webhook(
 ) -> dict:
     auth_header = request.headers.get("Authorization", "")
     raw_body = await request.body()
-    event = verify_webhook(auth_header, raw_body)
-    if not event:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook token")
+    event = room_service.verify_webhook_token(auth_header, raw_body)
 
     try:
         body = json.loads(raw_body) if raw_body else {}
@@ -569,17 +195,11 @@ async def handle_livekit_webhook(
 
     if not room_name:
         return {"status": "ignored"}
+
     if participant_identity and participant_identity.startswith("ai_"):
         return {"status": "ignored"}
 
-    if event_type == "participant_joined" and participant_identity:
-        try:
-            register_participant_join(db, room_name, participant_identity)
-        except ValueError:
-            pass
-
-    elif event_type == "participant_left" and participant_identity:
-        drop_participant_from_room(db, room_name, participant_identity)
+    room_service.handle_participant_event(db, event_type, room_name, participant_identity)
 
     return {"status": "success", "event": event_type}
 
@@ -591,16 +211,7 @@ def join_room(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    # Client goi truc tiep khi LiveKit onConnected — khong phu thuoc webhook
-    # (webhook Cloud co the chua cau hinh / miss). Idempotent.
-    db_room = room_crud.get_one(db, id=room_id)
-    if not db_room:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-    authorize_room_access(db_room, request)
-    seated = register_participant_join(db, str(room_id), request.state.current_user.id, enforce_limit=True)
-    if not seated:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Room is full")
-    return {"status": "joined", "room_id": room_id}
+    return room_service.join_room(db, request.state.current_user, room_id)
 
 
 @router.post("/{room_id}/leave")
@@ -610,7 +221,4 @@ def leave_room(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    # Client goi truc tiep khi bam Leave/back — khong doi webhook LiveKit
-    # (webhook co the miss khi tab dong dot ngot hoac server restart).
-    drop_participant_from_room(db, str(room_id), request.state.current_user.id)
-    return {"status": "left", "room_id": room_id}
+    return room_service.leave_room(db, request.state.current_user, room_id)

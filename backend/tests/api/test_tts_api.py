@@ -19,7 +19,7 @@ class TestTTSVoices:
 
 class TestTTSSpeak:
     def test_speak_returns_mp3(self, client: TestClient, alice: dict):
-        with patch("app.api.routers.tts.tts_speak", return_value=b"ID3fake") as mock_speak:
+        with patch("app.services.tts.tts_speak", return_value=b"ID3fake") as mock_speak:
             response = client.post("/api/v1/tts/speak", json={"text": "Hello world", "voice": "bf_emma"})
         assert response.status_code == 200, response.text
         assert response.headers["content-type"] == "audio/mpeg"
@@ -28,7 +28,7 @@ class TestTTSSpeak:
         assert kwargs.get("voice") == "bf_emma"
 
     def test_speak_defaults_voice(self, client: TestClient, alice: dict):
-        with patch("app.api.routers.tts.tts_speak", return_value=b"ID3x") as mock_speak:
+        with patch("app.services.tts.tts_speak", return_value=b"ID3x") as mock_speak:
             response = client.post("/api/v1/tts/speak", json={"text": "Hi"})
         assert response.status_code == 200, response.text
         _, kwargs = mock_speak.call_args
@@ -39,6 +39,6 @@ class TestTTSSpeak:
         assert response.status_code == 422
 
     def test_speak_server_down_returns_502(self, client: TestClient, alice: dict):
-        with patch("app.api.routers.tts.tts_speak", return_value=None):
+        with patch("app.services.tts.tts_speak", return_value=None):
             response = client.post("/api/v1/tts/speak", json={"text": "Hi", "voice": "am_adam"})
         assert response.status_code == 502

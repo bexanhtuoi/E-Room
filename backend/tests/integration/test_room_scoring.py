@@ -101,9 +101,9 @@ class TestScoreRoomUtterances:
 
         try:
             with (
-                patch("app.api.routers.room.enqueue_room_observer"),
-                patch("app.api.routers.room.enqueue_room_transcriber"),
-                patch("app.api.routers.room.score_room_utterances") as mock_scoring,
+                patch("app.ai.tasks.enqueue_room_observer"),
+                patch("app.ai.tasks.enqueue_room_transcriber"),
+                patch("app.ai.tasks.score_room_utterances") as mock_scoring,
             ):
                 client.post(f"/api/v1/rooms/{room['id']}/join")
                 assert not mock_scoring.apply_async.called

@@ -80,7 +80,7 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        with patch("app.api.routers.session.run_query", new=AsyncMock(return_value="They said hello.")) as mock_run:
+        with patch("app.ai.query.run_query", new=AsyncMock(return_value="They said hello.")) as mock_run:
             response = client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "What was said?"})
 
         assert response.status_code == 200, response.text
@@ -140,7 +140,7 @@ class TestSessionAI:
             yield {"kind": "thinking", "text": "Reading transcript…"}
             yield {"kind": "token", "text": "They said hello."}
 
-        with patch("app.api.routers.session.stream_events", side_effect=fake_stream):
+        with patch("app.ai.query.stream_events", side_effect=fake_stream):
             with client.stream("POST", f"/api/v1/sessions/{session_id}/chat/stream", json={"question": "What was said?"}) as response:
                 assert response.status_code == 200, response.text
                 body = response.read().decode()
@@ -160,7 +160,7 @@ class TestSessionAI:
             assert response.status_code == 200
             body = response.read().decode()
 
-        assert '"kind": "error"' in body and "No messages" in body
+        assert '"kind": "error"' in body and "chưa có tin nhắn" in body
 
         client.post(f"/api/v1/rooms/{room['id']}/leave")
 
@@ -169,7 +169,7 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        with patch("app.api.routers.session.run_query", new=AsyncMock(return_value="Saved answer.")):
+        with patch("app.ai.query.run_query", new=AsyncMock(return_value="Saved answer.")):
             assert client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "Remember me?"}).status_code == 200
 
         data = client.get(f"/api/v1/sessions/{session_id}/messages").json()

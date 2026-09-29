@@ -35,7 +35,8 @@ class TestRegister:
             json={"full_name": "Dup", "email": user["email"], "password": PASSWORD},
         )
         assert response.status_code == 400
-        assert "already registered" in response.json()["detail"]
+        assert "đã được đăng ký" in response.json()["detail"]
+        assert response.json()["code"] == "EMAIL_EXISTS"
 
     def test_register_weak_password_returns_422(self, client: TestClient):
         response = client.post(

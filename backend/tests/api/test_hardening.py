@@ -31,8 +31,8 @@ def make_client(tag: str) -> TestClient:
 
 def join_quiet(client: TestClient, room_id: int):
     with (
-        patch("app.api.routers.room.enqueue_room_observer"),
-        patch("app.api.routers.room.enqueue_room_transcriber"),
+        patch("app.ai.tasks.enqueue_room_observer"),
+        patch("app.ai.tasks.enqueue_room_transcriber"),
     ):
         return client.post(f"/api/v1/rooms/{room_id}/join")
 
@@ -80,7 +80,7 @@ class TestRoomCapacity:
         key = f"room:{room['id']}:participants"
 
         try:
-            with patch("app.api.routers.room.scard", side_effect=RedisError("redis down")):
+            with patch("app.services.room.scard", side_effect=RedisError("redis down")):
                 assert join_quiet(host, room["id"]).status_code == 200
         finally:
             host.post(f"/api/v1/rooms/{room['id']}/leave")
@@ -89,7 +89,7 @@ class TestRoomCapacity:
     def test_participants_unavailable_when_presence_down(self, client: TestClient, alice: dict):
         room = client.post("/api/v1/rooms/", json={"name": f"partdown-{alice['id']}"}).json()
 
-        with patch("app.api.routers.room.smembers", side_effect=RedisError("redis down")):
+        with patch("app.services.room.smembers", side_effect=RedisError("redis down")):
             assert client.get(f"/api/v1/rooms/{room['id']}/participants").status_code == 503
 
 

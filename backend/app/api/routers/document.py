@@ -1,23 +1,14 @@
 ﻿from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlmodel import Session
 
-from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
+from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import DocumentCreateSchema, DocumentResponse, DocumentUpdateSchema
-from app.services import document_crud
+from app.services import document as document_service
 
 router = APIRouter()
-
-
-def document_scope(request: Request) -> dict:
-    current_user = request.state.current_user
-
-    if current_user.role == "admin":
-        return {}
-
-    return {"user_id": current_user.id}
 
 
 @router.get("/", response_model=List[DocumentResponse])
@@ -28,8 +19,8 @@ def get_documents(
     _: str = Depends(require_auth),
 ) -> List[DocumentResponse]:
     skip, limit = pagination
-    documents = document_crud.get_many(db, skip=skip, limit=limit, **document_scope(request))
-    return documents
+
+    return document_service.list_documents(db, request.state.current_user, skip=skip, limit=limit)
 
 
 @router.get("/count")
@@ -38,7 +29,7 @@ def count_documents(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    return {"count": document_crud.count(db, **document_scope(request))}
+    return {"count": document_service.count_documents(db, request.state.current_user)}
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -48,11 +39,7 @@ def get_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
-    db_document = document_crud.get_one(db, id=document_id)
-    if not db_document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    authorize_owner(db_document.user_id, request)
-    return db_document
+    return document_service.get_document_data(db, request.state.current_user, document_id)
 
 
 @router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -62,14 +49,7 @@ def create_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
-    if ".." in (document_in.file_path or ""):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file path")
-
-    obj_in_data = document_in.model_dump()
-    obj_in_data["user_id"] = request.state.current_user.id
-    new_document = document_crud.create(db, obj_in=obj_in_data)
-
-    return new_document
+    return document_service.create_document(db, request.state.current_user, document_in)
 
 
 @router.patch("/{document_id}", response_model=DocumentResponse)
@@ -80,14 +60,7 @@ def update_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
-    db_document = document_crud.get_one(db, id=document_id)
-    if not db_document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    authorize_owner(db_document.user_id, request)
-
-    updated_document = document_crud.update(db, db_obj=db_document, obj_in=document_in)
-    return updated_document
+    return document_service.update_document(db, request.state.current_user, document_id, document_in)
 
 
 @router.delete("/{document_id}", response_model=DocumentResponse)
@@ -97,12 +70,4 @@ def delete_document(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> DocumentResponse:
-    db_document = document_crud.get_one(db, id=document_id)
-    if not db_document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    authorize_owner(db_document.user_id, request)
-
-    deleted_document = document_crud.delete(db, db_obj=db_document)
-    return deleted_document
-
+    return document_service.delete_document(db, request.state.current_user, document_id)

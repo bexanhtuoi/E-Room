@@ -70,7 +70,7 @@ class TestSessionFeedback:
         room, session_id = _make_room_and_session(client, alice)
         _write_db_score(room["id"], alice["id"])
 
-        with patch("app.api.routers.session.request_pronun_feedback", return_value={"summary": "Short."}) as mock_fb:
+        with patch("app.ai.pronunciation.request_pronun_feedback", return_value={"summary": "Short."}) as mock_fb:
             resp = client.post(f"/api/v1/sessions/{session_id}/feedback")
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -86,7 +86,7 @@ class TestSessionFeedback:
         room, session_id = _make_room_and_session(client, alice)
         _write_jsonl_utterance(room["id"], alice["id"], scored=True)
 
-        with patch("app.api.routers.session.request_pronun_feedback", return_value={"summary": "Legacy."}):
+        with patch("app.ai.pronunciation.request_pronun_feedback", return_value={"summary": "Legacy."}):
             resp = client.post(f"/api/v1/sessions/{session_id}/feedback")
         assert resp.status_code == 200, resp.text
         assert resp.json()["scored_count"] == 1
@@ -117,7 +117,7 @@ class TestScoreDbWriteThrough:
             audio_data=np.zeros(16000, dtype=np.int16),
         )
 
-        with patch("app.api.routers.speech.score_single_utterance") as mock_task:
+        with patch("app.ai.tasks.score_single_utterance") as mock_task:
             resp = client.post(f"/api/v1/rooms/{room['id']}/speech-logs/2/score")
             assert resp.status_code == 202, resp.text
             assert resp.json()["status"] == "queued"

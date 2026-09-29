@@ -71,11 +71,12 @@ class TestRoomCrud:
         auto_room = client.post("/api/v1/rooms/", json={"name": f"auto-room-{alice['id']}", "language": "auto"}).json()
         assert auto_room["language"] == "auto"
 
-    def test_create_duplicate_name_returns_400(self, client: TestClient, alice: dict):
+    def test_create_duplicate_name_returns_409(self, client: TestClient, alice: dict):
         name = f"dup-room-{alice['id']}"
         create_room(client, name)
         duplicate = client.post("/api/v1/rooms/", json={"name": name})
-        assert duplicate.status_code == 400
+        assert duplicate.status_code == 409
+        assert duplicate.json()["code"] == "ROOM_NAME_EXISTS"
 
     def test_list_and_count_rooms(self, client: TestClient, alice: dict):
         create_room(client, f"list-room-{alice['id']}")
@@ -183,8 +184,8 @@ class TestParticipants:
 
         try:
             with (
-                patch("app.api.routers.room.enqueue_room_observer"),
-                patch("app.api.routers.room.enqueue_room_transcriber"),
+                patch("app.ai.tasks.enqueue_room_observer"),
+                patch("app.ai.tasks.enqueue_room_transcriber"),
             ):
                 response = client.post(f"/api/v1/rooms/{room['id']}/join")
             assert response.status_code == 200
@@ -194,8 +195,8 @@ class TestParticipants:
 
             # Idempotent — join lai khong dup
             with (
-                patch("app.api.routers.room.enqueue_room_observer"),
-                patch("app.api.routers.room.enqueue_room_transcriber"),
+                patch("app.ai.tasks.enqueue_room_observer"),
+                patch("app.ai.tasks.enqueue_room_transcriber"),
             ):
                 client.post(f"/api/v1/rooms/{room['id']}/join")
             assert len(redis_smembers(key)) == 1
