@@ -23,6 +23,7 @@ def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: l
         for seg in whisper_segments:
             for w in seg.get("words", []) or []:
                 seg_words.append(w)
+
     def whisper_hint(idx: int) -> dict:
         # idx: index trong a
         if 0 <= idx < len(seg_words):
@@ -37,13 +38,15 @@ def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: l
             ops.append({"word": b[j - 1], "source_word": a[i - 1], "alignment": "match",
                         "start_s": h["start_s"], "end_s": h["end_s"],
                         "span_available": h["start_s"] is not None, "ignored_for_pronunciation": False})
-            i -= 1; j -= 1
+            i -= 1
+            j -= 1
         elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
             h = whisper_hint(i - 1)
             ops.append({"word": b[j - 1], "source_word": a[i - 1], "alignment": "substitution",
                         "start_s": h["start_s"], "end_s": h["end_s"],
                         "span_available": h["start_s"] is not None, "ignored_for_pronunciation": False})
-            i -= 1; j -= 1
+            i -= 1
+            j -= 1
         elif j > 0 and dp[i][j] == dp[i][j - 1] + 1:
             ops.append({"word": b[j - 1], "source_word": None, "alignment": "insertion",
                         "start_s": None, "end_s": None,
@@ -57,7 +60,6 @@ def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: l
 
 
 def apply_forced_spans(aligned: list[dict], forced_words: list[dict]) -> list[dict]:
-    """Ghi đè start/end bằng forced aligner (nguồn sự thật). forced_words: [{word,start_s,end_s}]."""
     fw = {w["word"].upper(): w for w in forced_words}
     out = []
     for w in aligned:

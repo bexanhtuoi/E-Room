@@ -2,15 +2,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.document import document_scope
-from app.services.helpers import ensure_owner
-from app.services.room import (
+from app.services.helpers import (
+    avatar_marker,
     coerce_user_id,
-    ensure_room_access,
-    filter_visible_rooms,
+    document_scope,
+    ensure_owner,
     parse_room_id,
 )
-from app.services.user import avatar_marker
+from app.services.room import room_service
 from app.shared.exceptions import AppException, NotAuthenticatedError, NotAuthorizedError
 
 
@@ -42,24 +41,24 @@ class TestEnsureOwner:
 
 class TestEnsureRoomAccess:
     def test_public_room_open(self):
-        ensure_room_access(make_room(is_private=False), make_user(99))
+        room_service.ensure_room_access(make_room(is_private=False), make_user(99))
 
     def test_host_passes(self):
-        ensure_room_access(make_room(host_id=7, is_private=True), make_user(7))
+        room_service.ensure_room_access(make_room(host_id=7, is_private=True), make_user(7))
 
     def test_stranger_blocked_private(self):
         with pytest.raises(NotAuthorizedError):
-            ensure_room_access(make_room(host_id=7, is_private=True), make_user(99))
+            room_service.ensure_room_access(make_room(host_id=7, is_private=True), make_user(99))
 
     def test_allowed_email_passes(self):
         room = make_room(host_id=7, is_private=True, allowed='["hocvien@test.com"]')
-        ensure_room_access(room, make_user(99))
+        room_service.ensure_room_access(room, make_user(99))
 
 
 class TestFilterVisibleRooms:
     def test_anonymous_sees_only_public(self):
         rooms = [make_room(1, is_private=False), make_room(2, is_private=True)]
-        assert [room.id for room in filter_visible_rooms(rooms, None)] == [1]
+        assert [room.id for room in room_service.filter_visible_rooms(rooms, None)] == [1]
 
     def test_member_sees_public_plus_own_private(self):
         rooms = [
@@ -67,7 +66,7 @@ class TestFilterVisibleRooms:
             make_room(2, host_id=7, is_private=True),
             make_room(3, host_id=9, is_private=True),
         ]
-        assert [room.id for room in filter_visible_rooms(rooms, make_user(7))] == [1, 2]
+        assert [room.id for room in room_service.filter_visible_rooms(rooms, make_user(7))] == [1, 2]
 
 
 class TestRoomIdHelpers:

@@ -1,9 +1,3 @@
-"""Lỗi domain dùng chung toàn backend.
-
-Services raise các lỗi dưới đây, 1 handler trung tâm trong main.py
-chuyển thành response {code, detail}. Routers không raise HTTPException trực tiếp.
-"""
-
 
 class AppException(Exception):
     status_code = 500

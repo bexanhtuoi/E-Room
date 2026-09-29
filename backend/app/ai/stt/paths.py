@@ -3,11 +3,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from app.log import get_logger
-
-log = get_logger("app.ai.stt.paths")
-
-
 WAV_HEADER_SIZE = 44
 
 

@@ -37,7 +37,7 @@ def _write_db_score(room_id: int, user_id: int) -> None:
     from sqlmodel import Session as DBSession
 
     from app.database import engine
-    from app.services.pronunciation_score import pronunciation_score_crud
+    from app.repositories.pronunciation_score import pronunciation_score_crud
 
     with DBSession(engine) as db:
         pronunciation_score_crud.upsert_score(
@@ -105,7 +105,6 @@ class TestSessionFeedback:
 
 class TestScoreDbWriteThrough:
     def test_audio_utterance_returns_202_and_enqueues(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
-        """Có audio -> viec nang -> 202 + enqueue, khong cham sync (het 504)."""
         import numpy as np
 
         from app.ai.stt.speech_log import append_utterance
@@ -124,11 +123,10 @@ class TestScoreDbWriteThrough:
             mock_task.apply_async.assert_called_once()
 
     def test_heuristic_rescore_writes_db(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
-        """Không audio -> heuristic (nhẹ, không cần model) nhưng vẫn write-through DB."""
         from sqlmodel import Session as DBSession
 
         from app.database import engine
-        from app.services.pronunciation_score import pronunciation_score_crud
+        from app.repositories.pronunciation_score import pronunciation_score_crud
 
         monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
         room, _ = _make_room_and_session(client, alice)

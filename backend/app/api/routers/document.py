@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlmodel import Session
@@ -6,7 +6,7 @@ from sqlmodel import Session
 from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import DocumentCreateSchema, DocumentResponse, DocumentUpdateSchema
-from app.services import document as document_service
+from app.services.document import document_service
 
 router = APIRouter()
 

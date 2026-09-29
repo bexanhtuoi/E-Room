@@ -9,6 +9,15 @@ from app.config import settings
 SPOKEN_LANGUAGES = ("en", "vi", "auto")
 MIN_SEGMENT_LOGPROB = -1.0
 
+
+def normalize_word_entry(word: dict) -> dict:
+    return {
+        "word": str(word.get("word", "")).strip(),
+        "start": float(word.get("start", 0.0)),
+        "end": float(word.get("end", 0.0)),
+        "probability": float(word.get("probability", 1.0)),
+    }
+
 STT_PROMPTS = {
     "en": (
         "This is an English speaking practice session in Vietnam. "

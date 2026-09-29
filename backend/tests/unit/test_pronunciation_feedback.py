@@ -1,4 +1,3 @@
-"""Nhan xet AI: 2 prompt md rieng (feedback_utterance.md + assessment.md) + LLM local."""
 import asyncio
 from unittest.mock import AsyncMock, patch
 

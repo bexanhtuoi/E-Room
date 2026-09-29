@@ -5,31 +5,38 @@ from sqlmodel import Session
 from app.config import settings
 from app.repositories.user import user_crud
 from app.security import create_access_token, hash_password, verify_password
+from app.services.base import ServiceBase
 from app.shared.exceptions import EmailExistsError, InvalidCredentialsError
 
 __all__ = [
-    "login_user",
-    "register_user",
+    "AuthService",
+    "auth_service",
 ]
 
 
-def register_user(db: Session, user_in):
-    if user_crud.get_one(db, email=user_in.email):
-        raise EmailExistsError()
+class AuthService(ServiceBase):
+    def register_user(self, db: Session, user_in):
+        if user_crud.get_one(db, email=user_in.email):
+            raise EmailExistsError()
 
-    obj_in_data = user_in.model_dump()
-    obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
+        obj_in_data = user_in.model_dump()
+        obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
 
-    return user_crud.create(db, obj_in=obj_in_data)
+        return user_crud.create(db, obj_in=obj_in_data)
 
 
-def login_user(db: Session, username: str, password: str) -> tuple:
-    user = user_crud.get_one(db, email=username)
 
-    if not user or not verify_password(password, user.password_hash):
-        raise InvalidCredentialsError()
+    def login_user(self, db: Session, username: str, password: str) -> tuple:
+        user = user_crud.get_one(db, email=username)
 
-    expires = timedelta(minutes=settings.access_token_expires_minutes)
-    token = create_access_token(data=user.id, expires_delta=expires)
+        if not user or not verify_password(password, user.password_hash):
+            raise InvalidCredentialsError()
 
-    return user, token, expires
+        expires = timedelta(minutes=settings.access_token_expires_minutes)
+        token = create_access_token(data=user.id, expires_delta=expires)
+
+        return user, token, expires
+
+
+
+auth_service = AuthService()

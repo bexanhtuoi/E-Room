@@ -15,6 +15,8 @@ from app.log import get_logger
 
 log = get_logger("app.ai.stt.local")
 
+whisper_model_instance = None
+
 
 def get_whisper_model():
     global whisper_model_instance
@@ -37,6 +39,44 @@ def get_whisper_model():
         )
         log.info("Faster-whisper model loaded successfully")
     return whisper_model_instance
+
+
+def collect_transcript_segments(segments) -> tuple:
+    full_text_list: List[str] = []
+    word_timings: List[Dict[str, Any]] = []
+    total_logprob = 0.0
+    segment_count = 0
+
+    for segment in segments:
+        text_clean = segment.text.strip()
+
+        if not text_clean:
+            continue
+
+        if segment.avg_logprob < MIN_SEGMENT_LOGPROB:
+            log.info(
+                "Dropping low-confidence segment | logprob=%.2f text='%s'",
+                segment.avg_logprob,
+                text_clean[:80],
+            )
+            continue
+
+        full_text_list.append(text_clean)
+        total_logprob += segment.avg_logprob
+        segment_count += 1
+
+        if segment.words:
+            for word_info in segment.words:
+                word_timings.append(
+                    {
+                        "word": word_info.word.strip(),
+                        "start": word_info.start,
+                        "end": word_info.end,
+                        "probability": word_info.probability,
+                    }
+                )
+
+    return full_text_list, word_timings, total_logprob, segment_count
 
 
 def transcribe_faster_whisper(
@@ -76,37 +116,7 @@ def transcribe_faster_whisper(
             no_speech_threshold=0.6,
         )
 
-        full_text_list: List[str] = []
-        word_timings: List[Dict[str, Any]] = []
-        total_logprob = 0.0
-        segment_count = 0
-
-        for segment in segments:
-            text_clean = segment.text.strip()
-            if not text_clean:
-                continue
-
-            if segment.avg_logprob < MIN_SEGMENT_LOGPROB:
-                log.info(
-                    "Dropping low-confidence segment | logprob=%.2f text='%s'",
-                    segment.avg_logprob,
-                    text_clean[:80],
-                )
-                continue
-            full_text_list.append(text_clean)
-            total_logprob += segment.avg_logprob
-            segment_count += 1
-
-            if segment.words:
-                for word_info in segment.words:
-                    word_timings.append(
-                        {
-                            "word": word_info.word.strip(),
-                            "start": word_info.start,
-                            "end": word_info.end,
-                            "probability": word_info.probability,
-                        }
-                    )
+        full_text_list, word_timings, total_logprob, segment_count = collect_transcript_segments(segments)
 
         if not full_text_list:
             return None
@@ -136,7 +146,4 @@ def transcribe_faster_whisper(
     except Exception as error:
         log.error("faster-whisper error: %s", error)
         return None
-
-
-whisper_model_instance = None
 

@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from fastapi.responses import Response
@@ -7,7 +7,7 @@ from sqlmodel import Session
 from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import UserResponse, UserStatsResponse, UserUpdateSchema
-from app.services import user as user_service
+from app.services.user import user_service
 
 router = APIRouter()
 

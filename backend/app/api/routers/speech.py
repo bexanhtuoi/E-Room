@@ -1,20 +1,3 @@
-"""Speech-log API: log riêng từng người đã nói trong phòng.
-
-Luồng chấm điểm raw -> sửa -> chấm:
-- whisper append raw, pronunciation=None (chưa chấm gì cả),
-- PATCH /speech-logs/{id} để user sửa corrected_text (sửa sau khi có điểm
-  sẽ reset điểm cũ về None — bắt chấm lại),
-- POST /speech-logs/{id}/score chấm trên corrected_text, lưu kèm scored_text.
-
-- GET  /rooms/{room_id}/speech-logs/me        -> câu của chính mình (để sửa)
-- GET  /rooms/{room_id}/speech-logs           -> toàn bộ room, group theo user
-- GET  /rooms/{room_id}/speech-logs/summary   -> gộp sort theo giờ (cho mục summary)
-- PATCH /rooms/{room_id}/speech-logs/{message_id} -> sửa corrected_text của mình
-- POST /rooms/{room_id}/speech-logs/{message_id}/score -> chấm phát âm lại
-- POST /rooms/{room_id}/speech-logs/{message_id}/feedback -> xin nhận xét AI
-  cho 1 lượt nói đã chấm (đọc ScoringReport đã lưu, không chấm lại).
-  Nhận xét cấp session vẫn có riêng: POST /sessions/{session_id}/feedback.
-"""
 
 from typing import Any, Dict, List, Optional
 
@@ -30,7 +13,7 @@ from app.schemas.speech import (
     SpeechSummaryLine,
     SpeechUtterance,
 )
-from app.services import speech as speech_service
+from app.services.speech import speech_service
 
 router = APIRouter()
 

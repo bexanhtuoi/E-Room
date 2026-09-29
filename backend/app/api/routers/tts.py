@@ -1,15 +1,10 @@
-"""TTS API: chon 1 trong 4 giong Anh + doc text thanh audio.
-
-- GET  /tts/voices        -> 4 lua chon (Heart/Adam/Emma/George)
-- POST /tts/speak         -> tra file mp3 (body: text, voice?, speed?)
-"""
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 from app.api.dependencies import require_auth
 from app.schemas.tts import TTSSpeakRequest, TTSVoiceOption
-from app.services import tts as tts_service
+from app.services.tts import tts_service
 
 router = APIRouter()
 

@@ -9,8 +9,8 @@ from app.log import get_logger
 
 log = get_logger("app.ai.tts")
 
-# voice_id -> mo ta ngan cho UI chon giong. af_*/am_* = My, bf_*/bm_* = Anh.
-# Ca 4 giong da test (demo/tts_*.mp3), toc do mac dinh 0.9.
+# voice_id -> mô tả ngắn cho UI chọn giọng. af_*/am_* = Mỹ, bf_*/bm_* = Anh.
+# Cả 4 giọng đã test (demo/tts_*.mp3), tốc độ mặc định 0.9.
 ENGLISH_VOICES: List[Dict[str, str]] = [
     {"id": "af_heart", "label": "Heart — nữ Mỹ, ấm (mặc định)"},
     {"id": "am_adam", "label": "Adam — nam Mỹ, trầm"},
@@ -35,12 +35,11 @@ def speak(
     base_url: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Optional[bytes]:
-    """Chuyen text -> audio bytes. Tra None khi loi (caller tu fallback)."""
     text = (text or "").strip()
     if not text:
         return None
     chosen_voice = voice or settings.tts_voice
-    # Toc do giong nguoi (~0.9). 1.0 cua Kokoro nghe hoi voi.
+    # Tốc độ giọng người (~0.9). 1.0 của Kokoro nghe hơi vội.
     chosen_speed = speed if speed is not None else settings.tts_speed
     url = (base_url or settings.tts_base_url).rstrip("/")
     try:

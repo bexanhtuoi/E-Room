@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import functools
 
-from app.log import get_logger
-
-log = get_logger("app.ai.pronunciation.g2p")
-
 
 IPA_MAP = {
     "TH": "θ", "DH": "ð", "SH": "ʃ", "ZH": "ʒ", "CH": "tʃ", "JH": "dʒ",
@@ -19,7 +15,6 @@ IPA_MAP = {
 
 
 def arpa_to_ipa(phone: str) -> str:
-    """ARPAbet -> IPA (subset MVP, đủ cho test think/sink/rice/lice/very)."""
     base = phone.rstrip("012")
     return IPA_MAP.get(base, base.lower())
 
@@ -45,7 +40,6 @@ def get_g2p():
 
 
 def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
-    """Trả (arpa_phones, oov=True). g2p-en sinh cả stress số."""
     try:
         raw: list[str] = get_g2p()(word_upper.lower())
     except Exception:
@@ -65,10 +59,31 @@ def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
     return phones, True
 
 
+def split_syllables(arpa: list[str]) -> tuple[list[list[str]], int | None]:
+    syllables: list[list[str]] = []
+    cur: list[str] = []
+
+    for ph in arpa:
+        cur.append(ph)
+
+        if is_vowel(ph):
+            syllables.append(cur)
+            cur = []
+
+    if cur:
+        if syllables:
+            syllables[-1].extend(cur)
+        else:
+            syllables.append(cur)
+
+    for idx, syl in enumerate(syllables):
+        if any(p.endswith("1") for p in syl):
+            return syllables, idx
+
+    return syllables, None
+
+
 def get_pronunciation(word: str, accent: str = "en-US") -> dict:
-    """Full CMUdict (qua package `pronouncing`, ~130k từ) + fallback `g2p-en`
-    neural cho từ OOV. Theo tư vấn chuyên gia: không dùng mini-dict,
-    không đoán stress thủ công."""
     w = (word or "").strip()
     if not w:
         return {"word": word, "arpa": [], "ipa": "", "syllables": [],
@@ -85,23 +100,7 @@ def get_pronunciation(word: str, accent: str = "en-US") -> dict:
         arpa = None
     if arpa is None:
         arpa, oov = g2p_to_phones(wu)
-    syllables: list[list[str]] = []
-    cur: list[str] = []
-    for ph in arpa:
-        cur.append(ph)
-        if is_vowel(ph):
-            syllables.append(cur)
-            cur = []
-    if cur:
-        if syllables:
-            syllables[-1].extend(cur)
-        else:
-            syllables.append(cur)
-    stress_index = None
-    for idx, syl in enumerate(syllables):
-        if any(p.endswith("1") for p in syl):
-            stress_index = idx
-            break
+    syllables, stress_index = split_syllables(arpa)
     return {
         "word": wu,
         "arpa": arpa,

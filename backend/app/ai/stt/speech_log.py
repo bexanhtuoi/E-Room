@@ -6,14 +6,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import app.log as _app_log
+import app.log
+from app.ai.stt.paths import utcnow_iso
 from app.log import get_logger
 
 log = get_logger("app.ai.speech_log")
 
 # Neo vào backend/ root qua vị trí ổn định của app.log (đúng dù file này
 # di chuyển trong nội bộ package).
-BACKEND_ROOT = Path(_app_log.__file__).resolve().parent.parent
+BACKEND_ROOT = Path(app.log.__file__).resolve().parent.parent
 DEFAULT_DIR = BACKEND_ROOT / "log" / "speech"
 
 
@@ -55,10 +56,6 @@ def user_audio_dir(room_id: int) -> Path:
     return path
 
 
-def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def save_utterance_audio(
     room_id: int,
     user_id: Any,
@@ -66,7 +63,6 @@ def save_utterance_audio(
     audio_data,
     sample_rate: int = 16000,
 ) -> Optional[str]:
-    """Lưu wav 16k mono cho 1 utterance. Trả về relative path hoặc None."""
     if not should_save_audio() or audio_data is None:
         return None
     try:
@@ -99,7 +95,6 @@ def append_utterance(
     audio_data=None,
     sample_rate: int = 16000,
 ) -> Dict[str, Any]:
-    """Append 1 utterance vào file JSONL của user. Không raise (best-effort)."""
     audio_file = save_utterance_audio(room_id, user_id, message_id, audio_data, sample_rate)
     entry: Dict[str, Any] = {
         "message_id": message_id,
@@ -151,7 +146,6 @@ def read_user_log(room_id: int, user_id: Any) -> List[Dict[str, Any]]:
 
 
 def list_room_users(room_id: int) -> List[str]:
-    """Trả về danh sách user_id (dạng str) đã có log trong room."""
     directory = room_dir(room_id)
     users: List[str] = []
     for child in directory.glob("user_*.jsonl"):
@@ -165,10 +159,6 @@ def read_room_logs(room_id: int) -> Dict[str, List[Dict[str, Any]]]:
 
 
 def get_room_transcript_for_summary(room_id: int) -> List[Dict[str, Any]]:
-    """Gộp mọi user, sort theo created_at — dùng cho mục summary sau này.
-
-    Ưu tiên `corrected_text` (bản user đã sửa) thay vì STT raw.
-    """
     merged: List[Dict[str, Any]] = []
     for entries in read_room_logs(room_id).values():
         merged.extend(entries)
@@ -197,14 +187,6 @@ def update_corrected_text(
     message_id: int,
     corrected_text: str,
 ) -> Optional[Dict[str, Any]]:
-    """User sửa lại câu mình đã nói. Ghi đè file JSONL. Trả về entry mới hoặc None.
-
-    Quy ước chấm điểm raw -> sửa -> chấm:
-    - whisper lúc nào cũng lưu raw với pronunciation=None (xem append_utterance),
-    - chỉ POST .../score mới gắn điểm, và điểm luôn chấm trên corrected_text,
-    - nếu user sửa text SAU khi đã có điểm, điểm + feedback cũ bị reset về None
-      để bắt chấm lại — tránh điểm của bản cũ dính sang bản mới.
-    """
     path = user_log_path(room_id, user_id)
     entries = read_jsonl(path)
     updated: Optional[Dict[str, Any]] = None
@@ -234,7 +216,6 @@ def attach_pronunciation(
     message_id: int,
     score: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    """Gắn kết quả chấm phát âm vào 1 utterance."""
     path = user_log_path(room_id, user_id)
     entries = read_jsonl(path)
     updated: Optional[Dict[str, Any]] = None
@@ -259,7 +240,6 @@ def attach_feedback(
     message_id: int,
     feedback: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    """Gắn nhận xét AI vào 1 utterance (chỉ sau khi đã có pronunciation.report)."""
     path = user_log_path(room_id, user_id)
     entries = read_jsonl(path)
     updated: Optional[Dict[str, Any]] = None

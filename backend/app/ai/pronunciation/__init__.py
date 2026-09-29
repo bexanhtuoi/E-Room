@@ -19,7 +19,7 @@ from app.ai.pronunciation.feedback import (
     request_pronun_feedback,
     strip_reasoning,
 )
-from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation
+from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation, split_syllables
 from app.ai.pronunciation.helpers import tok_words
 from app.ai.pronunciation.metrics import (
     calculate_overall,
@@ -92,6 +92,7 @@ __all__ = [
     "score_utterance",
     "score_via_pronun_service",
     "score_with_wav2vec2",
+    "split_syllables",
     "vad_segments",
     "vi_reading",
 ]

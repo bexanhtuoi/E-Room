@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
@@ -7,7 +7,7 @@ from app.config import settings
 from app.database import get_session
 from app.schemas import UserCreateSchema, UserResponse
 from app.security import set_auth_cookie
-from app.services import auth as auth_service
+from app.services.auth import auth_service
 from app.utils.rate_limit import check_rate_limit
 
 router = APIRouter()

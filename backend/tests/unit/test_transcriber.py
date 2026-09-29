@@ -28,7 +28,7 @@ from app.ai.stt import (
 )
 from app.ai.stt.completion import build_transcript_payload, handle_speech_completion
 from app.ai.stt.transcriber import cancel_user_stream
-from app.services.message import is_recent_duplicate, message_crud
+from app.repositories.message import is_recent_duplicate, message_crud
 
 
 def make_loud_frame(n: int = 1600) -> np.ndarray:

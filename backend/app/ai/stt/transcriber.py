@@ -12,7 +12,7 @@ from app.integration.livekit import create_token
 from app.integration.redis import scard
 from app.log import get_logger
 from app.shared.constants import AI_IDENTITY_PREFIX, AI_TRANSCRIBER_IDENTITY
-from app.shared.keys import room_transcriber_lock_key
+from app.shared.keys import room_presence_key, room_transcriber_lock_key
 
 log = get_logger("app.ai.transcriber")
 
@@ -172,7 +172,7 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
         loop_count = 0
         while asyncio.get_event_loop().time() < deadline:
 
-            if scard(f"room:{room_id}:participants") < 1:
+            if scard(room_presence_key(room_id)) < 1:
                 break
 
             loop_count += 1

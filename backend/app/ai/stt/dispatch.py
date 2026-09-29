@@ -37,8 +37,6 @@ def transcribe_auto(
     sample_rate: int = 16000,
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
-    """STT host sống -> dùng host (large-v3-turbo, GPU). Chết/giữa chừng chết
-    giữa câu -> fallback whisper local (small, CPU). Không bao giờ câm."""
     if is_stt_server_alive():
         try:
             out = transcribe_whisper_server(audio_data, sample_rate=sample_rate, **kwargs)
@@ -52,7 +50,6 @@ def transcribe_auto(
 
 
 def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued: int) -> Optional[str]:
-
     name = (provider or settings.stt_provider).lower()
     # auto được tính như whisper_server khi host đang sống (tràn cloud khi tắc),
     # như local khi host chết (không tràn).

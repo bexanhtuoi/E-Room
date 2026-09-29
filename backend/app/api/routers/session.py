@@ -14,23 +14,14 @@ from app.schemas import (
     SessionWithRoom,
 )
 from app.schemas.speech import SpeechFeedbackRequest
-from app.services.session import (
-    answer_session_question,
-    count_sessions,
-    generate_session_feedback,
-    get_my_session,
-    get_session_detail_data,
-    get_session_messages_data,
-    list_my_sessions,
-    stream_session_answer,
-)
+from app.services.session import session_service
 
 router = APIRouter()
 
 
 @router.get("/count")
 def count_sessions_endpoint(db: Session = Depends(get_session), _: str = Depends(require_auth)) -> dict:
-    return {"count": count_sessions(db)}
+    return {"count": session_service.count_sessions(db)}
 
 
 @router.get("/mine", response_model=MySessionsResponse)
@@ -39,7 +30,7 @@ def get_my_sessions(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> MySessionsResponse:
-    items = list_my_sessions(db, request.state.current_user)
+    items = session_service.list_my_sessions(db, request.state.current_user)
 
     return MySessionsResponse(sessions=[
         SessionWithRoom(session=item["session"], room=item["room"], message_count=item["message_count"])
@@ -54,7 +45,7 @@ def get_session_detail(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> SessionWithRoom:
-    data = get_session_detail_data(db, request.state.current_user, session_id)
+    data = session_service.get_session_detail_data(db, request.state.current_user, session_id)
 
     return SessionWithRoom(session=data["session"], room=data["room"], message_count=data["message_count"])
 
@@ -66,7 +57,7 @@ def get_session_messages(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    return get_session_messages_data(db, request.state.current_user, session_id)
+    return session_service.get_session_messages_data(db, request.state.current_user, session_id)
 
 
 @router.post("/{session_id}/chat", response_model=SessionAnswerResponse)
@@ -77,9 +68,9 @@ async def chat_session(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> SessionAnswerResponse:
-    db_session = get_my_session(db, session_id, request.state.current_user)
+    db_session = session_service.get_my_session(db, session_id, request.state.current_user)
 
-    answer, message_count = await answer_session_question(
+    answer, message_count = await session_service.answer_session_question(
         db, db_session, request.state.current_user.id, ask_in.question,
     )
 
@@ -94,10 +85,10 @@ async def chat_session_stream(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ):
-    db_session = get_my_session(db, session_id, request.state.current_user)
+    db_session = session_service.get_my_session(db, session_id, request.state.current_user)
 
     async def event_source():
-        async for event in stream_session_answer(
+        async for event in session_service.stream_session_answer(
             db, db_session, request.state.current_user.id, ask_in.question,
         ):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -113,13 +104,9 @@ def session_feedback(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    """AI feedbacks cấp session (LLM local, prompt gọn chỉ mô tả phần sai).
-
-    Gộp các câu của CHÍNH user trong khoảng joined_at–left_at của session mà
-    đã có pronunciation.report. Không chấm lại, không nhận audio."""
     opts = body or SpeechFeedbackRequest()
 
-    return generate_session_feedback(
+    return session_service.generate_session_feedback(
         db,
         request.state.current_user,
         session_id,

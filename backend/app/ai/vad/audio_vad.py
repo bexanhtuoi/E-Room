@@ -45,7 +45,6 @@ def trim_trailing_silence(
     energy_threshold: Optional[float] = None,
     pad_seconds: float = TRIM_PAD_SECONDS,
 ) -> np.ndarray:
-
     if len(audio) == 0:
         return audio
 
@@ -132,11 +131,11 @@ def process_audio_frame(
         silence_dur = now - last_voice
         total_dur = now - speech_start
 
-        # 1. Ngat cau khi im lang vuot nguong silence timeout
+        # 1. Ngắt câu khi im lặng vượt ngưỡng silence timeout
         if silence_dur >= silence_timeout:
             return finalize_speech_frames(state, min_speech_seconds=min_speech_seconds)
 
-        # 2. Tu dong cat doan neu nguoi dung noi qua dai
+        # 2. Tự động cắt đoạn nếu người dùng nói quá dài
         if total_dur >= max_duration:
             return finalize_speech_frames(state, min_speech_seconds=min_speech_seconds)
 

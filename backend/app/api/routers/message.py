@@ -1,4 +1,4 @@
-﻿from typing import List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlmodel import Session
@@ -6,7 +6,7 @@ from sqlmodel import Session
 from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import MessageCreateSchema, MessageResponse
-from app.services import message as message_service
+from app.services.message import message_service
 
 router = APIRouter()
 

@@ -1,4 +1,3 @@
-"""Redis key builders dùng chung (presence, jobs, locks, RAG tags)."""
 
 
 def room_presence_key(room_id: int) -> str:

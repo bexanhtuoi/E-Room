@@ -1,9 +1,6 @@
 import difflib
 
 from app.ai.pronunciation.helpers import tok_words
-from app.log import get_logger
-
-log = get_logger("app.ai.pronunciation.metrics")
 
 
 def score_fluency(duration_s: float, words_count: int, pauses: list[tuple[float, float]],
@@ -21,11 +18,19 @@ def score_fluency(duration_s: float, words_count: int, pauses: list[tuple[float,
     art = phones / max(0.1, duration_s - pause_dur)
     # rubric 0-100
     s = 100.0
-    if 130 <= wpm <= 170: s -= 0
-    elif 90 <= wpm < 130 or 170 < wpm <= 210: s -= 10
-    else: s -= 25
-    if pause_ratio > 0.35: s -= 20
-    elif pause_ratio > 0.25: s -= 10
+
+    if 130 <= wpm <= 170:
+        s -= 0
+    elif 90 <= wpm < 130 or 170 < wpm <= 210:
+        s -= 10
+    else:
+        s -= 25
+
+    if pause_ratio > 0.35:
+        s -= 20
+    elif pause_ratio > 0.25:
+        s -= 10
+
     s -= min(20, long_pauses * 5 + hes * 4 + rep * 5)
     return {"wpm": round(wpm,1), "articulation_rate": round(art,2), "pause_ratio": round(pause_ratio,3),
             "long_pause_count": long_pauses, "hesitation_count": hes, "repetition_count": rep,
@@ -69,30 +74,41 @@ def score_completeness_read_aloud(original: str | None, corrected: str, mode: st
 
 
 def calculate_overall(sounds: float, stress: float, fluency: float, completeness: float) -> float:
-    """MVP v2: 0.5*Sounds + 0.25*Stress + 0.15*Fluency + 0.10*Completeness. Intonation v1.1."""
     return round(0.5*sounds + 0.25*stress + 0.15*fluency + 0.10*completeness, 1)
 
 
 def needleman(a: list[str], b: list[str]) -> list[tuple[str, str, str]]:
-    """Align canonical (a) vs observed (b) -> [(exp, obs, type)]. Dùng chung
-    cho char-phoneme fallback (Part 6) và GOP thật (Part 8)."""
     n, m = len(a), len(b)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
-    for i in range(n + 1): dp[i][0] = i
-    for j in range(m + 1): dp[0][j] = j
+
+    for i in range(n + 1):
+        dp[i][0] = i
+
+    for j in range(m + 1):
+        dp[0][j] = j
+
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            c = 0 if a[i-1] == b[j-1] else 1
-            dp[i][j] = min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+c)
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+
     i, j, out = n, m, []
+
     while i > 0 or j > 0:
-        if i > 0 and j > 0 and a[i-1] == b[j-1]:
-            out.append((a[i-1], b[j-1], "match")); i -= 1; j -= 1
-        elif i > 0 and j > 0 and dp[i][j] == dp[i-1][j-1]+1:
-            out.append((a[i-1], b[j-1], "substitution")); i -= 1; j -= 1
-        elif j > 0 and dp[i][j] == dp[i][j-1]+1:
-            out.append(("-", b[j-1], "insertion")); j -= 1
+        if i > 0 and j > 0 and a[i - 1] == b[j - 1]:
+            out.append((a[i - 1], b[j - 1], "match"))
+            i -= 1
+            j -= 1
+        elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
+            out.append((a[i - 1], b[j - 1], "substitution"))
+            i -= 1
+            j -= 1
+        elif j > 0 and dp[i][j] == dp[i][j - 1] + 1:
+            out.append(("-", b[j - 1], "insertion"))
+            j -= 1
         else:
-            out.append((a[i-1], "-", "deletion")); i -= 1
+            out.append((a[i - 1], "-", "deletion"))
+            i -= 1
+
     return out[::-1]
 

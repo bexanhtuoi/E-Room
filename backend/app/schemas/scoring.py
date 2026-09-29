@@ -1,4 +1,3 @@
-"""Data contract B1-B4 — deterministic scorer dùng chung cho demo + backend sau này."""
 from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional

@@ -111,11 +111,6 @@ def redis_available() -> bool:
 
 @pytest.fixture(autouse=True)
 def _isolate_speech_logs(tmp_path, monkeypatch):
-    """Mọi test ghi speech log vào tmp — không bao giờ đụng log production.
-
-    (Đã từng xảy ra: test_transcriber gọi append_utterance thật, đẻ
-    room_1/user_1.jsonl + wav silence ngay trong backend/log/speech.)
-    """
     from app import config as app_config
 
     monkeypatch.setattr(app_config.settings, "speech_log_dir", str(tmp_path / "speech"), raising=False)

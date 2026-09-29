@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 import numpy as np
 
-from app.ai.stt.helpers import convert_audio_to_float32, convert_audio_to_wav_bytes
+from app.ai.stt.helpers import convert_audio_to_float32, convert_audio_to_wav_bytes, normalize_word_entry
 from app.config import settings
 from app.log import get_logger
 
@@ -57,16 +57,10 @@ def transcribe_cloud_whisper(
             return None
 
         words_data: List[Dict[str, Any]] = []
+
         if result_json.get("words"):
-            for w in result_json["words"]:
-                words_data.append(
-                    {
-                        "word": w.get("word", "").strip(),
-                        "start": w.get("start", 0.0),
-                        "end": w.get("end", 0.0),
-                        "probability": 1.0,
-                    }
-                )
+            for word in result_json["words"]:
+                words_data.append(normalize_word_entry(word))
 
         return {
             "text": full_text,

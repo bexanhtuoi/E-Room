@@ -36,9 +36,46 @@ log = get_logger("app.ai.pronunciation")
 scoring_gate = threading.Semaphore(max(1, settings.scoring_max_parallel))
 
 
-# Part 4 — CTC acoustic: wav2vec2 forced align char-level (word spans thật).
-# Dùng cho stress/fluency + fallback acoustic khi phoneme model chưa tải.
-# KHÔNG gọi output này là GOP. Full-audio 1 pass, không chunk.
+def split_words_with_spans(ref_ctc: str) -> tuple[list[str], list[list[int]]]:
+    chars = list(ref_ctc)
+    word_list: list[str] = []
+    per_word_spans: list[list[int]] = []
+    word, idxs = "", []
+
+    for ci, ch in enumerate(chars):
+        if ch == "|":
+            if word:
+                word_list.append(word)
+                per_word_spans.append(idxs)
+                word, idxs = "", []
+        else:
+            word += ch
+            idxs.append(ci)
+
+    if word:
+        word_list.append(word)
+        per_word_spans.append(idxs)
+
+    return word_list, per_word_spans
+
+
+def greedy_decode(processor, pred_ids: list[int], blank_id: int) -> str:
+    vocab_list = [None] * len(processor.tokenizer)
+
+    for tok, i in processor.tokenizer.get_vocab().items():
+        if 0 <= i < len(vocab_list):
+            vocab_list[i] = tok
+
+    collapsed, prev = [], None
+
+    for pid in pred_ids:
+        if pid != prev:
+            if pid != blank_id:
+                collapsed.append(vocab_list[pid] if vocab_list[pid] else "")
+        prev = pid
+
+    return "".join(collapsed).replace("|", " ").strip()
+
 
 def normalize_reference(text: str, vocab: set[str]) -> str:
     t = (text or "").upper().strip()
@@ -50,8 +87,6 @@ def normalize_reference(text: str, vocab: set[str]) -> str:
 
 
 def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict[str, Any]:
-    """Char-level acoustic likelihood + word spans + alignment_status.
-    KHÔNG cắt audio (chỉ chặn >10 phút). Từ no_evidence/misaligned loại khỏi overall."""
     torch = load_torch()
     processor, model = get_acoustic_model()
     device = next(model.parameters()).device
@@ -112,22 +147,7 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
             char_ok.append(False)
 
     words_out: list[dict[str, Any]] = []
-    chars = list(ref_ctc)
-    w, wi = "", []
-    per_word_spans: list[list[int]] = []
-    word_list: list[str] = []
-    for ci, ch in enumerate(chars):
-        if ch == "|":
-            if w:
-                word_list.append(w)
-                per_word_spans.append(wi)
-                w, wi = "", []
-        else:
-            w += ch
-            wi.append(ci)
-    if w:
-        word_list.append(w)
-        per_word_spans.append(wi)
+    word_list, per_word_spans = split_words_with_spans(ref_ctc)
 
     for wstr, idxs in zip(word_list, per_word_spans):
         lps = [char_lp[i] for i in idxs if 0 <= i < len(char_lp)]
@@ -185,21 +205,11 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
         loss = float("nan")
 
     try:
-        vocab_list = [None] * len(processor.tokenizer)
-        for tok, i in processor.tokenizer.get_vocab().items():
-            if 0 <= i < len(vocab_list):
-                vocab_list[i] = tok
-        collapsed, prev = [], None
-        for pid in pred_ids:
-            if pid != prev:
-                if pid != blank_id:
-                    collapsed.append(vocab_list[pid] if vocab_list[pid] else "")
-            prev = pid
-        greedy = "".join(collapsed).replace("|", " ").strip()
+        greedy = greedy_decode(processor, pred_ids, blank_id)
     except Exception:
         greedy = ""
 
-    level = "Xuat sac" if overall >= 85 else ("Tot" if overall >= 70 else ("Trung binh" if overall >= 50 else "Can luyen them"))
+    level = "Xuất sắc" if overall >= 85 else ("Tốt" if overall >= 70 else ("Trung bình" if overall >= 50 else "Cần luyện thêm"))
 
     return {
         "transcript_norm": ref_norm,
@@ -218,19 +228,7 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
     }
 
 
-# Part 5 — Metrics: fluency + completeness + overall (deterministic)
 
-# Part 6 — Sounds: phoneme-level từ char evidence + CMU.
-# Case bắt buộc: đọc /sɪŋk/ nhưng corrected là think -> phải ra /θ/→/s/.
-# Khi có xlsr-espeak: thay observe_phones_fallback bằng decode IPA trực tiếp
-# từ audio (API giữ nguyên, chỉ đổi hàm observe).
-
-# Part 7 — Stress: syllable boundary THẬT từ phoneme timestamps
-# (forced aligner), không chia đều. MVP: word span -> N syllable spans theo
-# tỉ lệ duration phoneme; v1.1 MFA cho boundary chuẩn 100%.
-
-# Part 8 — Phoneme GOP thật (theo tư vấn chuyên gia).
-# Model: facebook/wav2vec2-xlsr-53-espeak-cv-ft (Wav2Vec2ForCTC trên phone espeak).
 # - KHÔNG dùng tokenizer của transformers (nó đòi binary espeak) — đọc thẳng
 #   vocab.json trong HF cache, tokenize thủ công.
 # - user_corrected -> CMUdict (full) -> ARPAbet -> espeak phones.
@@ -244,15 +242,11 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
 # ARPAbet (đã strip số stress) -> espeak phone token. Mọi token đều có trong vocab.
 
 
-# Part 9 — Pipeline: audio + whisper_raw + user_corrected + accent
-# -> ScoringReport. Trái tim scorer. Deterministic.
-# LLM feedback KHÔNG được gọi ở đây.
+# Deterministic pipeline — LLM feedback KHÔNG được gọi ở đây.
 def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected: str,
                      mode: str = "free_speaking", original_text: str | None = None,
                      accent: str = "en-US", whisper_segments: list[dict] | None = None,
                      char_words: list[dict] | None = None, greedy_text: str = "") -> dict:
-    """char_words: output words từ score_utterance (forced aligner char-level,
-    nguồn span thật). Caller truyền vào để tái dùng model đã load."""
     t0 = time.time()
     warnings: list[str] = []
     if not (user_corrected or "").strip():
@@ -276,11 +270,13 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
     if snd is None:
         # Fallback char-level: KHÔNG gọi là GOP, chỉ là acoustic likelihood.
         snd = score_sounds(char_words or [], greedy_text=greedy_text or whisper_raw, accent=accent)
-        warnings.append("diem Sounds hien tai la char-level acoustic likelihood, KHONG phai GOP chuan")
+        warnings.append("Điểm Sounds hiện tại là char-level acoustic likelihood, KHÔNG phải GOP chuẩn")
+
     st = score_stress(snd.get("word_details") or char_words or [], wav, sr, accent)
     segs, pauses = vad_segments(wav, sr)
     fl = score_fluency(len(wav)/sr, len([w for w in aligned if w["alignment"] != "deletion"]),
                        pauses, whisper_raw)
+
     _details = snd["word_details"]
     _no_ev = sum(1 for d in _details if d.get("status") == "no_evidence")
     cp = score_completeness(original_text, user_corrected, mode, _details)
@@ -311,14 +307,12 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
     }
 
 
-# Part 10 — Hook: entry-point cho router + xin nhận xét AI
 def heuristic_score(
     confidence: float = 1.0,
     avg_logprob: float = 0.0,
     duration: float = 0.0,
     words_count: int = 0,
 ) -> Dict[str, Any]:
-    """Chấm tạm 0-100 từ tín hiệu STT sẵn có."""
     conf_part = max(0.0, min(1.0, confidence)) * 60.0
     # avg_logprob thường nằm [-2, 0]; map về 0-25 điểm
     logprob_norm = max(0.0, min(1.0, (avg_logprob + 2.0) / 2.0))
@@ -374,11 +368,6 @@ def score_local(
     reference_text: str,
     language: str = "en",
 ) -> Dict[str, Any]:
-    """Chấm bằng ruột scorer trong file này: full-audio 1 pass,
-    phoneme GOP + 4 tiêu chí. Raise khi model/audio lỗi.
-
-    Xếp hàng qua scoring_gate: lượt chấm sau đợi lượt trước xong (tuần tự
-    theo SCORING_MAX_PARALLEL) thay vì forward song song gây OOM."""
     raw = Path(audio_path).read_bytes()
     if len(raw) > 100 * 1024 * 1024:
         raise ValueError("Audio > 100MB.")
@@ -405,8 +394,6 @@ def score_via_pronun_service(
     reference_text: str,
     language: str = "en",
 ) -> Dict[str, Any]:
-    """Gọi Pronun scorer qua HTTP: POST {PRONUN_BASE_URL}/api/speaking/score.
-    Raise khi chưa cấu hình hoặc scorer lỗi."""
     base = (settings.pronun_base_url or "").strip().rstrip("/")
     if not base:
         raise NotImplementedError(
@@ -439,7 +426,6 @@ def score_with_wav2vec2(
     reference_text: str,
     language: str = "en",
 ) -> Dict[str, Any]:
-    """Local trước, remote sau. Raise để caller fallback heuristic."""
     try:
         return score_local(audio_path, reference_text, language)
     except Exception as error:
@@ -457,17 +443,9 @@ def score_pronunciation(
     words: Optional[List[Dict[str, Any]]] = None,
     prefer_wav2vec: bool = True,
 ) -> Dict[str, Any]:
-    """Entry-point duy nhất caller cần gọi.
-
-    Thử local scorer -> pronun service (nếu có audio + text), fallback heuristic.
-    Không bao giờ raise — luôn trả dict score.
-    Heuristic kèm `reason`: "no_audio" (không có file audio để chấm) hoặc
-    "scorer_failed" (có audio nhưng scorer lỗi) — frontend dùng để hiện
-    hướng dẫn đúng thay vì điểm số gây hiểu lầm.
-    """
     words = words or []
 
-    def _heuristic(reason: str) -> Dict[str, Any]:
+    def heuristic(reason: str) -> Dict[str, Any]:
         result = heuristic_score(
             confidence=confidence,
             avg_logprob=avg_logprob,
@@ -491,19 +469,19 @@ def score_pronunciation(
                         "scoring skipped, audio too quiet | peak=%s rms=%s path=%s",
                         quality["peak"], quality["rms"], path,
                     )
-                    result = _heuristic("quiet_audio")
+                    result = heuristic("quiet_audio")
                     result["audio_quality"] = quality
                     return result
                 return score_with_wav2vec2(path, reference_text, language)
             log.warning("scoring thiếu audio (file không tồn tại: %s) — fallback heuristic", audio_path)
-            return _heuristic("no_audio")
+            return heuristic("no_audio")
         except NotImplementedError as error:
             log.warning("local scoring failed và chưa cấu hình pronun service — fallback heuristic | err=%s", error)
-            return _heuristic("scorer_failed")
+            return heuristic("scorer_failed")
         except Exception as error:
             log.warning("wav2vec2 scoring failed, fallback heuristic | err=%s", error)
-            return _heuristic("scorer_failed")
+            return heuristic("scorer_failed")
     if prefer_wav2vec and reference_text.strip():
         log.warning("scoring thiếu audio (audio_path=%r) — fallback heuristic", audio_path)
-        return _heuristic("no_audio")
-    return _heuristic("heuristic")
+        return heuristic("no_audio")
+    return heuristic("heuristic")

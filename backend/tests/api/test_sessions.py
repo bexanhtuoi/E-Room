@@ -20,7 +20,7 @@ def make_session_with_lines(texts: list, room_id: int) -> int:
     from app.database import engine
     from app.models import MessageRole
     from app.services import message_crud
-    from app.services.session import session_crud
+    from app.repositories.session import session_crud
 
     with DBSession(engine) as db:
         db_session = session_crud.create(db, obj_in={"user_id": 1, "room_id": room_id})

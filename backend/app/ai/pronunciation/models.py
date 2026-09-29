@@ -27,21 +27,15 @@ ARPA_TO_ESPEAK: dict[str, tuple[str, ...]] = {
 
 
 acoustic_lock = threading.Lock()
-
-
 ctc_processor = None
-
-
 acoustic_model = None
-
-
 torch_lib = None
 
 
 def load_torch():
     global torch_lib
     if torch_lib is None:
-        import torch  # noqa: WPS433
+        import torch
 
         torch_lib = torch
     return torch_lib
@@ -55,7 +49,6 @@ def acoustic_model_id() -> str:
 
 
 def get_acoustic_model():
-    """Lazy-load wav2vec2 processor + model (thread-safe, load 1 lần)."""
     global ctc_processor, acoustic_model
     if acoustic_model is not None:
         return ctc_processor, acoustic_model
@@ -85,14 +78,8 @@ PHONE_MODEL_ID = phone_model_id()
 
 
 phone_lock = threading.Lock()
-
-
 phone_fe = None
-
-
 phone_model = None
-
-
 phone_vocab: dict[str, int] | None = None
 
 
@@ -104,9 +91,7 @@ def load_vocab() -> dict[str, int]:
         str(Path.home() / ".cache" / "huggingface" / "hub" /
             ("models--" + PHONE_MODEL_ID.replace("/", "--")) / "snapshots" / "*" / "vocab.json"),
     ]
-    found = []
-    for p in pats:
-        found.extend(glob.glob(p))
+    found = [f for p in pats for f in glob.glob(p)]
     if not found:
         # ép download vocab (nhẹ, vài KB)
         from huggingface_hub import hf_hub_download
@@ -118,7 +103,6 @@ def load_vocab() -> dict[str, int]:
 
 
 def get_phone_model():
-    """Lazy-load feature extractor + phone CTC model (1 lần). Nặng ~1.2GB lần đầu."""
     global phone_fe, phone_model
     if phone_model is not None:
         return phone_fe, phone_model
@@ -137,7 +121,6 @@ def get_phone_model():
 
 
 def arpa_to_espeak(arpa: list[str]) -> tuple[list[str], list[int]]:
-    """ARPAbet (kèm số stress) -> (espeak tokens, phone->arpa index). Bỏ token lạ."""
     vocab = load_vocab()
     toks: list[str] = []
     back: list[int] = []
@@ -151,8 +134,6 @@ def arpa_to_espeak(arpa: list[str]) -> tuple[list[str], list[int]]:
 
 
 def ctc_forced_align(log_probs, target_ids: list[int], blank_id: int):
-    """Viterbi forced alignment CTC (vector hoá theo S).
-    Extended: [b, t1, b, t2, b, ..., tL, b]. Ưu tiên stay > +1 > +2 khi hoà."""
     torch = load_torch()
     T = log_probs.shape[0]
     L = len(target_ids)

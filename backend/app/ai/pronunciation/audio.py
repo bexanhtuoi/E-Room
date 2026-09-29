@@ -61,8 +61,6 @@ def frame_rms(wav: np.ndarray, frame_len: int = 320) -> np.ndarray:
 
 def vad_segments(wav: np.ndarray, sr: int = 16000, energy_thr: float = 0.003,
                  silence_s: float = 0.5, min_speech_s: float = 0.3) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
-    """Trả (speech_segments, pauses). Không cắt audio, chỉ đánh dấu.
-    Dùng cho file dài free_speaking: chunk theo speech_segments nếu segment > 20s thì cắt tiếp ở pause."""
     hop = 320  # 20ms
     rms = frame_rms(wav, hop)
     voiced = rms >= energy_thr
@@ -97,25 +95,23 @@ def vad_segments(wav: np.ndarray, sr: int = 16000, energy_thr: float = 0.003,
 
 
 def extract_f0(wav: np.ndarray, sr: int = 16000) -> dict[str, Any]:
-    """pYIN F0. Trả median/std/p10/p90 + curve thưa để vẽ."""
     try:
         import librosa
         f0, voiced_flag, _ = librosa.pyin(wav, fmin=librosa.note_to_hz("C2"),
                                           fmax=librosa.note_to_hz("C7"), sr=sr)
-        import numpy as _np
-        valid = f0[~_np.isnan(f0)] if f0 is not None else _np.array([])
+        valid = f0[~np.isnan(f0)] if f0 is not None else np.array([])
         if len(valid) == 0:
             return {"median_f0": 0.0, "std_f0": 0.0, "p10": 0.0, "p90": 0.0,
                     "range_f0": 0.0, "final_slope": 0.0, "curve_t": [], "curve_f0": [], "voiced_ratio": 0.0}
-        p10, p90 = float(_np.percentile(valid, 10)), float(_np.percentile(valid, 90))
+        p10, p90 = float(np.percentile(valid, 10)), float(np.percentile(valid, 90))
         # slope 0.5s cuối
         tail = valid[-25:] if len(valid) >= 25 else valid
         slope = float(tail[-1] - tail[0]) if len(tail) >= 2 else 0.0
         # curve thưa 100 điểm để frontend vẽ
-        idx = _np.linspace(0, len(f0) - 1, min(100, len(f0))).astype(int)
+        idx = np.linspace(0, len(f0) - 1, min(100, len(f0))).astype(int)
         curve_t = [round(float(i) * 512 / sr, 2) for i in idx]  # pyin hop mặc định 512
-        curve_f0 = [round(float(f0[i]) if not _np.isnan(f0[i]) else 0.0, 1) for i in idx]
-        return {"median_f0": round(float(_np.median(valid)), 1), "std_f0": round(float(_np.std(valid)), 1),
+        curve_f0 = [round(float(f0[i]) if not np.isnan(f0[i]) else 0.0, 1) for i in idx]
+        return {"median_f0": round(float(np.median(valid)), 1), "std_f0": round(float(np.std(valid)), 1),
                 "p10": round(p10, 1), "p90": round(p90, 1), "range_f0": round(p90 - p10, 1),
                 "final_slope": round(slope, 1), "curve_t": curve_t, "curve_f0": curve_f0,
                 "voiced_ratio": round(float(len(valid)) / max(1, len(f0)), 3)}

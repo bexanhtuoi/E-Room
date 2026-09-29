@@ -86,7 +86,6 @@ class TestSpeechLog:
         assert update_corrected_text(5555, 1, 999999, "x") is None
 
     def test_raw_edit_rescore_flow(self, tmp_path, monkeypatch):
-        """whisper lưu raw (chưa chấm) -> user sửa -> chấm -> sửa nữa thì mất điểm cũ."""
         import app.config as cfg
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
@@ -125,7 +124,6 @@ class TestSpeechLog:
         assert updated3["pronunciation"]["scored_text"] == "you're using a satellite"
 
     def test_feedback_flow_and_reset_on_edit(self, tmp_path, monkeypatch):
-        """chấm -> gắn feedback -> sửa text thì cả điểm + feedback đều reset."""
         import app.config as cfg
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)

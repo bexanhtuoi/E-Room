@@ -14,7 +14,6 @@ log = get_logger("app.ai.stt.recorder")
 
 
 class UtteranceRef:
-    """轻量 ref để attach STT result (message_id/text) vào metadata của attempt."""
 
     __slots__ = ("_recorder", "room_id", "attempt_id", "index")
 
@@ -121,7 +120,7 @@ class RawAttemptRecorder:
             if self._file is None:
                 if not has_voice:
                     return
-                self._open_attempt()
+                self.open_attempt()
 
             data = pcm.astype("<i2", copy=False).tobytes()
             self._buffer.extend(data)
@@ -130,7 +129,7 @@ class RawAttemptRecorder:
             if has_voice:
                 self._last_voice_sample = self._samples_written
             if len(self._buffer) >= self._flush_bytes:
-                self._flush()
+                self.flush()
         except Exception as error:
             log.warning(
                 "Raw recorder write error | room=%s user=%s err=%s",
@@ -215,7 +214,7 @@ class RawAttemptRecorder:
                     utt["status"] = "truncated"
                 self._current_utt = None
 
-            self._flush()
+            self.flush()
             if self._file is not None:
                 end_pos = self._file.tell()
                 self._file.seek(0)
@@ -259,7 +258,7 @@ class RawAttemptRecorder:
 
         try:
             path = metadata_path(self.room_id, self._attempt_id)
-            self._write_metadata_atomic(path, metadata)
+            self.write_metadata_atomic(path, metadata)
         except Exception as error:
             log.warning(
                 "Raw recorder metadata write error | room=%s user=%s err=%s",
@@ -312,7 +311,7 @@ class RawAttemptRecorder:
                     break
             else:
                 return
-            self._write_metadata_atomic(path, meta)
+            self.write_metadata_atomic(path, meta)
         except Exception as error:
             log.warning(
                 "Raw recorder attach result error | room=%s user=%s err=%s",
@@ -321,7 +320,7 @@ class RawAttemptRecorder:
                 error,
             )
 
-    def _open_attempt(self) -> None:
+    def open_attempt(self) -> None:
         ts = int(time.time() * 1000)
         user_tag = str(self.user_id) if self.user_id is not None else (self.user_identity or "unknown")
         user_tag = user_tag.replace(":", "_")[:32]
@@ -344,7 +343,7 @@ class RawAttemptRecorder:
             self._attempt_id,
         )
 
-    def _flush(self) -> None:
+    def flush(self) -> None:
         if self._file is None or not self._buffer:
             return
         self._file.write(bytes(self._buffer))
@@ -356,7 +355,7 @@ class RawAttemptRecorder:
         self._buffer.clear()
 
     @staticmethod
-    def _write_metadata_atomic(path: Path, metadata: Dict[str, Any]) -> None:
+    def write_metadata_atomic(path: Path, metadata: Dict[str, Any]) -> None:
         tmp = path.with_name(path.name + ".tmp")
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(metadata, fh, ensure_ascii=False, indent=2)
@@ -366,12 +365,6 @@ class RawAttemptRecorder:
 def find_attempt_by_message(
     room_id: int, user_id: Any, message_id: int
 ) -> Optional[Dict[str, Any]]:
-    """Tìm attempt chứa utterance có message_id (để chấm từ đầu đến cuối).
-
-    Quét attempts/*/metadata.json của user trong room. Trả về:
-    {"attempt_id", "raw_path" (Path|None), "utterances" (theo index),
-     "message_ids" (theo thứ tự utterance)} hoặc None nếu không thấy.
-    """
     try:
         root = attempts_root(room_id)
     except Exception:

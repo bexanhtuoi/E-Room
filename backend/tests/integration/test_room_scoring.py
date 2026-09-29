@@ -9,7 +9,7 @@ from sqlmodel import Session
 from app.tasks.scoring import score_room_utterances
 from app.database import engine
 from app.services import room_crud, session_crud
-from app.services.pronunciation_score import pronunciation_score_crud
+from app.repositories.pronunciation_score import pronunciation_score_crud
 
 MOCK_SCORE = {
     "overall": 82.0,

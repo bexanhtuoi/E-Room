@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlmodel import Session
@@ -6,7 +6,7 @@ from sqlmodel import Session
 from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
-from app.services import notification as notification_service
+from app.services.notification import notification_service
 
 router = APIRouter()
 

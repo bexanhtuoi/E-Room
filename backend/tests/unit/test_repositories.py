@@ -15,18 +15,36 @@ class TestRepositorySurface:
         assert repositories.notification_crud is services.notification_crud
         assert repositories.pronunciation_score_crud is services.pronunciation_score_crud
 
-    def test_legacy_names_still_exposed(self):
-        from app.services import document as document_service
-        from app.services import message as message_service
-        from app.services import session as session_service
-        from app.services import user as user_service
+    def test_service_classes_exposed(self):
+        from app.services.auth import AuthService, auth_service
+        from app.services.document import DocumentService, document_service
+        from app.services.message import MessageService, message_service
+        from app.services.notification import NotificationService, notification_service
+        from app.services.room import RoomService, room_service
+        from app.services.session import SessionService, session_service
+        from app.services.speech import SpeechService, speech_service
+        from app.services.tts import TTSService, tts_service
+        from app.services.user import UserService, user_service
 
-        assert document_service.drop_doc_storage is not None
-        assert message_service.is_recent_duplicate is not None
-        assert session_service.is_session_chat is not None
-        assert session_service.session_lines is not None
-        assert user_service.count_streak is not None
-        assert user_service.peak_day is not None
+        assert isinstance(room_service, RoomService)
+        assert isinstance(session_service, SessionService)
+        assert isinstance(message_service, MessageService)
+        assert isinstance(speech_service, SpeechService)
+        assert isinstance(user_service, UserService)
+        assert isinstance(document_service, DocumentService)
+        assert isinstance(notification_service, NotificationService)
+        assert isinstance(auth_service, AuthService)
+        assert isinstance(tts_service, TTSService)
+
+    def test_helpers_hold_shared_functions(self):
+        from app.services import helpers
+
+        assert helpers.document_scope is not None
+        assert helpers.is_session_chat is not None
+        assert helpers.coerce_user_id is not None
+        assert helpers.parse_room_id is not None
+        assert helpers.avatar_marker is not None
+        assert helpers.parse_log_time is not None
 
     def test_crud_through_new_layer(self):
         from app.repositories import notification_crud, user_crud

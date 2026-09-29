@@ -10,7 +10,7 @@ from app.config import settings
 from app.database import engine
 from app.log import log_call
 from app.repositories.session import session_crud
-from app.services.session import session_lines
+from app.services.session import session_service
 from app.shared.keys import room_tag
 
 MAX_TOOL_LINES = 100
@@ -22,7 +22,7 @@ def load_lines(session_id: int) -> list:
         db_session = session_crud.get_one(db, id=session_id)
         if not db_session:
             return []
-        return session_lines(db, db_session)
+        return session_service.session_lines(db, db_session)
 
 
 RETRIEVAL_BASE_DESCRIPTION = """Search and retrieve relevant information from uploaded documents.

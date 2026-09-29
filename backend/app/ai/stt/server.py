@@ -10,6 +10,7 @@ from app.ai.stt.helpers import (
     convert_audio_to_wav_bytes,
     is_prompt_echo,
     is_repetitive_hallucination,
+    normalize_word_entry,
     resolve_stt_language,
 )
 from app.config import settings
@@ -25,11 +26,11 @@ STT_URL_CACHE: Dict[str, Any] = {"value": None, "expires": 0.0}
 
 
 STT_URL_CACHE_TTL = 30.0
+
 STT_ALIVE_CACHE: Dict[str, Any] = {"value": False, "expires": 0.0}
 
 
 def get_stt_server_url_override() -> Optional[str]:
-    """Đọc URL whisper-server từ Redis (cache 30s). Fail-open → None."""
     import time
 
     now = time.monotonic()
@@ -49,7 +50,6 @@ def get_stt_server_url_override() -> Optional[str]:
 
 
 def is_stt_server_alive() -> bool:
-    """Whisper host (:8001) có sống không? Cache theo STT_SERVER_ALIVE_TTL."""
     import time
 
     now = time.monotonic()
@@ -121,27 +121,15 @@ def transcribe_whisper_server(
         # segments[] mỗi cái có avg_logprob -> dùng để tính confidence giống local.
         words_data: List[Dict[str, Any]] = []
         raw_words = result_json.get("words") or []
+
         for seg in result_json.get("segments") or []:
-            for w in seg.get("words") or []:
-                words_data.append(
-                    {
-                        "word": str(w.get("word", "")).strip(),
-                        "start": float(w.get("start", 0.0)),
-                        "end": float(w.get("end", 0.0)),
-                        "probability": float(w.get("probability", 1.0)),
-                    }
-                )
+            for word in seg.get("words") or []:
+                words_data.append(normalize_word_entry(word))
+
         if not words_data:
-            for w in raw_words:
-                if isinstance(w, dict):
-                    words_data.append(
-                        {
-                            "word": str(w.get("word", "")).strip(),
-                            "start": float(w.get("start", 0.0)),
-                            "end": float(w.get("end", 0.0)),
-                            "probability": float(w.get("probability", 1.0)),
-                        }
-                    )
+            for word in raw_words:
+                if isinstance(word, dict):
+                    words_data.append(normalize_word_entry(word))
 
         logprobs = [
             float(s.get("avg_logprob", 0.0))

@@ -7,14 +7,6 @@ from app.utils.datetime_utils import now_utc
 
 
 class PronunciationScore(SQLModel, table=True):
-    """Điểm phát âm 1 lượt nói — nguồn thật trong DB (đồng nhất cho
-    session feedback, thống kê, rescore).
-
-    JSONL speech log (backend/log/speech) giữ vai trò log raw/audio;
-    mỗi lần chấm xong (POST .../score) và mỗi lần xin nhận xét
-    (POST .../feedback) đều write-through vào bảng này.
-    Máy host tự tính (scorer local), bảng này chỉ lưu KẾT QUẢ.
-    """
 
     __tablename__ = "pronunciation_scores"
 

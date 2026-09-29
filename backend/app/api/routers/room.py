@@ -1,4 +1,4 @@
-﻿import json
+import json
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
@@ -16,7 +16,7 @@ from app.schemas import (
     RoomTokenResponse,
     RoomUpdateSchema,
 )
-from app.services import room as room_service
+from app.services.room import room_service
 from app.shared.constants import AI_IDENTITY_PREFIX
 
 router = APIRouter()

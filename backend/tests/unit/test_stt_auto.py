@@ -1,4 +1,3 @@
-"""STT auto: host song -> host, chet -> fallback whisper local cu."""
 from unittest.mock import patch
 
 import numpy as np

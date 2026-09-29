@@ -20,11 +20,6 @@ def request_pronun_feedback(
     system_prompt: str = "",
     user_label: str = "scoring_report",
 ) -> Dict[str, Any]:
-    """Xin nhận xét AI: LLM local qua get_llm (llama.cpp).
-    Chỉ gửi ScoringReport (không audio, không tự tính điểm — đúng luật đã khóa).
-    system_prompt != "" cho phép caller (vd session feedback) dùng prompt gọn
-    chuyên biệt thay vì prompt mặc định. LLM chết -> gợi ý theo quy tắc
-    (không raise, API vẫn 200)."""
     import asyncio
 
     try:
@@ -41,7 +36,6 @@ def request_pronun_feedback(
 
 
 def load_feedback_prompts() -> Dict[str, str]:
-    """Đọc 2 prompt md riêng. Fallback feedback.md cũ nếu file mới thiếu."""
     from app.ai.llm.prompt import load_prompt
 
     out = {"utterance": "", "session": ""}
@@ -56,7 +50,7 @@ def load_feedback_prompts() -> Dict[str, str]:
     # Fallback: feedback.md cũ (1 file, 2 mục ## utterance / ## session).
     text = load_prompt("feedback")
     if not text:
-        log.warning("prompt feedback thieu/trong — feedback se chay prompt rong")
+        log.warning("prompt feedback thiếu/trống — feedback sẽ chạy prompt rỗng")
         return out
     current = None
     buf: list[str] = []
@@ -75,29 +69,24 @@ def load_feedback_prompts() -> Dict[str, str]:
     if current:
         out[current] = "\n".join(buf).strip()
     if not out["utterance"] or not out["session"]:
-        log.warning("thieu prompt feedback_utterance/assessment")
+        log.warning("thiếu prompt feedback_utterance/assessment")
     return out
 
 
 PROMPTS = load_feedback_prompts()
 
-
 SYSTEM_PROMPT = PROMPTS["utterance"]
 
-
 SESSION_FEEDBACK_PROMPT = PROMPTS["session"]
-
 
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 def strip_reasoning(content: str) -> str:
-    """Bỏ khối reasoning (<think>...</think>) model đôi khi kèm theo."""
     return THINK_BLOCK_RE.sub("", content or "").strip()
 
 
 def extract_json(content: str) -> Dict[str, Any] | None:
-    """LLM local tra JSON (co the kem text). Boc tach object JSON dau tien."""
     text = strip_reasoning(content)
     if not text:
         return None
@@ -141,35 +130,36 @@ async def generate_feedback(scoring_report: dict, model: str = "",
     return {"feedback_raw": content, "model": (model or "").strip() or settings.llm_model, "usage": {}}
 
 
-def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_report") -> dict:
-    """Gợi ý theo quy tắc từ điểm đã chấm (không cần LLM).
-    Dùng khi LLM local chết — API vẫn 200, không 502. Bao đủ keys cho cả
-    2 frontend (utterance: pronunciation_feedback/priority_errors/...;
-    session: error_words)."""
-    def word_guide(word: str, issue: str) -> Dict[str, str]:
-        try:
-            arpa = get_pronunciation(word.split(",")[0].strip(), "en-US").get("arpa", [])
-        except Exception:
-            arpa = []
-        return guide_for_word(word, arpa, issue)
+def word_guide(word: str, issue: str) -> Dict[str, str]:
+    try:
+        arpa = get_pronunciation(word.split(",")[0].strip(), "en-US").get("arpa", [])
+    except Exception:
+        arpa = []
+    return guide_for_word(word, arpa, issue)
 
+
+def bad_word_entry(word: str, issue: str, score) -> dict:
+    return {"word": word, "issue": issue, "score": score, **word_guide(word, issue)}
+
+
+def top_error_entry(examples, pattern: str) -> dict:
+    word = ", ".join((examples or [])[:2]) or "?"
+    issue = str(pattern)
+    return {"word": word, "issue": issue, "score": None, **word_guide(word, issue)}
+
+
+def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_report") -> dict:
     report = scoring_report or {}
     utts = report.get("utterances")
     if isinstance(utts, list):
         # Dạng session_scores: [{text, overall, bad_words, top_errors}]
         entries = []
         for u in utts:
-            bad = u.get("bad_words") or []
-            for b in bad[:5]:
-                w = b.get("word") or "?"
+            for b in (u.get("bad_words") or [])[:5]:
                 issue = f"{b.get('status', '')} {b.get('expected_ipa', '')}".strip()
-                entries.append({"word": w, "issue": issue, "score": b.get("score"),
-                                **word_guide(w, issue)})
+                entries.append(bad_word_entry(b.get("word") or "?", issue, b.get("score")))
             for t in (u.get("top_errors") or [])[:3]:
-                w = ", ".join(t.get("examples", [])[:2]) or "?"
-                issue = str(t.get("pattern", ""))
-                entries.append({"word": w, "issue": issue, "score": None,
-                                **word_guide(w, issue)})
+                entries.append(top_error_entry(t.get("examples"), t.get("pattern", "")))
         scored = [u for u in utts if isinstance(u.get("overall"), (int, float))]
         avg = round(sum(u["overall"] for u in scored) / len(scored), 1) if scored else 0.0
         n = len(utts)
@@ -178,15 +168,10 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
         entries = []
         for w in report.get("word_details") or []:
             if (w.get("status") or "ok") != "ok":
-                word = w.get("word") or "?"
                 issue = f"{w.get('status', '')} {w.get('expected_ipa', '')}".strip()
-                entries.append({"word": word, "issue": issue, "score": w.get("score"),
-                                **word_guide(word, issue)})
+                entries.append(bad_word_entry(w.get("word") or "?", issue, w.get("score")))
         for t in (report.get("top_errors") or [])[:3]:
-            w = ", ".join(t.get("examples", [])[:2]) or "?"
-            issue = str(t.get("pattern", ""))
-            entries.append({"word": w, "issue": issue, "score": None,
-                            **word_guide(w, issue)})
+            entries.append(top_error_entry(t.get("examples"), t.get("pattern", "")))
         overall = ((report.get("scores") or {}).get("overall"))
         avg = round(float(overall), 1) if isinstance(overall, (int, float)) else 0.0
         n = 1

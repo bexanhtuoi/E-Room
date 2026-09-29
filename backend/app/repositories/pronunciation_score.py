@@ -15,8 +15,6 @@ class PronunciationScoreCrud(CRUDRepository):
     def find_for_utterance(
         self, db: Session, room_id: int, user_id: int, message_id: Any
     ) -> Optional[PronunciationScore]:
-        """Tìm dòng điểm của 1 câu. message_id None (log cũ) -> None để
-        caller insert dòng mới thay vì upsert sai."""
         if message_id is None:
             return None
         stmt = (
@@ -37,7 +35,6 @@ class PronunciationScoreCrud(CRUDRepository):
         session_id: Any,
         score: Dict[str, Any],
     ) -> PronunciationScore:
-        """Write-through sau POST .../score: chấm lại thì UPDATE (không đẻ dòng mới)."""
         details = score.get("details") or {}
         report = score.get("report") or {}
         scores = report.get("scores") or {}
@@ -75,8 +72,6 @@ class PronunciationScoreCrud(CRUDRepository):
     def scored_in_window(
         self, db: Session, room_id: int, user_id: int, start, end=None, session_id=None
     ) -> List[PronunciationScore]:
-        """Các dòng đã chấm của user trong khoảng session (DB là nguồn thật).
-        Batch chấm sau call gắn session_id nên match cả khi created_at ngoài window."""
         time_match = PronunciationScore.created_at >= start
         if end is not None:
             time_match = time_match & (PronunciationScore.created_at <= end)
