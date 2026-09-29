@@ -6,7 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.ai.tasks import score_room_utterances
+from app.tasks.scoring import score_room_utterances
 from app.database import engine
 from app.services import room_crud, session_crud
 from app.services.pronunciation_score import pronunciation_score_crud
@@ -57,16 +57,16 @@ class TestScoreRoomUtterances:
         assert score_room_utterances(999999999) == 0
 
     def test_single_task_delegates_to_helper(self):
-        from app.ai.tasks import score_single_utterance
+        from app.tasks.scoring import score_single_utterance
 
-        with patch("app.ai.tasks.score_room_utterance", return_value={"overall": 75.0}) as mock_helper:
+        with patch("app.tasks.scoring.score_room_utterance", return_value={"overall": 75.0}) as mock_helper:
             assert score_single_utterance(3, 7, 9, 11) == {"overall": 75.0}
             mock_helper.assert_called_once()
 
     def test_single_task_returns_none_on_error(self):
-        from app.ai.tasks import score_single_utterance
+        from app.tasks.scoring import score_single_utterance
 
-        with patch("app.ai.tasks.score_room_utterance", side_effect=RuntimeError("boom")):
+        with patch("app.tasks.scoring.score_room_utterance", side_effect=RuntimeError("boom")):
             assert score_single_utterance(3, 7, 9, 11) is None
 
     def test_delete_room_cascades_scores(self, monkeypatch, tmp_path):
@@ -101,9 +101,9 @@ class TestScoreRoomUtterances:
 
         try:
             with (
-                patch("app.ai.tasks.enqueue_room_observer"),
-                patch("app.ai.tasks.enqueue_room_transcriber"),
-                patch("app.ai.tasks.score_room_utterances") as mock_scoring,
+                patch("app.tasks.room_jobs.enqueue_room_observer"),
+                patch("app.tasks.room_jobs.enqueue_room_transcriber"),
+                patch("app.tasks.scoring.score_room_utterances") as mock_scoring,
             ):
                 client.post(f"/api/v1/rooms/{room['id']}/join")
                 assert not mock_scoring.apply_async.called

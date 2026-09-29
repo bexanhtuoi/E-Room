@@ -3,7 +3,6 @@ import asyncio
 from livekit import rtc
 
 from app.ai.llm.participant import live_humans
-from app.ai.tasks import mark_room_activity, refresh_worker_lock
 from app.config import settings
 from app.integration.livekit import create_token
 from app.integration.redis import scard
@@ -13,6 +12,8 @@ MAX_OBSERVE_SECONDS = 240
 
 
 async def observe_room_audio(room_id: int, task_id: str = "") -> None:
+    from app.tasks.helpers import mark_room_activity, refresh_worker_lock
+
     room = rtc.Room()
     token = create_token(
         room_name=str(room_id),

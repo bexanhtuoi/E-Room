@@ -464,7 +464,8 @@ def parse_room_id(room_name: str) -> Optional[int]:
 
 
 def register_participant_join(db: Session, room_name: str, participant_identity: str, enforce_limit: bool = False) -> bool:
-    from app.ai.tasks import enqueue_room_observer, enqueue_room_transcriber, mark_room_activity
+    from app.tasks.helpers import mark_room_activity
+    from app.tasks.room_jobs import enqueue_room_observer, enqueue_room_transcriber
 
     room_id_int = parse_room_id(room_name)
 
@@ -498,7 +499,7 @@ def register_participant_join(db: Session, room_name: str, participant_identity:
 
 
 def drop_participant_from_room(db: Session, room_name: str, participant_identity: str) -> None:
-    from app.ai.tasks import score_room_utterances
+    from app.tasks.scoring import score_room_utterances
 
     room_id_int = parse_room_id(room_name)
 

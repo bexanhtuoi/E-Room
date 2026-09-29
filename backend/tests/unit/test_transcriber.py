@@ -393,7 +393,7 @@ class TestTranscriberFunctions:
 
         with (
             patch("app.ai.stt.transcriber.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
-            patch("app.ai.tasks.enqueue_ai_job") as mock_enqueue_ai,
+            patch("app.tasks.room_jobs.enqueue_ai_job") as mock_enqueue_ai,
         ):
             audio_data = np.zeros(16000 * 2, dtype=np.int16)
             await handle_speech_completion(

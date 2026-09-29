@@ -129,7 +129,7 @@ def score_utterance(
     chứa câu này + toàn bộ corrected_text của lượt nói. Log cũ không có
     attempt mới rớt về wav VAD từng câu. Có audio -> việc nặng -> 202 queued.
     """
-    from app.ai.tasks import score_room_utterance, score_single_utterance
+    from app.tasks.scoring import score_room_utterance, score_single_utterance
 
     room = get_room_or_404(db, room_id)
     ensure_room_access(room, user)

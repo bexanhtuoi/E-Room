@@ -7,7 +7,7 @@ celery_app = Celery(
     "eroom",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.ai.tasks"],
+    include=["app.tasks.helpers", "app.tasks.room_jobs", "app.tasks.maintenance", "app.tasks.scoring"],
 )
 
 celery_app.conf.update(
@@ -51,7 +51,7 @@ def get_celery_app() -> Celery:
 @worker_ready.connect
 def clear_locks_on_worker_start(sender=None, **kwargs) -> None:
     try:
-        from app.ai.tasks import clear_stale_worker_locks
+        from app.tasks.helpers import clear_stale_worker_locks
 
         clear_stale_worker_locks()
     except Exception:

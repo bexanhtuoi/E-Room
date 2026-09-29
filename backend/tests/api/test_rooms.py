@@ -39,7 +39,7 @@ class TestRoomCrud:
 
         from sqlmodel import Session
 
-        from app.ai.tasks import delete_expired_scheduled_rooms
+        from app.tasks.maintenance import delete_expired_scheduled_rooms
         from app.database import engine
         from app.utils.datetime_utils import now_utc
 
@@ -48,7 +48,7 @@ class TestRoomCrud:
         old = client.post("/api/v1/rooms/", json={"name": f"old-sched-{alice['id']}", "scheduled_at": past}).json()
         fresh = client.post("/api/v1/rooms/", json={"name": f"new-sched-{alice['id']}", "scheduled_at": future}).json()
 
-        with Session(engine) as db, patch("app.ai.tasks.delete"):
+        with Session(engine) as db, patch("app.tasks.maintenance.delete"):
             removed = delete_expired_scheduled_rooms(db, now_utc().timestamp())
 
         assert removed >= 1
@@ -184,8 +184,8 @@ class TestParticipants:
 
         try:
             with (
-                patch("app.ai.tasks.enqueue_room_observer"),
-                patch("app.ai.tasks.enqueue_room_transcriber"),
+                patch("app.tasks.room_jobs.enqueue_room_observer"),
+                patch("app.tasks.room_jobs.enqueue_room_transcriber"),
             ):
                 response = client.post(f"/api/v1/rooms/{room['id']}/join")
             assert response.status_code == 200
@@ -195,8 +195,8 @@ class TestParticipants:
 
             # Idempotent — join lai khong dup
             with (
-                patch("app.ai.tasks.enqueue_room_observer"),
-                patch("app.ai.tasks.enqueue_room_transcriber"),
+                patch("app.tasks.room_jobs.enqueue_room_observer"),
+                patch("app.tasks.room_jobs.enqueue_room_transcriber"),
             ):
                 client.post(f"/api/v1/rooms/{room['id']}/join")
             assert len(redis_smembers(key)) == 1

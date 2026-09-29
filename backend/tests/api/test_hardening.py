@@ -31,8 +31,8 @@ def make_client(tag: str) -> TestClient:
 
 def join_quiet(client: TestClient, room_id: int):
     with (
-        patch("app.ai.tasks.enqueue_room_observer"),
-        patch("app.ai.tasks.enqueue_room_transcriber"),
+        patch("app.tasks.room_jobs.enqueue_room_observer"),
+        patch("app.tasks.room_jobs.enqueue_room_transcriber"),
     ):
         return client.post(f"/api/v1/rooms/{room_id}/join")
 

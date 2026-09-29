@@ -1,4 +1,4 @@
-﻿from typing import Optional
+from typing import Optional
 
 from sqlmodel import Session
 
@@ -54,7 +54,7 @@ def list_messages(
             raise NotAuthorizedError()
 
     if room_id is None and not is_self_lookup and user.role != "admin":
-        raise BadRequestError(detail="Cần truyền room_id.")
+        raise BadRequestError(detail="C?n truy?n room_id.")
 
     filter_kwargs = {}
 
@@ -88,7 +88,7 @@ def count_messages(
             ensure_room_access(room, user)
 
     if room_id is None and user_id is None and user.role != "admin":
-        raise BadRequestError(detail="Cần truyền room_id hoặc user_id.")
+        raise BadRequestError(detail="C?n truy?n room_id ho?c user_id.")
 
     if user_id is not None and room_id is None:
         if str(user_id) != str(user.id) and user.role != "admin":
@@ -125,8 +125,9 @@ def get_message_data(db: Session, user, message_id: int):
 
 
 def create_message(db: Session, user, message_in):
-    from app.ai.tasks import enqueue_ai_job, mark_room_activity
     from app.services.room import ensure_room_access
+    from app.tasks.helpers import mark_room_activity
+    from app.tasks.room_jobs import enqueue_ai_job
 
     room = room_crud.get_one(db, id=message_in.room_id)
 

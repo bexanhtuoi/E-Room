@@ -117,7 +117,7 @@ class TestScoreDbWriteThrough:
             audio_data=np.zeros(16000, dtype=np.int16),
         )
 
-        with patch("app.ai.tasks.score_single_utterance") as mock_task:
+        with patch("app.tasks.scoring.score_single_utterance") as mock_task:
             resp = client.post(f"/api/v1/rooms/{room['id']}/speech-logs/2/score")
             assert resp.status_code == 202, resp.text
             assert resp.json()["status"] == "queued"

@@ -182,7 +182,7 @@ async def handle_speech_completion(
 
         query = strip_ai_mention(text)
         if query:
-            from app.ai.tasks import enqueue_ai_job
+            from app.tasks.room_jobs import enqueue_ai_job
 
             enqueue_ai_job(
                 room_id,
