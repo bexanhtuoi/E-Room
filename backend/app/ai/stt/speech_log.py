@@ -1,35 +1,3 @@
-"""Per-user speech logs cho E-Room.
-
-Mỗi câu user nói (sau STT) được append vào 1 file JSONL riêng:
-
-    <SPEECH_LOG_DIR>/room_<room_id>/user_<user_id>.jsonl
-
-Mỗi dòng = 1 utterance:
-{
-  "message_id": 123,          # id trong bảng messages (None nếu chưa lưu DB)
-  "room_id": 1,
-  "user_id": 5,
-  "user_name": "An",
-  "text": "hello everyone...",        # STT raw
-  "corrected_text": "hello everyone...",  # user sửa tay, mặc định = text
-  "language": "en",
-  "duration": 2.1,
-  "confidence": 0.93,
-  "avg_logprob": -0.2,
-  "words": [...],
-  "provider": "faster_whisper",
-  "audio_file": "audio/user_5_123.wav",  # relative path, None nếu tắt lưu audio
-  "pronunciation": null,  # filled bởi app.ai.pronunciation
-  "created_at": "2026-...Z",
-  "edited_at": null
-}
-
-File này là nguồn cho 2 tính năng tương lai:
-1. `summary` — đọc toàn bộ room (mọi user, sort theo created_at).
-2. User tự sửa lại những gì mình đã nói (corrected_text).
-3. AI chấm phát âm (wav2vec2 + thuật toán khác) đọc audio_file + text.
-"""
-
 from __future__ import annotations
 
 import json
@@ -45,18 +13,18 @@ log = get_logger("app.ai.speech_log")
 
 # Neo vào backend/ root qua vị trí ổn định của app.log (đúng dù file này
 # di chuyển trong nội bộ package).
-_BACKEND_ROOT = Path(_app_log.__file__).resolve().parent.parent
-_DEFAULT_DIR = _BACKEND_ROOT / "log" / "speech"
+BACKEND_ROOT = Path(_app_log.__file__).resolve().parent.parent
+DEFAULT_DIR = BACKEND_ROOT / "log" / "speech"
 
 
 def get_speech_log_dir() -> Path:
     from app.config import settings
 
     configured = getattr(settings, "speech_log_dir", "") or os.getenv("SPEECH_LOG_DIR", "")
-    base = Path(configured) if configured else _DEFAULT_DIR
+    base = Path(configured) if configured else DEFAULT_DIR
     if not base.is_absolute():
         # Resolve relative từ backend/ root
-        base = _BACKEND_ROOT / base
+        base = BACKEND_ROOT / base
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -87,7 +55,7 @@ def user_audio_dir(room_id: int) -> Path:
     return path
 
 
-def _utcnow_iso() -> str:
+def utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -150,7 +118,7 @@ def append_utterance(
         "audio_file": audio_file,
         "pronunciation": None,
         "feedback": None,
-        "created_at": _utcnow_iso(),
+        "created_at": utcnow_iso(),
         "edited_at": None,
     }
     try:
@@ -162,7 +130,7 @@ def append_utterance(
     return entry
 
 
-def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
     entries: List[Dict[str, Any]] = []
@@ -179,7 +147,7 @@ def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
 
 
 def read_user_log(room_id: int, user_id: Any) -> List[Dict[str, Any]]:
-    return _read_jsonl(user_log_path(room_id, user_id))
+    return read_jsonl(user_log_path(room_id, user_id))
 
 
 def list_room_users(room_id: int) -> List[str]:
@@ -238,9 +206,9 @@ def update_corrected_text(
       để bắt chấm lại — tránh điểm của bản cũ dính sang bản mới.
     """
     path = user_log_path(room_id, user_id)
-    entries = _read_jsonl(path)
+    entries = read_jsonl(path)
     updated: Optional[Dict[str, Any]] = None
-    now = _utcnow_iso()
+    now = utcnow_iso()
     for entry in entries:
         if entry.get("message_id") == message_id:
             if entry.get("corrected_text") != corrected_text:
@@ -268,7 +236,7 @@ def attach_pronunciation(
 ) -> Optional[Dict[str, Any]]:
     """Gắn kết quả chấm phát âm vào 1 utterance."""
     path = user_log_path(room_id, user_id)
-    entries = _read_jsonl(path)
+    entries = read_jsonl(path)
     updated: Optional[Dict[str, Any]] = None
     for entry in entries:
         if entry.get("message_id") == message_id:
@@ -293,7 +261,7 @@ def attach_feedback(
 ) -> Optional[Dict[str, Any]]:
     """Gắn nhận xét AI vào 1 utterance (chỉ sau khi đã có pronunciation.report)."""
     path = user_log_path(room_id, user_id)
-    entries = _read_jsonl(path)
+    entries = read_jsonl(path)
     updated: Optional[Dict[str, Any]] = None
     for entry in entries:
         if entry.get("message_id") == message_id:

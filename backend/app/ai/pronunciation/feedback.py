@@ -1,4 +1,3 @@
-"""AI feedback: LLM comments + rule-based fallback from scoring report."""
 from __future__ import annotations
 
 import json
@@ -41,7 +40,7 @@ def request_pronun_feedback(
     return out
 
 
-def _load_feedback_prompts() -> Dict[str, str]:
+def load_feedback_prompts() -> Dict[str, str]:
     """Đọc 2 prompt md riêng. Fallback feedback.md cũ nếu file mới thiếu."""
     from app.ai.llm.prompt import load_prompt
 
@@ -80,26 +79,26 @@ def _load_feedback_prompts() -> Dict[str, str]:
     return out
 
 
-_PROMPTS = _load_feedback_prompts()
+PROMPTS = load_feedback_prompts()
 
 
-SYSTEM_PROMPT = _PROMPTS["utterance"]
+SYSTEM_PROMPT = PROMPTS["utterance"]
 
 
-SESSION_FEEDBACK_PROMPT = _PROMPTS["session"]
+SESSION_FEEDBACK_PROMPT = PROMPTS["session"]
 
 
-_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
-def _strip_reasoning(content: str) -> str:
+def strip_reasoning(content: str) -> str:
     """Bỏ khối reasoning (<think>...</think>) model đôi khi kèm theo."""
-    return _THINK_BLOCK_RE.sub("", content or "").strip()
+    return THINK_BLOCK_RE.sub("", content or "").strip()
 
 
-def _extract_json(content: str) -> Dict[str, Any] | None:
+def extract_json(content: str) -> Dict[str, Any] | None:
     """LLM local tra JSON (co the kem text). Boc tach object JSON dau tien."""
-    text = _strip_reasoning(content)
+    text = strip_reasoning(content)
     if not text:
         return None
     try:
@@ -135,7 +134,7 @@ async def generate_feedback(scoring_report: dict, model: str = "",
         log.warning("LLM feedback không reachable (%s) — dùng gợi ý theo quy tắc", error)
         return build_fallback_feedback(scoring_report, user_label)
     content = getattr(msg, "content", "") or ""
-    parsed = _extract_json(content if isinstance(content, str) else str(content))
+    parsed = extract_json(content if isinstance(content, str) else str(content))
     if parsed:
         parsed.setdefault("model", (model or "").strip() or settings.llm_model)
         return parsed

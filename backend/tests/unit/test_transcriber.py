@@ -26,11 +26,8 @@ from app.ai.stt import (
     transcribe_cloud_whisper,
     transcribe_whisper_server,
 )
-from app.ai.stt.transcriber import (
-    build_transcript_payload,
-    cancel_user_stream,
-    handle_speech_completion,
-)
+from app.ai.stt.completion import build_transcript_payload, handle_speech_completion
+from app.ai.stt.transcriber import cancel_user_stream
 from app.services.message import is_recent_duplicate, message_crud
 
 
@@ -351,7 +348,7 @@ class TestSTTFunctions:
     @pytest.mark.asyncio
     async def test_async_forwards_language_kwarg(self):
         audio = np.zeros(16000, dtype=np.int16)
-        with patch("app.ai.stt.providers.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
+        with patch("app.ai.stt.dispatch.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
             result = await transcribe_audio_async(audio, language="vi")
             assert result == {"text": "hi"}
             _, kwargs = mock_sync.call_args
@@ -392,7 +389,7 @@ class TestTranscriberFunctions:
         }
 
         with (
-            patch("app.ai.stt.transcriber.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
+            patch("app.ai.stt.completion.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
             patch("app.tasks.room_jobs.enqueue_ai_job") as mock_enqueue_ai,
         ):
             audio_data = np.zeros(16000 * 2, dtype=np.int16)

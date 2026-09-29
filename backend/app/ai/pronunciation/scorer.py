@@ -1,15 +1,7 @@
-"""Scoring engine: wav2vec2/CTC forced align + phoneme GOP + metrics.
-
-Single entry-point for callers: score_pronunciation.
-"""
-
 from __future__ import annotations
 
-import difflib
-import glob
 import json
 import math
-import os
 import re
 import threading
 import time
@@ -21,8 +13,16 @@ import numpy as np
 
 from app.ai.pronunciation.align import align_transcripts, apply_forced_spans
 from app.ai.pronunciation.audio import check_audio_quality, extract_f0, load_wav_16k, vad_segments
-from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation
-from app.ai.pronunciation.helpers import _tok_words
+from app.ai.pronunciation.metrics import calculate_overall, score_completeness, score_fluency
+from app.ai.pronunciation.models import (
+    BLANK_RATIO_MISALIGNED,
+    FRAME_STRIDE_S,
+    acoustic_model_id,
+    ctc_forced_align,
+    get_acoustic_model,
+    load_torch,
+)
+from app.ai.pronunciation.phonemes import score_phones, score_sounds, score_stress
 from app.config import settings
 from app.log import get_logger
 
@@ -33,59 +33,12 @@ log = get_logger("app.ai.pronunciation")
 # là nặng). Rescore endpoint là sync def (chạy trong worker thread) nên
 # threading.Semaphore là đủ, không cần Celery cho tới khi tải cao hơn
 # (lúc đó offload qua PRONUN_BASE_URL).
-_scoring_gate = threading.Semaphore(max(1, settings.scoring_max_parallel))
+scoring_gate = threading.Semaphore(max(1, settings.scoring_max_parallel))
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Part 4 — CTC acoustic: wav2vec2 forced align char-level (word spans thật).
 # Dùng cho stress/fluency + fallback acoustic khi phoneme model chưa tải.
 # KHÔNG gọi output này là GOP. Full-audio 1 pass, không chunk.
-# ═══════════════════════════════════════════════════════════════════
-
-FRAME_STRIDE_S = 0.02  # wav2vec2 downsample 320x @16kHz ~= 20ms/frame
-BLANK_RATIO_MISALIGNED = 0.70  # blank >70% word span -> misalignment, không phải lỗi phát âm
-
-_acoustic_lock = threading.Lock()
-_ctc_processor = None
-_acoustic_model = None
-_torch = None
-
-
-def _load_torch():
-    global _torch
-    if _torch is None:
-        import torch  # noqa: WPS433
-
-        _torch = torch
-    return _torch
-
-
-def _acoustic_model_id() -> str:
-    try:
-        return settings.wav2vec_model_id or "facebook/wav2vec2-base-960h"
-    except Exception:
-        return "facebook/wav2vec2-base-960h"
-
-
-def get_acoustic_model():
-    """Lazy-load wav2vec2 processor + model (thread-safe, load 1 lần)."""
-    global _ctc_processor, _acoustic_model
-    if _acoustic_model is not None:
-        return _ctc_processor, _acoustic_model
-    with _acoustic_lock:
-        if _acoustic_model is not None:
-            return _ctc_processor, _acoustic_model
-        torch = _load_torch()
-        from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-
-        mid = _acoustic_model_id()
-        _ctc_processor = Wav2Vec2Processor.from_pretrained(mid)
-        _acoustic_model = Wav2Vec2ForCTC.from_pretrained(mid)
-        _acoustic_model.eval()
-        if torch.cuda.is_available():
-            _acoustic_model.to("cuda")
-    return _ctc_processor, _acoustic_model
-
 
 def normalize_reference(text: str, vocab: set[str]) -> str:
     t = (text or "").upper().strip()
@@ -96,62 +49,10 @@ def normalize_reference(text: str, vocab: set[str]) -> str:
     return kept
 
 
-def ctc_forced_align(log_probs, target_ids: list[int], blank_id: int):
-    """Viterbi forced alignment CTC (vector hoá theo S).
-    Extended: [b, t1, b, t2, b, ..., tL, b]. Ưu tiên stay > +1 > +2 khi hoà."""
-    torch = _load_torch()
-    T = log_probs.shape[0]
-    L = len(target_ids)
-    if L == 0 or T == 0:
-        return [0] * T, float("-inf")
-    ext = [blank_id]
-    for tid in target_ids:
-        ext.append(int(tid))
-        ext.append(blank_id)
-    S = len(ext)
-    NEG = -1e9
-    ext_t = torch.tensor(ext, dtype=torch.long)
-    lp = log_probs[:, ext_t]  # [T, S]
-    trellis = torch.full((T, S), NEG)
-    choice = torch.zeros((T, S), dtype=torch.long)  # 0=stay, 1=+1, 2=+2
-    trellis[0, 0] = lp[0, 0]
-    if S > 1:
-        trellis[0, 1] = lp[0, 1]
-    skip_ok = torch.zeros(S, dtype=torch.bool)
-    for s in range(2, S):
-        if ext[s] != blank_id and ext[s] != ext[s - 2]:
-            skip_ok[s] = True
-    neg_col = torch.full((S,), NEG)
-    for t in range(1, T):
-        prev = trellis[t - 1]
-        stay = prev
-        plus1 = torch.cat([neg_col[:1], prev[:-1]])
-        if skip_ok.any():
-            plus2 = torch.cat([neg_col[:2], prev[:-2]])
-            plus2 = torch.where(skip_ok, plus2, neg_col)
-            cand = torch.stack([stay, plus1, plus2], dim=0)
-        else:
-            cand = torch.stack([stay, plus1], dim=0)
-        best, idx = cand.max(dim=0)
-        trellis[t] = best + lp[t]
-        choice[t] = idx
-    last = S - 1
-    if S > 1 and trellis[T - 1, S - 2] > trellis[T - 1, S - 1]:
-        last = S - 2
-    align = [0] * T
-    s = last
-    for t in range(T - 1, -1, -1):
-        align[t] = s
-        if t > 0:
-            c = int(choice[t, s])
-            s = s if c == 0 else (s - 1 if c == 1 else s - 2)
-    return align, float(trellis[T - 1, last])
-
-
 def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict[str, Any]:
     """Char-level acoustic likelihood + word spans + alignment_status.
     KHÔNG cắt audio (chỉ chặn >10 phút). Từ no_evidence/misaligned loại khỏi overall."""
-    torch = _load_torch()
+    torch = load_torch()
     processor, model = get_acoustic_model()
     device = next(model.parameters()).device
 
@@ -310,266 +211,24 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
         "ctc_loss": loss,
         "num_frames": T,
         "duration_s": round(duration_s, 2),
-        "model": _acoustic_model_id(),
+        "model": acoustic_model_id(),
         "n_scored": len(scored),
         "n_no_evidence": len(no_ev),
         "words": words_out,
     }
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Part 5 — Metrics: fluency + completeness + overall (deterministic)
-# ═══════════════════════════════════════════════════════════════════
 
-def score_fluency(duration_s: float, words_count: int, pauses: list[tuple[float, float]],
-                  whisper_text: str = "") -> dict:
-    wpm = (words_count / max(0.1, duration_s)) * 60.0 if duration_s > 0 else 0.0
-    pause_dur = sum(e - s for s, e in pauses)
-    pause_ratio = pause_dur / max(0.1, duration_s)
-    long_pauses = sum(1 for s, e in pauses if e - s >= 0.4)
-    low = (whisper_text or "").lower()
-    hes = sum(low.count(x) for x in [" uh ", " um ", " er ", " ah "])
-    # repetition: từ lặp liền nhau
-    toks = _tok_words(whisper_text)
-    rep = sum(1 for i in range(1, len(toks)) if toks[i] == toks[i-1])
-    phones = sum(len(w) for w in toks)
-    art = phones / max(0.1, duration_s - pause_dur)
-    # rubric 0-100
-    s = 100.0
-    if 130 <= wpm <= 170: s -= 0
-    elif 90 <= wpm < 130 or 170 < wpm <= 210: s -= 10
-    else: s -= 25
-    if pause_ratio > 0.35: s -= 20
-    elif pause_ratio > 0.25: s -= 10
-    s -= min(20, long_pauses * 5 + hes * 4 + rep * 5)
-    return {"wpm": round(wpm,1), "articulation_rate": round(art,2), "pause_ratio": round(pause_ratio,3),
-            "long_pause_count": long_pauses, "hesitation_count": hes, "repetition_count": rep,
-            "score": round(max(0.0, min(100.0, s)),1)}
-
-
-def score_completeness(
-    original: str | None,
-    corrected: str,
-    mode: str,
-    word_details: list[dict] | None = None,
-) -> dict:
-    if mode == "read_aloud" and original:
-        return _score_completeness_read_aloud(original, corrected, mode)
-    details = word_details or []
-    total = len(details)
-    if not total:
-        return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 0.0}
-    missing = [
-        str(d.get("word", ""))
-        for d in details
-        if d.get("status") == "no_evidence" or float(d.get("score") or 0.0) <= 0.0
-    ]
-    score = round(100.0 * (total - len(missing)) / total, 1)
-    return {"mode": mode, "missing_words": missing[:20], "extra_words": [], "wer_vs_original": None, "score": score}
-
-
-def _score_completeness_read_aloud(original: str | None, corrected: str, mode: str) -> dict:
-    if not original:
-        return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 100.0}
-    a, b = _tok_words(original), _tok_words(corrected)
-    sa, sb = set(a), set(b)
-    missing = [w for w in a if w not in sb]
-    extra = [w for w in b if w not in sa]
-    # WER đơn giản
-    sm = difflib.SequenceMatcher(None, a, b)
-    wer = round(1.0 - sm.ratio(), 3)
-    score = round(max(0.0, 100.0 * (1.0 - (len(missing) + len(extra)) / max(1, len(a)))), 1)
-    return {"mode": mode, "missing_words": missing[:20], "extra_words": extra[:20],
-            "wer_vs_original": wer, "score": score}
-
-
-def calculate_overall(sounds: float, stress: float, fluency: float, completeness: float) -> float:
-    """MVP v2: 0.5*Sounds + 0.25*Stress + 0.15*Fluency + 0.10*Completeness. Intonation v1.1."""
-    return round(0.5*sounds + 0.25*stress + 0.15*fluency + 0.10*completeness, 1)
-
-
-# ═══════════════════════════════════════════════════════════════════
 # Part 6 — Sounds: phoneme-level từ char evidence + CMU.
 # Case bắt buộc: đọc /sɪŋk/ nhưng corrected là think -> phải ra /θ/→/s/.
 # Khi có xlsr-espeak: thay observe_phones_fallback bằng decode IPA trực tiếp
 # từ audio (API giữ nguyên, chỉ đổi hàm observe).
-# ═══════════════════════════════════════════════════════════════════
 
-def _needleman(a: list[str], b: list[str]) -> list[tuple[str, str, str]]:
-    """Align canonical (a) vs observed (b) -> [(exp, obs, type)]. Dùng chung
-    cho char-phoneme fallback (Part 6) và GOP thật (Part 8)."""
-    n, m = len(a), len(b)
-    dp = [[0] * (m + 1) for _ in range(n + 1)]
-    for i in range(n + 1): dp[i][0] = i
-    for j in range(m + 1): dp[0][j] = j
-    for i in range(1, n + 1):
-        for j in range(1, m + 1):
-            c = 0 if a[i-1] == b[j-1] else 1
-            dp[i][j] = min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+c)
-    i, j, out = n, m, []
-    while i > 0 or j > 0:
-        if i > 0 and j > 0 and a[i-1] == b[j-1]:
-            out.append((a[i-1], b[j-1], "match")); i -= 1; j -= 1
-        elif i > 0 and j > 0 and dp[i][j] == dp[i-1][j-1]+1:
-            out.append((a[i-1], b[j-1], "substitution")); i -= 1; j -= 1
-        elif j > 0 and dp[i][j] == dp[i][j-1]+1:
-            out.append(("-", b[j-1], "insertion")); j -= 1
-        else:
-            out.append((a[i-1], "-", "deletion")); i -= 1
-    return out[::-1]
-
-
-def observe_phones_fallback(greedy_text: str, canonical_arpa: list[str]) -> list[str]:
-    """Tạm: suy observed từ greedy char decode. VD greedy SINK vs canonical THINK -> S thay TH."""
-    g = (greedy_text or "").upper()
-    # map chữ cái đầu từ greedy sang ARPAbet tương ứng để so với canonical
-    m = {"S": "S", "F": "F", "TH": "TH", "T": "T", "D": "D", "R": "R", "L": "L", "V": "V", "W": "W"}
-    if not g:
-        return []
-    first = g.split()[0] if g.split() else g
-    if first.startswith("S"):
-        return ["S"]
-    if first.startswith("F"):
-        return ["F"]
-    if first.startswith("TH"):
-        return ["TH"]
-    return [canonical_arpa[0] if canonical_arpa else "AH0"]
-
-
-def score_sounds(words_forced: list[dict], greedy_text: str = "", accent: str = "en-US") -> dict[str, Any]:
-    """words_forced: [{word, avg_log_prob/score_0_100, start_s, end_s}] từ char forced aligner.
-    Trả sounds 0-100 + phonemes + top_errors + vowel/consonant split."""
-    phonemes: list[dict] = []
-    err_counter: dict[str, dict] = {}
-    wdetails: list[dict] = []
-    v_scores, c_scores = [], []
-    VOWELS = {"AA","AE","AH","AO","AW","AY","EH","ER","EY","IH","IY","OW","OY","UH","UW"}
-    for w in words_forced:
-        word = w.get("word", "")
-        status_in = w.get("status", "scored")
-        if status_in != "scored":
-            # Không evidence (misaligned/no_evidence): loại khỏi mẫu số, UI hiện "Không nghe rõ"
-            wdetails.append({"word": word, "score": 0.0, "status": "no_evidence",
-                             "start_s": w.get("start_s"), "end_s": w.get("end_s"),
-                             "acoustic_confidence": w.get("avg_log_prob"),
-                             "expected_ipa": get_pronunciation(word, accent)["ipa"]})
-            continue
-        pron = get_pronunciation(word, accent)
-        arpa = pron["arpa"]
-        char_score = float(w.get("score_0_100", 0.0))
-        # GOP phoneme tạm = char acoustic_confidence (MVP), ghi rõ warnings ở pipeline
-        obs = observe_phones_fallback(greedy_text if word.upper() in (greedy_text or "").upper() else word, arpa)
-        # align full: nếu greedy không có info thì coi như match để không false-positive
-        if word.upper() in (greedy_text or "").upper() or not greedy_text:
-            pairs = [(p, p, "match") for p in arpa]
-        else:
-            # từ bị đọc khác hẳn -> align canonical vs observed suy từ greedy
-            obs_full = obs * max(1, len(arpa) // max(1, len(obs)))
-            pairs = _needleman(arpa, (obs_full + arpa)[ :len(arpa)])
-        for exp, ob, typ in pairs:
-            base = exp.rstrip("012")
-            is_v = base in VOWELS
-            # phoneme sai -> phạt 25đ so với word score (MVP heuristic, thay bằng GOP thật ở v1.1)
-            pscore = char_score if typ == "match" else max(0.0, char_score - 25.0)
-            gop = math.log(max(1e-6, pscore / 100.0))
-            phonemes.append({"word": word, "expected": "/" + arpa_to_ipa(exp) + "/",
-                             "observed": "/" + arpa_to_ipa(ob) + "/" if ob != "-" else None,
-                             "type": typ, "gop": round(gop, 3), "score": round(pscore, 1)})
-            (v_scores if is_v else c_scores).append(pscore)
-            if typ == "substitution":
-                pat = f"/{arpa_to_ipa(exp)}/ → /{arpa_to_ipa(ob)}/"
-                e = err_counter.setdefault(pat, {"pattern": pat, "count": 0, "examples": []})
-                e["count"] += 1
-                if word not in e["examples"]:
-                    e["examples"].append(word)
-        status = "ok" if char_score >= 70 else "pronunciation_error"
-        wdetails.append({"word": word, "score": round(char_score, 1), "status": status,
-                         "start_s": w.get("start_s"), "end_s": w.get("end_s"),
-                         "acoustic_confidence": w.get("avg_log_prob"), "expected_ipa": pron["ipa"]})
-    sounds = round(sum(d["score"] for d in wdetails if d["status"] != "no_evidence") / max(1, sum(1 for d in wdetails if d["status"] != "no_evidence")), 1) if wdetails else 0.0
-    top_errors = sorted(err_counter.values(), key=lambda x: -x["count"])[:5]
-    return {"sounds": sounds,
-            "vowel_score": round(sum(v_scores)/max(1,len(v_scores)),1) if v_scores else sounds,
-            "consonant_score": round(sum(c_scores)/max(1,len(c_scores)),1) if c_scores else sounds,
-            "word_details": wdetails, "phonemes": phonemes, "top_errors": top_errors}
-
-
-# ═══════════════════════════════════════════════════════════════════
 # Part 7 — Stress: syllable boundary THẬT từ phoneme timestamps
 # (forced aligner), không chia đều. MVP: word span -> N syllable spans theo
 # tỉ lệ duration phoneme; v1.1 MFA cho boundary chuẩn 100%.
-# ═══════════════════════════════════════════════════════════════════
 
-def score_stress(words_forced: list[dict], wav: np.ndarray, sr: int = 16000, accent: str = "en-US") -> dict:
-    details: list[dict] = []
-    correct, total = 0, 0
-    for w in words_forced:
-        if w.get("status", "scored") == "no_evidence":
-            details.append({"word": w.get("word",""), "expected_stress": None,
-                            "detected_stress": None, "correct": None, "reason": "no_evidence"})
-            continue
-        pron = get_pronunciation(w.get("word",""), accent)
-        n = pron["num_syllables"]
-        if n <= 1 or w.get("start_s") is None:
-            details.append({"word": w.get("word",""), "expected_stress": pron["stress_index"],
-                            "detected_stress": pron["stress_index"], "correct": True if n<=1 else None,
-                            "reason": "mono-syllable" if n<=1 else "missing_span"})
-            continue
-        s, e = float(w["start_s"]), float(w["end_s"])
-        s_i, e_i = max(0, int(s*sr)), min(len(wav), int(e*sr))
-        seg = wav[s_i:e_i]
-        if len(seg) < 160:
-            details.append({"word": w.get("word",""), "expected_stress": pron["stress_index"],
-                            "detected_stress": None, "correct": False, "reason": "too_short"})
-            total += 1
-            continue
-        # chia theo tỉ lệ phoneme trong syllable (MVP: đều theo số phone mỗi syllable — tốt hơn chia đều time)
-        syls = pron["syllables"]
-        lens = [max(1, len(x)) for x in syls]
-        tot = sum(lens)
-        bounds = []
-        cur = 0
-        for L in lens:
-            nxt = cur + int(len(seg) * L / tot)
-            bounds.append((cur, nxt)); cur = nxt
-        bounds[-1] = (bounds[-1][0], len(seg))
-        feats = []
-        try:
-            import librosa
-            f0, _, _ = librosa.pyin(seg, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr)
-            import numpy as _np
-            f0m = []
-            hop = 512
-            for a, b in bounds:
-                fa, fb = a // hop, max(a // hop + 1, b // hop)
-                vals = f0[fa:fb] if f0 is not None else []
-                vals = [float(x) for x in vals if x == x]
-                f0m.append(sum(vals)/len(vals) if vals else 0.0)
-        except Exception:
-            f0m = [0.0]*len(bounds)
-        proms = []
-        for (a, b), f in zip(bounds, f0m):
-            part = seg[a:b]
-            dur = (b-a)/sr
-            energy = float(np.sqrt(np.mean(part**2)+1e-12))
-            proms.append((dur, energy, f))
-        # z-norm trong word
-        def znorm(xs):
-            m = sum(xs)/len(xs); v = sum((x-m)**2 for x in xs)/len(xs); s = math.sqrt(v+1e-9)
-            return [(x-m)/(s+1e-9) for x in xs]
-        dz = znorm([p[0] for p in proms]); ez = znorm([p[1] for p in proms]); fz = znorm([p[2] for p in proms])
-        scores = [0.4*d+0.4*e+0.2*f for d,e,f in zip(dz,ez,fz)]
-        det = max(range(len(scores)), key=lambda i: scores[i])
-        exp = pron["stress_index"]
-        ok = (det == exp)
-        details.append({"word": w.get("word",""), "expected_stress": exp, "detected_stress": det,
-                        "correct": ok, "reason": ""})
-        total += 1; correct += 1 if ok else 0
-    score = round(100.0*correct/max(1,total),1) if total else 85.0
-    return {"stress": score, "correct": correct, "total": total, "details": details}
-
-
-# ═══════════════════════════════════════════════════════════════════
 # Part 8 — Phoneme GOP thật (theo tư vấn chuyên gia).
 # Model: facebook/wav2vec2-xlsr-53-espeak-cv-ft (Wav2Vec2ForCTC trên phone espeak).
 # - KHÔNG dùng tokenizer của transformers (nó đòi binary espeak) — đọc thẳng
@@ -581,243 +240,13 @@ def score_stress(words_forced: list[dict], wav: np.ndarray, sr: int = 16000, acc
 #   -> align Needleman canonical vs observed -> substitution thật (/th/->/s/).
 # - Char-level (Part 4+6) KHÔNG được gọi là GOP nữa — chỉ fallback khi
 #   model phoneme chưa tải được (ghi rõ trong warnings).
-# ═══════════════════════════════════════════════════════════════════
-
-def _phone_model_id() -> str:
-    try:
-        return settings.phoneme_model_id or "facebook/wav2vec2-xlsr-53-espeak-cv-ft"
-    except Exception:
-        return os.getenv("PHONEME_MODEL_ID", "facebook/wav2vec2-xlsr-53-espeak-cv-ft")
-
-
-_PHONE_MODEL_ID = _phone_model_id()
 
 # ARPAbet (đã strip số stress) -> espeak phone token. Mọi token đều có trong vocab.
-ARPA_TO_ESPEAK: dict[str, tuple[str, ...]] = {
-    "AA": ("ɑ",), "AE": ("æ",), "AH": ("ʌ",), "AO": ("ɔ",),
-    "AW": ("aʊ",), "AY": ("aɪ",),
-    "EH": ("ɛ",), "ER": ("ɜ", "ɹ"), "EY": ("eɪ",),
-    "IH": ("ɪ",), "IY": ("i",),
-    "OW": ("oʊ",), "OY": ("ɔɪ",), "UH": ("ʊ",), "UW": ("u",),
-    "P": ("p",), "B": ("b",), "T": ("t",), "D": ("d",),
-    "K": ("k",), "G": ("ɡ",),
-    "F": ("f",), "V": ("v",), "TH": ("θ",), "DH": ("ð",),
-    "S": ("s",), "Z": ("z",), "SH": ("ʃ",), "ZH": ("ʒ",),
-    "HH": ("h",), "M": ("m",), "N": ("n",), "NG": ("ŋ",),
-    "L": ("l",), "R": ("ɹ",), "W": ("w",), "Y": ("j",),
-    "CH": ("tʃ",), "JH": ("dʒ",),
-}
-
-_phone_lock = threading.Lock()
-_phone_fe = None
-_phone_model = None
-_phone_vocab: dict[str, int] | None = None
 
 
-def _load_vocab() -> dict[str, int]:
-    global _phone_vocab
-    if _phone_vocab is not None:
-        return _phone_vocab
-    pats = [
-        str(Path.home() / ".cache" / "huggingface" / "hub" /
-            ("models--" + _PHONE_MODEL_ID.replace("/", "--")) / "snapshots" / "*" / "vocab.json"),
-    ]
-    found = []
-    for p in pats:
-        found.extend(glob.glob(p))
-    if not found:
-        # ép download vocab (nhẹ, vài KB)
-        from huggingface_hub import hf_hub_download
-        fp = hf_hub_download(_PHONE_MODEL_ID, "vocab.json")
-        found = [fp]
-    with open(found[0], encoding="utf-8") as f:
-        _phone_vocab = json.load(f)
-    return _phone_vocab
-
-
-def get_phone_model():
-    """Lazy-load feature extractor + phone CTC model (1 lần). Nặng ~1.2GB lần đầu."""
-    global _phone_fe, _phone_model
-    if _phone_model is not None:
-        return _phone_fe, _phone_model
-    with _phone_lock:
-        if _phone_model is not None:
-            return _phone_fe, _phone_model
-        torch = _load_torch()
-        from transformers import AutoFeatureExtractor, Wav2Vec2ForCTC
-        _phone_fe = AutoFeatureExtractor.from_pretrained(_PHONE_MODEL_ID)
-        _phone_model = Wav2Vec2ForCTC.from_pretrained(_PHONE_MODEL_ID)
-        _phone_model.eval()
-        if torch.cuda.is_available():
-            _phone_model.to("cuda")
-        _load_vocab()
-    return _phone_fe, _phone_model
-
-
-def arpa_to_espeak(arpa: list[str]) -> tuple[list[str], list[int]]:
-    """ARPAbet (kèm số stress) -> (espeak tokens, phone->arpa index). Bỏ token lạ."""
-    vocab = _load_vocab()
-    toks: list[str] = []
-    back: list[int] = []
-    for i, ph in enumerate(arpa):
-        base = ph.rstrip("012")
-        for t in ARPA_TO_ESPEAK.get(base, ()):
-            if t in vocab:
-                toks.append(t)
-                back.append(i)
-    return toks, back
-
-
-def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, Any]:
-    """Full pipeline phoneme GOP. Trả word_details/phonemes/top_errors/sounds cùng schema score_sounds."""
-    torch = _load_torch()
-    fe, model = get_phone_model()
-    vocab = _load_vocab()
-    device = next(model.parameters()).device
-    blank_id = 0  # <pad>
-
-    words = [w for w in re.findall(r"[A-Za-z']+", text)]
-    if not words:
-        return {"error": "Text rỗng."}
-
-    # canonical phone sequence + word ranges
-    seq: list[str] = []
-    wranges: list[tuple[int, int, str, list[str]]] = []  # (p_start, p_end, word, arpa)
-    skipped_words: list[str] = []
-    for w in words:
-        pron = get_pronunciation(w, accent)
-        toks, _ = arpa_to_espeak(pron["arpa"])
-        if not toks:
-            skipped_words.append(w)
-            continue
-        s0 = len(seq)
-        seq.extend(toks)
-        wranges.append((s0, len(seq), w, pron["arpa"]))
-    if not seq:
-        return {"error": "Không map được phoneme nào."}
-    target_ids = [vocab[t] for t in seq]
-
-    warr = np.asarray(wav, dtype=np.float32).reshape(-1)
-    inputs = fe(warr, sampling_rate=16000, return_tensors="pt", padding=True)
-    with torch.no_grad():
-        logits = model(inputs.input_values.to(device)).logits[0].cpu()
-    log_probs = torch.log_softmax(logits, dim=-1)
-    T = log_probs.shape[0]
-    pred_ids: list[int] = torch.argmax(logits, dim=-1).tolist()
-
-    align, _ = ctc_forced_align(log_probs, target_ids, blank_id)
-
-    # per-phone GOP
-    L = len(target_ids)
-    phone_lp: list[float] = []
-    phone_span: list[tuple[int, int]] = []
-    phone_ok: list[bool] = []
-    for i, tid in enumerate(target_ids):
-        s = 2 * i + 1
-        frames = [t for t in range(T) if align[t] == s]
-        if frames:
-            vals = [float(log_probs[t, tid]) for t in frames]
-            phone_lp.append(sum(vals) / len(vals))
-            phone_span.append((frames[0], frames[-1]))
-            phone_ok.append(True)
-        else:
-            phone_lp.append(float("-inf"))
-            phone_span.append((-1, -1))
-            phone_ok.append(False)
-
-    # observed phones: free recognition (greedy collapse, không LM)
-    id2tok = {i: t for t, i in vocab.items()}
-    collapsed, prev = [], None
-    for pid in pred_ids:
-        if pid != prev:
-            if pid != blank_id:
-                collapsed.append(id2tok.get(pid, ""))
-        prev = pid
-    observed = [t for t in collapsed if t]
-
-    phonemes: list[dict] = []
-    wdetails: list[dict] = []
-    err_counter: dict[str, dict] = {}
-    for (p0, p1, w, arpa) in wranges:
-        canon = seq[p0:p1]
-        # observed evidence: align needleman toàn câu quá nặng -> so trong vùng từ:
-        # xấp xỉ bằng greedy phones gần span thời gian của từ (MVP trung thực)
-        f0 = phone_span[p0][0] if phone_ok[p0] else -1
-        f1 = phone_span[p1 - 1][1] if phone_ok[p1 - 1] else -1
-        if f0 >= 0:
-            span_pred = [id2tok.get(p, "") for p in pred_ids[f0:f1 + 1] if p != blank_id]
-            # collapse
-            obs_w, pv = [], None
-            for t in span_pred:
-                if t != pv:
-                    obs_w.append(t)
-                pv = t
-        else:
-            obs_w = []
-        pairs = _needleman(canon, obs_w)
-        # blank density trên word span
-        if f0 >= 0:
-            tot = f1 - f0 + 1
-            n_blank = sum(1 for t in range(f0, f1 + 1) if pred_ids[t] == blank_id)
-            blank_ratio = n_blank / max(1, tot)
-        else:
-            blank_ratio = 1.0
-        has_frames = any(phone_ok[p0:p1])
-        if not has_frames:
-            # Thật sự không có frame nào khớp -> thiếu bằng chứng.
-            status = "no_evidence"
-        elif blank_ratio > BLANK_RATIO_MISALIGNED:
-            # Model espeak-xlsr cho posterior peaky (blank 0.7-0.9 ngay cả
-            # với từ đọc rõ) nên KHÔNG loại từ này: vẫn chấm bằng GOP
-            # (posterior thấp tự cho điểm thấp trung thực), chỉ đánh dấu
-            # để UI hiện "Khớp lệch" thay vì "Không nghe rõ".
-            status = "misaligned"
-        else:
-            status = "scored"
-        pscores: list[float] = []
-        for (exp, ob, typ), pi in zip(pairs, range(p0, p1)):
-            # GOP: mean log-posterior; no_evidence -> -inf
-            g = phone_lp[pi] if phone_ok[pi] else float("-inf")
-            s100 = round(max(0.0, min(100.0, math.exp(max(g, -10.0)) * 100.0)), 1) if math.isfinite(g) else 0.0
-            if status in ("scored", "misaligned"):
-                pscores.append(s100)
-            disp_ob = ob if ob != "-" else None
-            phonemes.append({"word": w, "expected": exp, "observed": disp_ob,
-                             "type": typ, "gop": round(g, 3) if math.isfinite(g) else None,
-                             "score": s100 if status in ("scored", "misaligned") else 0.0})
-            if typ == "substitution" and status in ("scored", "misaligned"):
-                pat = f"/{exp}/ -> /{ob}/"
-                e = err_counter.setdefault(pat, {"pattern": pat, "count": 0, "examples": []})
-                e["count"] += 1
-                if w not in e["examples"]:
-                    e["examples"].append(w)
-        wscore = round(sum(pscores) / len(pscores), 1) if pscores else 0.0
-        pron = get_pronunciation(w, accent)
-        wdetails.append({"word": w, "score": wscore,
-                         "status": "ok" if status == "scored" else status,
-                         "start_s": round(f0 * FRAME_STRIDE_S, 2) if f0 >= 0 else 0.0,
-                         "end_s": round((f1 + 1) * FRAME_STRIDE_S, 2) if f1 >= 0 else 0.0,
-                         "acoustic_confidence": None, "expected_ipa": pron["ipa"],
-                         "blank_ratio": round(blank_ratio, 3)})
-    for w in skipped_words:
-        wdetails.append({"word": w, "score": 0.0, "status": "no_evidence",
-                         "start_s": 0.0, "end_s": 0.0, "acoustic_confidence": None,
-                         "expected_ipa": "", "blank_ratio": 1.0})
-    ok_w = [d for d in wdetails if d["status"] in ("ok", "misaligned")]
-    sounds = round(sum(d["score"] for d in ok_w) / len(ok_w), 1) if ok_w else 0.0
-    # vowel/consonant split theo ARPAbet gốc
-    return {"sounds": sounds, "word_details": wdetails, "phonemes": phonemes,
-            "top_errors": sorted(err_counter.values(), key=lambda x: -x["count"])[:5],
-            "model": _PHONE_MODEL_ID, "n_scored": len(ok_w),
-            "n_no_evidence": len(wdetails) - len(ok_w)}
-
-
-# ═══════════════════════════════════════════════════════════════════
 # Part 9 — Pipeline: audio + whisper_raw + user_corrected + accent
 # -> ScoringReport. Trái tim scorer. Deterministic.
 # LLM feedback KHÔNG được gọi ở đây.
-# ═══════════════════════════════════════════════════════════════════
-
 def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected: str,
                      mode: str = "free_speaking", original_text: str | None = None,
                      accent: str = "en-US", whisper_segments: list[dict] | None = None,
@@ -882,10 +311,7 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
     }
 
 
-# ═══════════════════════════════════════════════════════════════════
 # Part 10 — Hook: entry-point cho router + xin nhận xét AI
-# ═══════════════════════════════════════════════════════════════════
-
 def heuristic_score(
     confidence: float = 1.0,
     avg_logprob: float = 0.0,
@@ -920,7 +346,7 @@ def heuristic_score(
     }
 
 
-def _report_to_hook(report: Dict[str, Any], method: str) -> Dict[str, Any]:
+def report_to_hook(report: Dict[str, Any], method: str) -> Dict[str, Any]:
     scores = report.get("scores", {})
     return {
         "score": float(scores.get("overall", 0.0)),
@@ -951,13 +377,13 @@ def score_local(
     """Chấm bằng ruột scorer trong file này: full-audio 1 pass,
     phoneme GOP + 4 tiêu chí. Raise khi model/audio lỗi.
 
-    Xếp hàng qua _scoring_gate: lượt chấm sau đợi lượt trước xong (tuần tự
+    Xếp hàng qua scoring_gate: lượt chấm sau đợi lượt trước xong (tuần tự
     theo SCORING_MAX_PARALLEL) thay vì forward song song gây OOM."""
     raw = Path(audio_path).read_bytes()
     if len(raw) > 100 * 1024 * 1024:
         raise ValueError("Audio > 100MB.")
     queued_at = time.monotonic()
-    with _scoring_gate:
+    with scoring_gate:
         waited = time.monotonic() - queued_at
         if waited > 1.0:
             log.info("scoring queued %.1fs (nhieu nguoi cham cung luc)", waited)
@@ -971,7 +397,7 @@ def score_local(
         )
     if "error" in report and "scores" not in report:
         raise RuntimeError(f"local scorer: {report.get('error')}")
-    return _report_to_hook(report, "local-v2")
+    return report_to_hook(report, "local-v2")
 
 
 def score_via_pronun_service(
@@ -1005,7 +431,7 @@ def score_via_pronun_service(
         report = resp.json()
     if "error" in report and "scores" not in report:
         raise RuntimeError(f"pronun scorer: {report.get('error')}")
-    return _report_to_hook(report, "pronun-v2")
+    return report_to_hook(report, "pronun-v2")
 
 
 def score_with_wav2vec2(

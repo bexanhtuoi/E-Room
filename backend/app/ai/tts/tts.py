@@ -1,13 +1,3 @@
-"""TTS client cho E-Room — goi Kokoro server rieng (OpenAI-compatible, :8002).
-
-    from app.ai.tts import speak, list_voices
-    mp3_bytes = speak("Hello, welcome to your speaking practice!")
-    mp3_bytes = speak("Good morning!", voice="bf_emma")  # doi giong
-
-Server: ghcr.io/remsky/kokoro-fastapi-cpu (docker-compose.stt.yml -> tts-server).
-Doi voice mac dinh bang TTS_VOICE trong env (backend) / stt.env (may whisper).
-"""
-
 from __future__ import annotations
 
 from typing import Dict, List, Optional

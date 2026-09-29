@@ -1,13 +1,8 @@
-# Tên task Celery ("app.ai.tasks.*") giữ nguyên để tương thích beat schedule
-# và job đang xếp hàng — chỉ đổi module chứa code sang app.tasks.*.
 from app.tasks.helpers import (
     WORKER_LOCK_TTL,
     claim_worker_lock,
     clear_stale_worker_locks,
     format_room_message,
-    get_activity_key,
-    get_pending_key,
-    get_running_key,
     mark_room_activity,
     publish_task,
     recent_room_context,
@@ -41,9 +36,6 @@ __all__ = [
     "enqueue_room_observer",
     "enqueue_room_transcriber",
     "format_room_message",
-    "get_activity_key",
-    "get_pending_key",
-    "get_running_key",
     "mark_room_activity",
     "observe_room_audio",
     "publish_task",

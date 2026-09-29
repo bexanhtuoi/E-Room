@@ -19,13 +19,16 @@ from app.integration.redis import acquire_slot, decr, delete, expire, get, incr,
 from app.log import get_logger
 from app.models import MessageRole
 from app.repositories import document_crud, message_crud, room_crud
-from app.tasks.helpers import (
-    get_pending_key,
-    get_running_key,
-    publish_task,
-    recent_room_context,
-    release_worker_lock,
+from app.shared.constants import AI_ASSISTANT_IDENTITY
+from app.shared.keys import (
+    room_heartbeat_key,
+    room_observer_lock_key,
+    room_pending_key,
+    room_presence_key,
+    room_running_key,
+    room_transcriber_lock_key,
 )
+from app.tasks.helpers import publish_task, recent_room_context, release_worker_lock
 from app.utils.retry import EmptyLLMResponse, is_retryable_error
 
 log = get_logger("app.tasks", level="INFO")
@@ -33,7 +36,7 @@ log = get_logger("app.tasks", level="INFO")
 
 def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: Optional[int] = None) -> Optional[str]:
     try:
-        pending_key = get_pending_key(room_id)
+        pending_key = room_pending_key(room_id)
         incr(pending_key)
         expire(pending_key, settings.ai_timeout_seconds)
         try:
@@ -52,15 +55,15 @@ def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: O
 
 def enqueue_room_observer(room_id: int) -> None:
     task_id = uuid4().hex
-    publish_task(f"room:{room_id}:observer_running", task_id, observe_room_audio, [room_id, task_id], settings.ai_observer_queue_name)
+    publish_task(room_observer_lock_key(room_id), task_id, observe_room_audio, [room_id, task_id], settings.ai_observer_queue_name)
 
 
 def enqueue_room_transcriber(room_id: int) -> None:
     task_id = uuid4().hex
-    publish_task(f"room:{room_id}:transcriber_running", task_id, transcribe_room_audio, [room_id, task_id], settings.ai_transcriber_queue_name)
+    publish_task(room_transcriber_lock_key(room_id), task_id, transcribe_room_audio, [room_id, task_id], settings.ai_transcriber_queue_name)
 
 
-@celery_app.task(name="app.ai.tasks.stream_ai_response", bind=True)
+@celery_app.task(name="app.tasks.room_jobs.stream_ai_response", bind=True)
 def stream_ai_response(
     self,
     room_id: int,
@@ -74,11 +77,11 @@ def stream_ai_response(
         if room is not None:
 
             if job_type == "heartbeat" and not room.enable_heartbeat:
-                delete(get_pending_key(room_id))
+                delete(room_pending_key(room_id))
                 return None
 
             if job_type != "heartbeat" and not room.enable_agent:
-                delete(get_pending_key(room_id))
+                delete(room_pending_key(room_id))
                 return None
 
 
@@ -89,15 +92,15 @@ def stream_ai_response(
         if not slot_acquired:
             raise self.retry(countdown=3, max_retries=100)
 
-    remaining_jobs = decr(get_pending_key(room_id))
+    remaining_jobs = decr(room_pending_key(room_id))
     if remaining_jobs <= 0:
-        delete(get_pending_key(room_id))
+        delete(room_pending_key(room_id))
 
     if job_type == "heartbeat":
-        delete(f"room:{room_id}:heartbeat_pending")
+        delete(room_heartbeat_key(room_id))
 
     job_tag = getattr(self.request, "id", None) or "manual"
-    set(get_running_key(room_id), job_tag, ttl=settings.ai_timeout_seconds)
+    set(room_running_key(room_id), job_tag, ttl=settings.ai_timeout_seconds)
 
     context_room = None
     context_docs: list = []
@@ -134,7 +137,7 @@ def stream_ai_response(
             stream_to_room(
                 room_id,
                 stream_events(messages, agent=agent),
-                identity=f"ai_assistant_{job_tag[:8]}",
+                identity=f"{AI_ASSISTANT_IDENTITY}_{job_tag[:8]}",
                 job_id=job_tag[:8],
             )
         )
@@ -166,7 +169,7 @@ def stream_ai_response(
         log.exception("AI stream failed | room_id=%s job_type=%s", room_id, job_type)
         response_text = "Sorry, I could not generate a response right now."
     finally:
-        delete(get_running_key(room_id))
+        delete(room_running_key(room_id))
         if slot_acquired:
             release_slot("global_ai")
 
@@ -192,11 +195,11 @@ def stream_ai_response(
         return message.id
 
 
-@celery_app.task(name="app.ai.tasks.observe_room_audio", bind=True)
+@celery_app.task(name="app.tasks.room_jobs.observe_room_audio", bind=True)
 def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
     from app.ai.llm.observer import observe_room_audio as observe
 
-    observer_key = f"room:{room_id}:observer_running"
+    observer_key = room_observer_lock_key(room_id)
     owner = task_id or self.request.id
     if get(observer_key) not in (None, owner):
         return
@@ -206,15 +209,15 @@ def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
     finally:
         release_worker_lock(observer_key, owner)
 
-        if scard(f"room:{room_id}:participants") >= 2:
+        if scard(room_presence_key(room_id)) >= 2:
             enqueue_room_observer(room_id)
 
 
-@celery_app.task(name="app.ai.tasks.transcribe_room_audio", bind=True)
+@celery_app.task(name="app.tasks.room_jobs.transcribe_room_audio", bind=True)
 def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
     from app.ai.stt.transcriber import run_room_transcriber
 
-    transcriber_key = f"room:{room_id}:transcriber_running"
+    transcriber_key = room_transcriber_lock_key(room_id)
     owner = task_id or self.request.id
     if get(transcriber_key) not in (None, owner):
         return
@@ -226,10 +229,10 @@ def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
             return
 
     waited = 0.0
-    while scard(f"room:{room_id}:participants") < 1 and waited < 10:
+    while scard(room_presence_key(room_id)) < 1 and waited < 10:
         time.sleep(2)
         waited += 2
-    if scard(f"room:{room_id}:participants") < 1:
+    if scard(room_presence_key(room_id)) < 1:
         release_worker_lock(transcriber_key, owner)
         log.info("Transcriber skipped empty room | room_id=%s", room_id)
         return
@@ -239,5 +242,5 @@ def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
     finally:
         release_worker_lock(transcriber_key, owner)
 
-        if scard(f"room:{room_id}:participants") >= 1:
+        if scard(room_presence_key(room_id)) >= 1:
             enqueue_room_transcriber(room_id)

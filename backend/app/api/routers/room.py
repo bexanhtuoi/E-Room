@@ -17,6 +17,7 @@ from app.schemas import (
     RoomUpdateSchema,
 )
 from app.services import room as room_service
+from app.shared.constants import AI_IDENTITY_PREFIX
 
 router = APIRouter()
 
@@ -196,7 +197,7 @@ async def handle_livekit_webhook(
     if not room_name:
         return {"status": "ignored"}
 
-    if participant_identity and participant_identity.startswith("ai_"):
+    if participant_identity and participant_identity.startswith(AI_IDENTITY_PREFIX):
         return {"status": "ignored"}
 
     room_service.handle_participant_event(db, event_type, room_name, participant_identity)

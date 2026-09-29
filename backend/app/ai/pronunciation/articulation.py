@@ -1,8 +1,3 @@
-"""Hướng dẫn khẩu hình + phiên âm tiếng Việt cho lỗi phát âm.
-
-Thuần dữ liệu, không phụ thuộc model/DB — dùng chung cho fallback
-rule-based và gợi ý trong prompt LLM.
-"""
 from __future__ import annotations
 
 import re
@@ -76,7 +71,7 @@ PATTERN_TIPS: Dict[str, str] = {
     "θ→t": "Đừng bật thành /t/. Thò lưỡi giữa răng, thổi hơi liên tục thay vì bật.",
 }
 
-_CONFUSION_RE = re.compile(r"/([^/]+)/\s*→\s*/([^/]+)/")
+CONFUSION_RE = re.compile(r"/([^/]+)/\s*→\s*/([^/]+)/")
 
 
 def normalize_base(phone: str) -> str:
@@ -85,7 +80,7 @@ def normalize_base(phone: str) -> str:
 
 
 def parse_confusion(issue: str) -> Optional[tuple[str, str]]:
-    found = _CONFUSION_RE.findall(issue or "")
+    found = CONFUSION_RE.findall(issue or "")
     if not found:
         return None
     exp, obs = found[0][0].strip().lower(), found[0][1].strip().lower()

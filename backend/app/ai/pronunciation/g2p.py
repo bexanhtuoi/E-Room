@@ -1,4 +1,3 @@
-"""Pronunciation dictionary: CMUdict + g2p-en fallback + ARPAbet/IPA."""
 from __future__ import annotations
 
 import functools
@@ -8,7 +7,7 @@ from app.log import get_logger
 log = get_logger("app.ai.pronunciation.g2p")
 
 
-_IPA_MAP = {
+IPA_MAP = {
     "TH": "θ", "DH": "ð", "SH": "ʃ", "ZH": "ʒ", "CH": "tʃ", "JH": "dʒ",
     "NG": "ŋ", "HH": "h", "R": "r", "ER": "ɜr", "AH": "ʌ", "IH": "ɪ",
     "IY": "i", "EH": "ɛ", "AE": "æ", "AA": "ɑ", "AO": "ɔ", "OW": "oʊ",
@@ -22,33 +21,33 @@ _IPA_MAP = {
 def arpa_to_ipa(phone: str) -> str:
     """ARPAbet -> IPA (subset MVP, đủ cho test think/sink/rice/lice/very)."""
     base = phone.rstrip("012")
-    return _IPA_MAP.get(base, base.lower())
+    return IPA_MAP.get(base, base.lower())
 
 
-_VOWEL_BASE = {
+VOWEL_BASE = {
     "AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY",
     "IH", "IY", "OW", "OY", "UH", "UW",
 }
 
 
-def _strip_stress(phone: str) -> str:
+def strip_stress(phone: str) -> str:
     return phone.rstrip("012")
 
 
-def _is_vowel(phone: str) -> bool:
-    return _strip_stress(phone) in _VOWEL_BASE
+def is_vowel(phone: str) -> bool:
+    return strip_stress(phone) in VOWEL_BASE
 
 
 @functools.lru_cache(maxsize=1)
-def _g2p():
+def get_g2p():
     from g2p_en import G2p
     return G2p()
 
 
-def _from_g2p(word_upper: str) -> tuple[list[str], bool]:
+def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
     """Trả (arpa_phones, oov=True). g2p-en sinh cả stress số."""
     try:
-        raw: list[str] = _g2p()(word_upper.lower())
+        raw: list[str] = get_g2p()(word_upper.lower())
     except Exception:
         return ["AH1"], True
     # g2p-en có thể trả từ gốc xen kẽ phoneme khi không biết -> lọc token không phải phone
@@ -60,8 +59,8 @@ def _from_g2p(word_upper: str) -> tuple[list[str], bool]:
     # đảm bảo có stress: nếu chưa có số nào, gán 1 cho nguyên âm đầu
     if not any(p[-1] in "012" for p in phones):
         for i, p in enumerate(phones):
-            if _strip_stress(p) in _VOWEL_BASE:
-                phones[i] = _strip_stress(p) + "1"
+            if strip_stress(p) in VOWEL_BASE:
+                phones[i] = strip_stress(p) + "1"
                 break
     return phones, True
 
@@ -85,12 +84,12 @@ def get_pronunciation(word: str, accent: str = "en-US") -> dict:
     except Exception:
         arpa = None
     if arpa is None:
-        arpa, oov = _from_g2p(wu)
+        arpa, oov = g2p_to_phones(wu)
     syllables: list[list[str]] = []
     cur: list[str] = []
     for ph in arpa:
         cur.append(ph)
-        if _is_vowel(ph):
+        if is_vowel(ph):
             syllables.append(cur)
             cur = []
     if cur:

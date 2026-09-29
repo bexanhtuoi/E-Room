@@ -30,6 +30,7 @@ from app.shared.exceptions import (
     RoomNotFoundError,
     WebhookAuthError,
 )
+from app.shared.keys import room_presence_key, room_tag
 from app.utils.upload import media_type_for, read_upload
 
 log = get_logger("app.services.room")
@@ -67,7 +68,6 @@ __all__ = [
     "parse_room_id",
     "presence_add",
     "presence_count",
-    "presence_key",
     "presence_members",
     "presence_remove",
     "register_participant_join",
@@ -79,13 +79,9 @@ __all__ = [
 ]
 
 
-def presence_key(room_id: int) -> str:
-    return f"room:{room_id}:participants"
-
-
 def presence_members(room_id: int) -> set:
     try:
-        return set(smembers(presence_key(room_id)))
+        return set(smembers(room_presence_key(room_id)))
     except RedisError as error:
         log.warning("Presence read failed | room_id=%s error=%s", room_id, error)
         return set()
@@ -93,7 +89,7 @@ def presence_members(room_id: int) -> set:
 
 def presence_count(room_id: int) -> Optional[int]:
     try:
-        return scard(presence_key(room_id))
+        return scard(room_presence_key(room_id))
     except RedisError as error:
         log.warning("Presence count failed | room_id=%s error=%s", room_id, error)
         return None
@@ -101,7 +97,7 @@ def presence_count(room_id: int) -> Optional[int]:
 
 def presence_add(room_id: int, identity: str) -> None:
     try:
-        key = presence_key(room_id)
+        key = room_presence_key(room_id)
         sadd(key, str(identity))
         expire(key, PRESENCE_TTL_SECONDS)
     except RedisError as error:
@@ -110,7 +106,7 @@ def presence_add(room_id: int, identity: str) -> None:
 
 def presence_remove(room_id: int, identity: str) -> Optional[int]:
     try:
-        key = presence_key(room_id)
+        key = room_presence_key(room_id)
         srem(key, str(identity))
         return scard(key)
     except RedisError as error:
@@ -132,7 +128,7 @@ def room_is_full(room: Room, user_id: int) -> bool:
 
 def claim_room_seat(room: Room, identity: str) -> bool:
     try:
-        return claim_seat(presence_key(room.id), str(identity), room.max_participants or 4, PRESENCE_TTL_SECONDS)
+        return claim_seat(room_presence_key(room.id), str(identity), room.max_participants or 4, PRESENCE_TTL_SECONDS)
     except RedisError as error:
         log.warning("Seat claim skipped | room_id=%s error=%s", room.id, error)
         return True
@@ -237,7 +233,7 @@ def notify_room_invites(db: Session, room, emails: list) -> int:
 
     if invited_ids:
         for notif in notification_crud.get_many(db, Notification.user_id.in_(invited_ids)):
-            if notif.notification_type == NotificationType.INVITE and f"room:{room.id}" in (notif.body or ""):
+            if notif.notification_type == NotificationType.INVITE and room_tag(room.id) in (notif.body or ""):
                 sent_ids.add(notif.user_id)
 
     sent = 0
@@ -252,7 +248,7 @@ def notify_room_invites(db: Session, room, emails: list) -> int:
             obj_in={
                 "user_id": invited.id,
                 "title": f"You're invited to '{room.name}'",
-                "body": f"{host_name + ' invited you to ' if host_name else 'You are invited to '}room:{room.id}. Open Schedule to join on time.",
+                "body": f"{host_name + ' invited you to ' if host_name else 'You are invited to '}{room_tag(room.id)}. Open Schedule to join on time.",
                 "notification_type": NotificationType.INVITE,
             },
         )
@@ -357,7 +353,7 @@ async def upload_room_document(db: Session, user, room_id: int, file: UploadFile
     )
 
     try:
-        await process_document(raw, file.filename or object_name, f"room:{room.id}", new_doc.id)
+        await process_document(raw, file.filename or object_name, room_tag(room.id), new_doc.id)
     except Exception as error:
         document_crud.delete(db, db_obj=new_doc)
 
@@ -438,7 +434,7 @@ def get_participants_data(db: Session, user, room_id: int) -> Dict[str, Any]:
 
 def _participants_or_raise(room_id: int) -> Dict[str, Any]:
     try:
-        participants = list(smembers(f"room:{room_id}:participants"))
+        participants = list(smembers(room_presence_key(room_id)))
     except RedisError:
         raise PresenceUnavailableError()
 

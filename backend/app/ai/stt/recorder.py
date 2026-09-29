@@ -1,93 +1,16 @@
-"""Raw continuous attempt recorder — ghi TOÀN BỘ audio của 1 speaking attempt/turn.
-
-Khác với WAV per-utterance (VAD-cut, chỉ cắt đúng câu đã transcribe), recorder này
-giữ nguyên toàn bộ tín hiệu kể cả khoảng lặng/pause, streaming ra file nhỏ từng chunk
-(không buffer cả bài trong RAM), dùng cho forced-alignment (Wav2Vec2 CTC) sau này.
-
-Đường dẫn:
-    <SPEECH_LOG_DIR>/room_<room_id>/attempts/<attempt_id>/raw.wav
-    <SPEECH_LOG_DIR>/room_<room_id>/attempts/<attempt_id>/metadata.json
-
-Attempt mở khi gặp frame có voice (không attempt đang mở), đóng khi:
-    - im lặng >= speech_raw_end_silence_seconds, hoặc
-    - duration >= speech_raw_max_attempt_seconds, hoặc
-    - stream kết thúc (finally trong transcriber).
-
-Không đụng vào behavior của transcriber/speech_log/message — chỉ thêm parallel branch.
-"""
-
-from __future__ import annotations
-
 import json
 import os
-import struct
 import time
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.ai.stt.helpers import normalize_pcm_int16
+from app.ai.stt.paths import attempt_dir, attempts_root, metadata_path, raw_audio_path, resolve_user_id, utcnow_iso, wav_header
 from app.ai.vad.audio_vad import calculate_audio_rms
 from app.log import get_logger
 
-log = get_logger("app.ai.raw_recorder")
-
-WAV_HEADER_SIZE = 44
-
-
-def _wav_header(data_size: int, sample_rate: int, channels: int, bits: int = 16) -> bytes:
-    byte_rate = sample_rate * channels * bits // 8
-    block_align = channels * bits // 8
-    return struct.pack(
-        "<4sI4s4sIHHIIHH4sI",
-        b"RIFF",
-        36 + data_size,
-        b"WAVE",
-        b"fmt ",
-        16,
-        1,
-        channels,
-        sample_rate,
-        byte_rate,
-        block_align,
-        bits,
-        b"data",
-        data_size,
-    )
-
-
-def attempts_root(room_id: int) -> Path:
-    from app.ai.stt.speech_log import room_dir
-
-    path = room_dir(room_id) / "attempts"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def attempt_dir(room_id: int, attempt_id: str) -> Path:
-    path = attempts_root(room_id) / attempt_id
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def metadata_path(room_id: int, attempt_id: str) -> Path:
-    return attempt_dir(room_id, attempt_id) / "metadata.json"
-
-
-def raw_audio_path(room_id: int, attempt_id: str) -> Path:
-    return attempt_dir(room_id, attempt_id) / "raw.wav"
-
-
-def _resolve_user_id(user_identity: str) -> Optional[int]:
-    try:
-        return int(str(user_identity))
-    except (TypeError, ValueError):
-        return None
-
-
-def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+log = get_logger("app.ai.stt.recorder")
 
 
 class UtteranceRef:
@@ -122,7 +45,7 @@ class RawAttemptRecorder:
 
         self.room_id = room_id
         self.user_identity = str(user_identity)
-        self.user_id = _resolve_user_id(user_identity)
+        self.user_id = resolve_user_id(user_identity)
         self.sample_rate = sample_rate
         self.channels = channels
 
@@ -296,7 +219,7 @@ class RawAttemptRecorder:
             if self._file is not None:
                 end_pos = self._file.tell()
                 self._file.seek(0)
-                self._file.write(_wav_header(self._data_bytes, self.sample_rate, self.channels))
+                self._file.write(wav_header(self._data_bytes, self.sample_rate, self.channels))
                 self._file.seek(end_pos)
                 self._file.flush()
                 self._file.close()
@@ -330,7 +253,7 @@ class RawAttemptRecorder:
             "utterances": self._utterances,
             "num_utterances": len(self._utterances),
             "created_at": self._started_at,
-            "closed_at": _utcnow_iso(),
+            "closed_at": utcnow_iso(),
             "close_reason": reason,
         }
 
@@ -405,13 +328,13 @@ class RawAttemptRecorder:
         self._attempt_id = f"u{user_tag}_{ts}_{uuid.uuid4().hex[:6]}"
         self._dir = attempt_dir(self.room_id, self._attempt_id)
         self._file = open(raw_audio_path(self.room_id, self._attempt_id), "wb")
-        self._file.write(_wav_header(0, self.sample_rate, self.channels))
+        self._file.write(wav_header(0, self.sample_rate, self.channels))
         self._file.flush()
         self._buffer.clear()
         self._samples_written = 0
         self._data_bytes = 0
         self._last_voice_sample = 0
-        self._started_at = _utcnow_iso()
+        self._started_at = utcnow_iso()
         self._utterances = []
         self._current_utt = None
         log.debug(
@@ -427,7 +350,7 @@ class RawAttemptRecorder:
         self._file.write(bytes(self._buffer))
         end_pos = self._file.tell()
         self._file.seek(0)
-        self._file.write(_wav_header(self._data_bytes, self.sample_rate, self.channels))
+        self._file.write(wav_header(self._data_bytes, self.sample_rate, self.channels))
         self._file.seek(end_pos)
         self._file.flush()
         self._buffer.clear()
@@ -475,3 +398,4 @@ def find_attempt_by_message(
                 "message_ids": mids,
             }
     return None
+

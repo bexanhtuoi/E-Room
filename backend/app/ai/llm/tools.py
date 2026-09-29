@@ -11,6 +11,7 @@ from app.database import engine
 from app.log import log_call
 from app.repositories.session import session_crud
 from app.services.session import session_lines
+from app.shared.keys import room_tag
 
 MAX_TOOL_LINES = 100
 MAX_SEARCH_HITS = 20
@@ -67,14 +68,14 @@ async def run_retrieval(query: Any, k: int, tag: Any, reranking: bool, rerank_k:
 
 
 def make_room_retrieval_tool(room_id: int):
-    room_tag = f"room:{room_id}"
+    tag = room_tag(room_id)
 
     @tool(
         description=RETRIEVAL_BASE_DESCRIPTION
         + "\n- This tool only searches documents uploaded to the current room. Never ask for other rooms.\n",
     )
     async def room_retrieval_documents(query: str, k: int = 10, reranking: bool = False, rerank_k: int = 5) -> list[dict]:
-        return await run_retrieval(query, k, room_tag, reranking=reranking, rerank_k=rerank_k)
+        return await run_retrieval(query, k, tag, reranking=reranking, rerank_k=rerank_k)
 
     room_retrieval_documents.name = "retrieval_documents"
 

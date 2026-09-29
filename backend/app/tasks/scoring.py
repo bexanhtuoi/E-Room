@@ -18,7 +18,7 @@ def score_room_utterance(
     session_id: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
     from app.ai.pronunciation import score_pronunciation
-    from app.ai.stt.raw_recorder import find_attempt_by_message
+    from app.ai.stt.recorder import find_attempt_by_message
     from app.ai.stt.speech_log import attach_pronunciation, read_user_log, resolve_audio_path
 
     if message_id is None:
@@ -84,7 +84,7 @@ def score_room_utterance(
     return updated or {**entry, "pronunciation": score}
 
 
-@celery_app.task(name="app.ai.tasks.score_single_utterance")
+@celery_app.task(name="app.tasks.scoring.score_single_utterance")
 def score_single_utterance(
     room_id: int,
     user_id: Any,
@@ -99,7 +99,7 @@ def score_single_utterance(
             return None
 
 
-@celery_app.task(name="app.ai.tasks.score_room_utterances")
+@celery_app.task(name="app.tasks.scoring.score_room_utterances")
 def score_room_utterances(room_id: int) -> int:
     from app.ai.stt.speech_log import list_room_users, read_user_log
 

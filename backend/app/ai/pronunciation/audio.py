@@ -1,4 +1,3 @@
-"""Audio input: load wav 16k mono + quality gate + VAD + F0."""
 from __future__ import annotations
 
 import io

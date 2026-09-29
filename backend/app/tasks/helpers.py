@@ -14,6 +14,7 @@ from app.integration.redis import keys as scan_keys
 from app.log import get_logger
 from app.models import MessageRole
 from app.repositories import message_crud, user_crud
+from app.shared.keys import room_activity_key
 from app.utils.datetime_utils import now_utc
 
 log = get_logger("app.tasks", level="INFO")
@@ -21,21 +22,9 @@ log = get_logger("app.tasks", level="INFO")
 WORKER_LOCK_TTL = 180
 
 
-def get_pending_key(room_id: int) -> str:
-    return f"room:{room_id}:ai_pending"
-
-
-def get_running_key(room_id: int) -> str:
-    return f"room:{room_id}:ai_running"
-
-
-def get_activity_key(room_id: int) -> str:
-    return f"room:{room_id}:last_activity"
-
-
 def mark_room_activity(room_id: int) -> None:
     try:
-        set(get_activity_key(room_id), str(now_utc().timestamp()), ttl=settings.ai_timeout_seconds)
+        set(room_activity_key(room_id), str(now_utc().timestamp()), ttl=settings.ai_timeout_seconds)
     except Exception as error:
         log.warning("Room activity not recorded | room_id=%s error=%s", room_id, error)
 

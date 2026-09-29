@@ -54,7 +54,7 @@ def list_messages(
             raise NotAuthorizedError()
 
     if room_id is None and not is_self_lookup and user.role != "admin":
-        raise BadRequestError(detail="C?n truy?n room_id.")
+        raise BadRequestError(detail="Cần truyền room_id.")
 
     filter_kwargs = {}
 
@@ -88,7 +88,7 @@ def count_messages(
             ensure_room_access(room, user)
 
     if room_id is None and user_id is None and user.role != "admin":
-        raise BadRequestError(detail="C?n truy?n room_id ho?c user_id.")
+        raise BadRequestError(detail="Cần truyền room_id hoặc user_id.")
 
     if user_id is not None and room_id is None:
         if str(user_id) != str(user.id) and user.role != "admin":

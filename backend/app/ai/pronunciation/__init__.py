@@ -12,34 +12,36 @@ from app.ai.pronunciation.audio import (
 from app.ai.pronunciation.feedback import (
     SESSION_FEEDBACK_PROMPT,
     SYSTEM_PROMPT,
-    _extract_json,
-    _load_feedback_prompts,
-    _strip_reasoning,
     build_fallback_feedback,
+    extract_json,
     generate_feedback,
+    load_feedback_prompts,
     request_pronun_feedback,
+    strip_reasoning,
 )
 from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation
-from app.ai.pronunciation.helpers import _tok_words
-from app.ai.pronunciation.scorer import (
+from app.ai.pronunciation.helpers import tok_words
+from app.ai.pronunciation.metrics import (
+    calculate_overall,
+    needleman,
+    score_completeness,
+    score_fluency,
+)
+from app.ai.pronunciation.models import (
     BLANK_RATIO_MISALIGNED,
     FRAME_STRIDE_S,
     arpa_to_espeak,
-    calculate_overall,
     ctc_forced_align,
     get_acoustic_model,
     get_phone_model,
+)
+from app.ai.pronunciation.phonemes import observe_phones_fallback, score_phones, score_sounds, score_stress
+from app.ai.pronunciation.scorer import (
     heuristic_score,
     normalize_reference,
-    observe_phones_fallback,
     score_attempt_v2,
-    score_completeness,
-    score_fluency,
     score_local,
-    score_phones,
     score_pronunciation,
-    score_sounds,
-    score_stress,
     score_utterance,
     score_via_pronun_service,
     score_with_wav2vec2,
@@ -52,10 +54,10 @@ __all__ = [
     "QUIET_RMS_THRESHOLD",
     "SESSION_FEEDBACK_PROMPT",
     "SYSTEM_PROMPT",
-    "_extract_json",
-    "_load_feedback_prompts",
-    "_strip_reasoning",
-    "_tok_words",
+    "extract_json",
+    "load_feedback_prompts",
+    "strip_reasoning",
+    "tok_words",
     "align_transcripts",
     "apply_forced_spans",
     "arpa_to_espeak",
@@ -74,6 +76,7 @@ __all__ = [
     "heuristic_score",
     "load_wav_16k",
     "mouth_guide",
+    "needleman",
     "normalize_reference",
     "observe_phones_fallback",
     "parse_confusion",

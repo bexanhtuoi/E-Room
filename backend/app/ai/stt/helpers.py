@@ -7,6 +7,7 @@ import numpy as np
 from app.config import settings
 
 SPOKEN_LANGUAGES = ("en", "vi", "auto")
+MIN_SEGMENT_LOGPROB = -1.0
 
 STT_PROMPTS = {
     "en": (

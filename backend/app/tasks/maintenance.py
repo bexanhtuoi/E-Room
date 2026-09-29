@@ -7,7 +7,14 @@ from app.integration.redis import delete, exists, get, scard, set_if_absent
 from app.log import get_logger
 from app.models import RoomStatus
 from app.repositories import room_crud
-from app.tasks.helpers import get_activity_key, get_pending_key, get_running_key, mark_room_activity
+from app.shared.keys import (
+    room_activity_key,
+    room_heartbeat_key,
+    room_pending_key,
+    room_presence_key,
+    room_running_key,
+)
+from app.tasks.helpers import mark_room_activity
 from app.tasks.room_jobs import enqueue_ai_job, enqueue_room_observer, enqueue_room_transcriber
 from app.utils.datetime_utils import as_naive_utc, now_utc
 
@@ -40,10 +47,10 @@ def end_stale_empty_rooms(db: Session, now: float) -> int:
     for room in rooms:
         if room.status == RoomStatus.ENDED:
             continue
-        if scard(f"room:{room.id}:participants") > 0:
+        if scard(room_presence_key(room.id)) > 0:
             continue
 
-        last_activity = get(get_activity_key(room.id))
+        last_activity = get(room_activity_key(room.id))
         if last_activity is None:
             mark_room_activity(room.id)
             continue
@@ -56,14 +63,14 @@ def end_stale_empty_rooms(db: Session, now: float) -> int:
     return ended_count
 
 
-@celery_app.task(name="app.ai.tasks.ensure_room_workers")
+@celery_app.task(name="app.tasks.maintenance.ensure_room_workers")
 def ensure_room_workers() -> int:
     ensured_count = 0
 
     with Session(engine) as db:
         rooms = room_crud.get_many(db, status=RoomStatus.ACTIVE)
         for room in rooms:
-            if scard(f"room:{room.id}:participants") < 1:
+            if scard(room_presence_key(room.id)) < 1:
                 continue
             if room.enable_transcript:
                 enqueue_room_transcriber(room.id)
@@ -73,7 +80,7 @@ def ensure_room_workers() -> int:
     return ensured_count
 
 
-@celery_app.task(name="app.ai.tasks.check_room_heartbeats")
+@celery_app.task(name="app.tasks.maintenance.check_room_heartbeats")
 def check_room_heartbeats() -> int:
     now = now_utc().timestamp()
     queued_count = 0
@@ -85,20 +92,20 @@ def check_room_heartbeats() -> int:
         for room in rooms:
             if not room.enable_heartbeat:
                 continue
-            participant_count = scard(f"room:{room.id}:participants")
+            participant_count = scard(room_presence_key(room.id))
             if participant_count < 2:
                 continue
-            if exists(get_pending_key(room.id), get_running_key(room.id)):
+            if exists(room_pending_key(room.id), room_running_key(room.id)):
                 continue
 
-            last_activity = get(get_activity_key(room.id))
+            last_activity = get(room_activity_key(room.id))
             if last_activity is None:
                 mark_room_activity(room.id)
                 continue
             if now - float(last_activity) < settings.heartbeat_interval_seconds:
                 continue
 
-            heartbeat_key = f"room:{room.id}:heartbeat_pending"
+            heartbeat_key = room_heartbeat_key(room.id)
             is_queued = set_if_absent(
                 heartbeat_key,
                 "1",

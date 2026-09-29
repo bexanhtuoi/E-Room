@@ -6,13 +6,12 @@ import numpy as np
 import pytest
 
 from app.ai.vad.audio_vad import create_user_audio_state, process_audio_frame
-from app.ai.stt.raw_recorder import (
+from app.ai.stt.completion import handle_speech_completion
+from app.ai.stt.paths import metadata_path, raw_audio_path
+from app.ai.stt.recorder import (
     RawAttemptRecorder,
     UtteranceRef,
-    metadata_path,
-    raw_audio_path,
 )
-from app.ai.stt.transcriber import handle_speech_completion
 
 
 def _voice_frame(n: int = 1600) -> np.ndarray:
@@ -344,7 +343,7 @@ class TestHandleSpeechCompletionAttach:
         }
 
         with patch(
-            "app.ai.stt.transcriber.transcribe_audio_async",
+            "app.ai.stt.completion.transcribe_audio_async",
             AsyncMock(return_value=stt_result),
         ):
             await handle_speech_completion(

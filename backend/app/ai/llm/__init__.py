@@ -1,7 +1,6 @@
 from app.ai.llm.client import get_agent, get_llm, is_openrouter, reasoning_body
-from app.ai.llm.observer import MAX_OBSERVE_SECONDS, OBSERVER_IDENTITY, observe_room_audio
+from app.ai.llm.observer import MAX_OBSERVE_SECONDS, observe_room_audio
 from app.ai.llm.participant import (
-    AI_PARTICIPANT_IDENTITY,
     AI_PARTICIPANT_NAME,
     live_humans,
     split_words,
@@ -28,11 +27,9 @@ from app.ai.llm.tools import (
 )
 
 __all__ = [
-    "AI_PARTICIPANT_IDENTITY",
     "AI_PARTICIPANT_NAME",
     "MAX_OBSERVE_SECONDS",
     "MEMORIES_HEADER",
-    "OBSERVER_IDENTITY",
     "TRANSCRIPT_TOOLS",
     "build_room_messages",
     "format_lines",

@@ -1,9 +1,8 @@
-"""Transcript alignment: whisper_raw <-> user_corrected."""
-from app.ai.pronunciation.helpers import _tok_words
+from app.ai.pronunciation.helpers import tok_words
 
 
 def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: list[dict] | None = None) -> list[dict]:
-    a, b = _tok_words(whisper_raw), _tok_words(user_corrected)
+    a, b = tok_words(whisper_raw), tok_words(user_corrected)
     n, m = len(a), len(b)
     # DP edit distance
     dp = [[0] * (m + 1) for _ in range(n + 1)]

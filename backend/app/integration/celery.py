@@ -10,25 +10,22 @@ celery_app = Celery(
     include=["app.tasks.helpers", "app.tasks.room_jobs", "app.tasks.maintenance", "app.tasks.scoring"],
 )
 
-# LUU Y: ten task "app.ai.tasks.*" la dinh danh Celery (beat schedule +
-# job dang xep hang), GIU NGUYEN du code da chuyen sang app.tasks.*.
-# Doi ten = beat mat lich + job cu rot. Xem app/tasks/__init__.py.
 celery_app.conf.update(
     task_default_queue=settings.ai_queue_name,
     task_routes={
-        "app.ai.tasks.stream_ai_response": {"queue": settings.ai_queue_name},
-        "app.ai.tasks.check_room_heartbeats": {"queue": settings.ai_queue_name},
-        "app.ai.tasks.ensure_room_workers": {"queue": settings.ai_queue_name},
-        "app.ai.tasks.observe_room_audio": {"queue": settings.ai_observer_queue_name},
-        "app.ai.tasks.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
+        "app.tasks.room_jobs.stream_ai_response": {"queue": settings.ai_queue_name},
+        "app.tasks.maintenance.check_room_heartbeats": {"queue": settings.ai_queue_name},
+        "app.tasks.maintenance.ensure_room_workers": {"queue": settings.ai_queue_name},
+        "app.tasks.room_jobs.observe_room_audio": {"queue": settings.ai_observer_queue_name},
+        "app.tasks.room_jobs.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
     },
     beat_schedule={
         "check-room-heartbeats": {
-            "task": "app.ai.tasks.check_room_heartbeats",
+            "task": "app.tasks.maintenance.check_room_heartbeats",
             "schedule": 15.0,
         },
         "ensure-room-workers": {
-            "task": "app.ai.tasks.ensure_room_workers",
+            "task": "app.tasks.maintenance.ensure_room_workers",
             "schedule": 60.0,
         },
     },

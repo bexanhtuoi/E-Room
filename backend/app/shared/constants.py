@@ -1,1 +1,8 @@
 DUPLICATE_TRANSCRIPT_SECONDS = 10
+
+AI_IDENTITY_PREFIX = "ai_"
+AI_ASSISTANT_IDENTITY = "ai_assistant"
+AI_TRANSCRIBER_IDENTITY = "ai_transcriber"
+AI_OBSERVER_IDENTITY = "ai_observer"
+
+SESSION_CHAT_KEY = "session_chat"

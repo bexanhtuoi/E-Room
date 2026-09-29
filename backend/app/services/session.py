@@ -9,6 +9,7 @@ from app.repositories.message import message_crud
 from app.repositories.room import room_crud
 from app.repositories.session import SessionCrud, session_crud
 from app.repositories.user import user_crud
+from app.shared.constants import SESSION_CHAT_KEY
 from app.shared.exceptions import (
     AIServiceUnavailableError,
     BadRequestError,
@@ -46,7 +47,7 @@ __all__ = [
 
 def is_session_chat(message) -> bool:
     try:
-        return bool((json.loads(message.meta_data or "{}") or {}).get("session_chat"))
+        return bool((json.loads(message.meta_data or "{}") or {}).get(SESSION_CHAT_KEY))
     except (TypeError, ValueError):
         return False
 
@@ -120,7 +121,7 @@ def count_sessions(db: Session) -> int:
 
 
 def save_session_chat(db: Session, db_session, user_id: int, question: str, answer: str) -> None:
-    meta = json.dumps({"session_chat": True, "session_id": db_session.id})
+    meta = json.dumps({SESSION_CHAT_KEY: True, "session_id": db_session.id})
     message_crud.create(
         db,
         obj_in={"room_id": db_session.room_id, "user_id": user_id, "role": MessageRole.USER, "text": question, "meta_data": meta},
@@ -138,7 +139,7 @@ def get_session_chat_turns(db: Session, db_session) -> list:
             meta = json.loads(message.meta_data or "{}") or {}
         except (TypeError, ValueError):
             continue
-        if meta.get("session_chat") and meta.get("session_id") == db_session.id:
+        if meta.get(SESSION_CHAT_KEY) and meta.get("session_id") == db_session.id:
             turns.append({"role": "user" if message.role == MessageRole.USER else "ai", "text": message.text, "user_id": message.user_id})
     return turns
 

@@ -7,6 +7,7 @@ from app.repositories.document import document_crud, drop_doc_storage
 from app.repositories.message import message_crud
 from app.repositories.pronunciation_score import pronunciation_score_crud
 from app.repositories.session import session_crud
+from app.shared.keys import room_presence_key
 
 
 class RoomCrud(CRUDRepository):
@@ -31,7 +32,7 @@ class RoomCrud(CRUDRepository):
             for doc in room_docs:
                 drop_doc_storage(doc)
 
-        redis_delete(f"room:{room_id}:participants")
+        redis_delete(room_presence_key(room_id))
         room = self.get_one(db, id=room_id)
         if room is not None:
             self.delete(db, db_obj=room)

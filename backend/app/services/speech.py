@@ -104,7 +104,7 @@ def utterance_needs_heavy_scoring(room_id: int, user_id: Any, message_id: Any, e
         return False
 
     try:
-        from app.ai.stt.raw_recorder import find_attempt_by_message
+        from app.ai.stt.recorder import find_attempt_by_message
 
         attempt = find_attempt_by_message(room_id, user_id, message_id)
         if attempt and attempt.get("raw_path") is not None:

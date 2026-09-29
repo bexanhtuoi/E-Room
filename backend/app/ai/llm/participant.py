@@ -11,10 +11,11 @@ from app.config import settings
 from app.integration.livekit import create_token
 from app.integration.redis import delete, scard
 from app.log import get_logger
+from app.shared.constants import AI_ASSISTANT_IDENTITY, AI_IDENTITY_PREFIX
+from app.shared.keys import room_presence_key
 
 log = get_logger("app.ai.participant")
 
-AI_PARTICIPANT_IDENTITY = "ai_assistant"
 AI_PARTICIPANT_NAME = "AI Assistant"
 
 WORD_PACE_SECONDS = 0.04
@@ -24,7 +25,7 @@ def live_ids(room: rtc.Room) -> set:
     return {
         identity
         for identity, participant in room.remote_participants.items()
-        if not identity.startswith("ai_")
+        if not identity.startswith(AI_IDENTITY_PREFIX)
     }
 
 
@@ -34,8 +35,8 @@ async def live_humans(room: rtc.Room, room_id: int) -> bool:
         if live_ids(room):
             return True
 
-    if scard(f"room:{room_id}:participants") > 0:
-        delete(f"room:{room_id}:participants")
+    if scard(room_presence_key(room_id)) > 0:
+        delete(room_presence_key(room_id))
         log.info("Ghost presence cleared | room_id=%s", room_id)
 
     return False
@@ -87,7 +88,7 @@ async def stream_to_room(
     stream_id = str(uuid4())
     token = create_token(
         room_name=str(room_id),
-        user_id=identity or AI_PARTICIPANT_IDENTITY,
+        user_id=identity or AI_ASSISTANT_IDENTITY,
         user_name=AI_PARTICIPANT_NAME,
     )
     full_text = ""

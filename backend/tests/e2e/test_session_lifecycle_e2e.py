@@ -77,7 +77,7 @@ class TestSessionLifecycleE2E:
 
         # Mock STT va Background Task
         with (
-            patch("app.ai.stt.transcriber.transcribe_audio_async", AsyncMock(return_value=stt_mock_result)),
+            patch("app.ai.stt.completion.transcribe_audio_async", AsyncMock(return_value=stt_mock_result)),
             patch("app.tasks.room_jobs.enqueue_ai_job") as mock_enqueue_ai,
         ):
             audio_bytes = np.zeros(16000 * 3, dtype=np.int16)
