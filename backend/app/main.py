@@ -14,6 +14,7 @@ from app.log import get_logger
 from app.security import decode_token
 from app.seeds import seed_all
 from app.services import user_crud
+from app.shared.exceptions import AppException
 
 log = get_logger(__name__)
 api_log = get_logger("app.api")
@@ -55,6 +56,14 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(AppException)
+async def handle_app_exception(request: Request, exc: AppException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.code, "detail": exc.detail},
+    )
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
