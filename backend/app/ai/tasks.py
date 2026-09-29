@@ -8,10 +8,10 @@ from celery.exceptions import SoftTimeLimitExceeded
 from openai import APIConnectionError, APIError, APITimeoutError, InternalServerError, RateLimitError
 from sqlmodel import Session
 
-from app.ai import get_agent
-from app.ai.participant import stream_to_room
-from app.ai.query import build_room_messages, stream_events
-from app.ai.tools import make_room_retrieval_tool, web_search
+from app.ai.llm.client import get_agent
+from app.ai.llm.participant import stream_to_room
+from app.ai.llm.query import build_room_messages, stream_events
+from app.ai.llm.tools import make_room_retrieval_tool, web_search
 from app.config import settings
 from app.database import engine
 from app.integration.celery import celery_app
@@ -190,7 +190,7 @@ def stream_ai_response(
     context_room = None
     context_docs: list = []
     try:
-        from app.ai.prompt import room_system_prompt, room_tag_rule
+        from app.ai.llm.prompt import room_system_prompt, room_tag_rule
 
         with Session(engine) as db:
             context_room = room_crud.get_one(db, id=room_id)
@@ -282,7 +282,7 @@ def stream_ai_response(
 
 @celery_app.task(name="app.ai.tasks.observe_room_audio", bind=True)
 def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
-    from app.ai.observer import observe_room_audio as observe
+    from app.ai.llm.observer import observe_room_audio as observe
 
     observer_key = f"room:{room_id}:observer_running"
     owner = task_id or self.request.id
@@ -300,7 +300,7 @@ def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
 
 @celery_app.task(name="app.ai.tasks.transcribe_room_audio", bind=True)
 def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
-    from app.ai.transcriber import run_room_transcriber
+    from app.ai.stt.transcriber import run_room_transcriber
 
     transcriber_key = f"room:{room_id}:transcriber_running"
     owner = task_id or self.request.id
@@ -447,8 +447,8 @@ def score_room_utterance(
     session_id: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
     from app.ai.pronunciation import score_pronunciation
-    from app.ai.raw_recorder import find_attempt_by_message
-    from app.ai.speech_log import attach_pronunciation, read_user_log, resolve_audio_path
+    from app.ai.stt.raw_recorder import find_attempt_by_message
+    from app.ai.stt.speech_log import attach_pronunciation, read_user_log, resolve_audio_path
 
     if message_id is None:
         return None
@@ -530,7 +530,7 @@ def score_single_utterance(
 
 @celery_app.task(name="app.ai.tasks.score_room_utterances")
 def score_room_utterances(room_id: int) -> int:
-    from app.ai.speech_log import list_room_users, read_user_log
+    from app.ai.stt.speech_log import list_room_users, read_user_log
 
     try:
         raw_uids = list_room_users(room_id)

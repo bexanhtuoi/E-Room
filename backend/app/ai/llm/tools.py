@@ -1,11 +1,11 @@
-﻿import asyncio
+import asyncio
 from typing import Any, Dict, List
 
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.tools import tool
 from sqlmodel import Session
 
-from app.ai.retrieval import retrieve_relevant_documents
+from app.ai.rag.retrieval import retrieve_relevant_documents
 from app.config import settings
 from app.database import engine
 from app.log import log_call

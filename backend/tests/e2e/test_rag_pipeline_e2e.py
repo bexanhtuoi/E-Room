@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.ai.tools import retrieval_documents
+from app.ai.llm.tools import retrieval_documents
 from app.database import engine
 from app.services import document_crud
 from tests.conftest import switch_to
@@ -38,7 +38,7 @@ class TestRAGPipelineE2E:
             assert db_doc.file_name == "idioms.pdf"
 
         # 2. Truy van qua Tool RAG Retrieval cua AI Agent
-        with patch("app.ai.tools.retrieve_relevant_documents") as mock_retrieve:
+        with patch("app.ai.llm.tools.retrieve_relevant_documents") as mock_retrieve:
             mock_retrieve.return_value = [{"text": "Break a leg means good luck."}]
 
             retrieval_output = await retrieval_documents.ainvoke({"query": "What does break a leg mean?"})

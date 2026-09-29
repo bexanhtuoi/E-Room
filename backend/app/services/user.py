@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 from fastapi import UploadFile
 from sqlmodel import Session

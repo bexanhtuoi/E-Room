@@ -1,31 +1,37 @@
 import asyncio
 import functools
-import io
-import wave
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 import numpy as np
 
+from app.ai.stt.helpers import (
+    build_stt_prompt,
+    convert_audio_to_float32,
+    convert_audio_to_wav_bytes,
+    is_prompt_echo,
+    is_repetitive_hallucination,
+    resolve_stt_language,
+)
 from app.config import settings
 from app.log import get_logger
 
-log = get_logger("app.ai.stt")
+log = get_logger("app.ai.stt.providers")
 
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="stt_worker")
 
-# Cong tac doi STT tu xa qua Redis (cho phep admin bat/tat whisper-server
-# ma khong can sua file env + restart worker tren may chay E-Room).
+# Công tắc đổi STT từ xa qua Redis (cho phép admin bật/tắt whisper-server
+# mà không cần sửa file env + restart worker trên máy chạy E-Room).
 #   SET config:stt_server_base_url http://100.105.201.65:8001/v1
-#   DEL config:stt_server_base_url   (tro ve STT_SERVER_BASE_URL trong env)
+#   DEL config:stt_server_base_url   (trở về STT_SERVER_BASE_URL trong env)
 STT_SERVER_URL_OVERRIDE_KEY = "config:stt_server_base_url"
 _STT_URL_CACHE: Dict[str, Any] = {"value": None, "expires": 0.0}
 STT_URL_CACHE_TTL = 30.0
 
 
 def get_stt_server_url_override() -> Optional[str]:
-    """Doc URL whisper-server tu Redis (cache 30s). Fail-open → None."""
+    """Đọc URL whisper-server từ Redis (cache 30s). Fail-open → None."""
     import time
 
     now = time.monotonic()
@@ -45,8 +51,8 @@ def get_stt_server_url_override() -> Optional[str]:
 
 MIN_SEGMENT_LOGPROB = -1.0
 
-# ─── PROVIDER 0: FASTER-WHISPER LOCAL (whisper cu, chay trong worker) ────
-# Fallback khi whisper host (:8001) chet. Model load 1 lan, giu trong RAM.
+# ─── PROVIDER 0: FASTER-WHISPER LOCAL (whisper cũ, chạy trong worker) ────
+# Fallback khi whisper host (:8001) chết. Model load 1 lần, giữ trong RAM.
 _whisper_model_instance = None
 
 
@@ -172,14 +178,14 @@ def transcribe_faster_whisper(
         return None
 
 
-# ─── AUTO: whisper host song thi dung, chet thi fallback local ───────────
-# Health-check /health cua faster-whisper-server, cache TTL de khong ping
-# moi cau (transcriber goi lien tuc). Fail-closed ve local.
+# ─── AUTO: whisper host sống thì dùng, chết thì fallback local ───────────
+# Health-check /health của faster-whisper-server, cache TTL để không ping
+# mỗi câu (transcriber gọi liên tục). Fail-closed về local.
 _STT_ALIVE_CACHE: Dict[str, Any] = {"value": False, "expires": 0.0}
 
 
 def is_stt_server_alive() -> bool:
-    """Whisper host (:8001) co song khong? Cache theo STT_SERVER_ALIVE_TTL."""
+    """Whisper host (:8001) có sống không? Cache theo STT_SERVER_ALIVE_TTL."""
     import time
 
     now = time.monotonic()
@@ -188,7 +194,7 @@ def is_stt_server_alive() -> bool:
     alive = False
     try:
         url = (get_stt_server_url_override() or settings.stt_server_base_url).rstrip("/")
-        # /health nam o root (:8001/health), khong phai duoi /v1.
+        # /health nằm ở root (:8001/health), không phải dưới /v1.
         root = url[:-3] if url.endswith("/v1") else url
         with httpx.Client(timeout=settings.stt_server_alive_timeout) as client:
             resp = client.get(f"{root}/health")
@@ -205,8 +211,8 @@ def transcribe_auto(
     sample_rate: int = 16000,
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
-    """STT host song -> dung host (large-v3-turbo, GPU). Chet/giua chung chet
-    giua cau -> fallback whisper local (small, CPU). Khong bao gio câm."""
+    """STT host sống -> dùng host (large-v3-turbo, GPU). Chết/giữa chừng chết
+    giữa câu -> fallback whisper local (small, CPU). Không bao giờ câm."""
     if is_stt_server_alive():
         try:
             out = transcribe_whisper_server(audio_data, sample_rate=sample_rate, **kwargs)
@@ -215,117 +221,8 @@ def transcribe_auto(
             out = None
         if out:
             return out
-        log.info("Whisper host tra rong, thu local")
+        log.info("Whisper host trả rỗng, thử local")
     return transcribe_faster_whisper(audio_data, sample_rate=sample_rate, **kwargs)
-
-SPOKEN_LANGUAGES = ("en", "vi", "auto")
-
-STT_PROMPTS = {
-    "en": (
-        "This is an English speaking practice session in Vietnam. "
-        "The speakers are Vietnamese learners introducing themselves in English. "
-        "Common Vietnamese names you may hear: Hoang, Huong, An, Minh, Linh, Nam, Trang. "
-        "Transcribe exactly what is said, word for word."
-    ),
-    "vi": (
-        "Đây là một buổi luyện nói tiếng Việt. Người nói là người Việt Nam. "
-        "Các tên thường gặp: Hoàng, Hương, An, Minh, Linh, Nam, Trang, Hà Nội, Sài Gòn. "
-        "Ghi lại chính xác từng từ được nói, giữ nguyên dấu tiếng Việt."
-    ),
-    "auto": "Transcribe exactly what is said, word for word.",
-}
-
-
-def resolve_stt_language(value) -> str:
-    text = str(value if value is not None else settings.stt_language or "en").strip().lower()
-    return text if text in SPOKEN_LANGUAGES else "en"
-
-
-def build_stt_prompt(language: str) -> str:
-    return STT_PROMPTS.get(language, STT_PROMPTS["auto"])
-
-
-def normalize_pcm_int16(audio_data) -> np.ndarray:
-
-    if isinstance(audio_data, np.ndarray):
-        if audio_data.dtype == np.int16:
-            return audio_data
-        return (np.clip(audio_data, -1.0, 1.0) * 32767).astype(np.int16)
-
-    return np.frombuffer(bytes(audio_data), dtype=np.int16)
-
-
-def convert_audio_to_float32(audio_data: np.ndarray | bytes) -> np.ndarray:
-    int16_arr = normalize_pcm_int16(audio_data)
-    return int16_arr.astype(np.float32) / 32768.0
-
-
-def convert_audio_to_wav_bytes(audio_data: np.ndarray | bytes, sample_rate: int = 16000) -> bytes:
-    raw_int16 = normalize_pcm_int16(audio_data).tobytes()
-
-    wav_buffer = io.BytesIO()
-    with wave.open(wav_buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(raw_int16)
-
-    return wav_buffer.getvalue()
-
-
-def normalize_words(text: str) -> List[str]:
-    import re
-
-    return re.findall(r"[a-zà-ỹ0-9]+", text.lower())
-
-
-def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
-    words = text.lower().split()
-    if len(words) < min_repeats:
-        return False
-
-    for unit in range(1, len(words) // 2 + 1):
-        if len(words) % unit != 0:
-            continue
-        if words == words[:unit] * (len(words) // unit):
-            return True
-
-    return is_loopy_hallucination(text)
-
-
-def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
-
-    words = normalize_words(text)
-    if len(words) < phrase_words * 2:
-        return False
-
-    seen = set()
-    for i in range(len(words) - phrase_words + 1):
-        phrase = " ".join(words[i : i + phrase_words])
-        if phrase in seen:
-            return True
-        seen.add(phrase)
-
-    return False
-
-
-def is_prompt_echo(text: str, prompt: str) -> bool:
-
-    text_words = normalize_words(text)
-    prompt_words = normalize_words(prompt)
-    if not text_words or not prompt_words:
-        return False
-
-    prompt_set = set(prompt_words)
-
-    if len(text_words) >= 5 and all(word in prompt_set for word in text_words):
-        return True
-
-    joined_text = " ".join(text_words)
-    joined_prompt = " ".join(prompt_words)
-    if joined_prompt in joined_text:
-        return True
-    return len(text_words) >= 5 and joined_text in joined_prompt
 
 
 # ─── PROVIDER 1: FASTER-WHISPER-SERVER (OPENAI-COMPATIBLE, :8001) ─────────
@@ -511,8 +408,8 @@ def transcribe_cloud_whisper(
 
 
 # ─── DISPATCHER REGISTRY ──────────────────────────────────────────────────
-# "auto" (mac dinh): host song -> host, chet -> local. "faster_whisper"/"local":
-# ep local. "whisper_server"/"server": ep host (khong fallback).
+# "auto" (mặc định): host sống -> host, chết -> local. "faster_whisper"/"local":
+# ép local. "whisper_server"/"server": ép host (không fallback).
 STT_PROVIDERS: Dict[str, Callable] = {
     "auto": transcribe_auto,
     "faster_whisper": transcribe_faster_whisper,
@@ -535,8 +432,8 @@ def transcribe_audio(
     chosen_provider = (provider or settings.stt_provider).lower()
     transcribe_fn = STT_PROVIDERS.get(chosen_provider, transcribe_auto)
 
-    # local/auto giu language/initial_prompt (giong cu). cloud dung prompt
-    # co dinh nen drop de khoi lan.
+    # local/auto giữ language/initial_prompt (giọng cũ). cloud dùng prompt
+    # cố định nên drop để khỏi lẫn.
     if transcribe_fn is transcribe_cloud_whisper:
         kwargs.pop("language", None)
         kwargs.pop("initial_prompt", None)
@@ -547,8 +444,8 @@ def transcribe_audio(
 def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued: int) -> Optional[str]:
 
     name = (provider or settings.stt_provider).lower()
-    # auto duoc tinh nhu whisper_server khi host dang song (tran cloud khi tac),
-    # nhu local khi host chet (khong tran).
+    # auto được tính như whisper_server khi host đang sống (tràn cloud khi tắc),
+    # như local khi host chết (không tràn).
     effective = "whisper_server" if (name == "auto" and is_stt_server_alive()) else name
     if (
         queued >= 4

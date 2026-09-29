@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from app.ai.audio_vad import (
+from app.ai.vad.audio_vad import (
     calculate_audio_rms,
     create_user_audio_state,
     finalize_speech_frames,
@@ -26,7 +26,7 @@ from app.ai.stt import (
     transcribe_cloud_whisper,
     transcribe_whisper_server,
 )
-from app.ai.transcriber import (
+from app.ai.stt.transcriber import (
     build_transcript_payload,
     cancel_user_stream,
     handle_speech_completion,
@@ -351,7 +351,7 @@ class TestSTTFunctions:
     @pytest.mark.asyncio
     async def test_async_forwards_language_kwarg(self):
         audio = np.zeros(16000, dtype=np.int16)
-        with patch("app.ai.stt.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
+        with patch("app.ai.stt.providers.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
             result = await transcribe_audio_async(audio, language="vi")
             assert result == {"text": "hi"}
             _, kwargs = mock_sync.call_args
@@ -392,7 +392,7 @@ class TestTranscriberFunctions:
         }
 
         with (
-            patch("app.ai.transcriber.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
+            patch("app.ai.stt.transcriber.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
             patch("app.ai.tasks.enqueue_ai_job") as mock_enqueue_ai,
         ):
             audio_data = np.zeros(16000 * 2, dtype=np.int16)

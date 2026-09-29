@@ -16,7 +16,7 @@ def _make_room_and_session(client: TestClient, alice: dict) -> tuple[dict, int]:
 
 
 def _write_jsonl_utterance(room_id: int, user_id: int, scored: bool) -> None:
-    from app.ai.speech_log import append_utterance, attach_pronunciation
+    from app.ai.stt.speech_log import append_utterance, attach_pronunciation
 
     append_utterance(room_id, user_id, "Tester", message_id=1, text="I think this is good")
     if scored:
@@ -108,7 +108,7 @@ class TestScoreDbWriteThrough:
         """Có audio -> viec nang -> 202 + enqueue, khong cham sync (het 504)."""
         import numpy as np
 
-        from app.ai.speech_log import append_utterance
+        from app.ai.stt.speech_log import append_utterance
 
         monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
         room, _ = _make_room_and_session(client, alice)

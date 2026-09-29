@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.ai.prompt import get_main_prompt, room_system_prompt, room_tag_rule
+from app.ai.llm.prompt import get_main_prompt, room_system_prompt, room_tag_rule
 from app.models import DocumentKind
 from tests.conftest import make_user, register, switch_to, unique_email
 
@@ -103,9 +103,9 @@ class TestRoomDocuments:
         with (
             patch("app.integration.minio.put_document", return_value="documents/abc_notes.md"),
             patch("app.integration.minio.get_object", return_value=b"# hello\nsome english notes"),
-            patch("app.ai.vector_store.process_document", return_value=None),
+            patch("app.ai.rag.vector_store.process_document", return_value=None),
             patch("app.integration.minio.delete_object", return_value=None),
-            patch("app.ai.vector_store.delete_document_vectors", return_value=0),
+            patch("app.ai.rag.vector_store.delete_document_vectors", return_value=0),
         ):
             uploaded = client.post(
                 f"/api/v1/rooms/{room['id']}/documents",

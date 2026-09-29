@@ -1,14 +1,14 @@
-﻿import asyncio
+import asyncio
 from functools import lru_cache
 
 from qdrant_client.http.models import Fusion, FusionQuery, Prefetch
 from qdrant_client.models import FieldCondition, MatchValue
 from qdrant_client.models import Filter as QdrantFilter
 
-from app.ai.dense import get_embedding_model
-from app.ai.reranker import rerank_documents
-from app.ai.sparse import text_to_sparse
-from app.ai.vector_store import init_vector_store
+from app.ai.rag.dense import get_embedding_model
+from app.ai.rag.reranker import rerank_documents
+from app.ai.rag.sparse import text_to_sparse
+from app.ai.rag.vector_store import init_vector_store
 from app.config import settings
 
 

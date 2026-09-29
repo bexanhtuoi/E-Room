@@ -3,7 +3,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from app.ai.stt import normalize_pcm_int16
+from app.ai.stt.helpers import normalize_pcm_int16
 from app.config import settings
 from app.log import get_logger
 

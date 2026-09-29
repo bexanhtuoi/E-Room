@@ -1,4 +1,4 @@
-﻿from uuid import uuid4
+from uuid import uuid4
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -13,9 +13,9 @@ from qdrant_client.models import (
     Filter as QdrantFilter,
 )
 
-from app.ai.chunking import chunking_file
-from app.ai.dense import batch_embed, get_embedding_model
-from app.ai.sparse import text_to_sparse
+from app.ai.rag.chunking import chunking_file
+from app.ai.rag.dense import batch_embed, get_embedding_model
+from app.ai.rag.sparse import text_to_sparse
 from app.config import settings
 
 collection_initialized = False

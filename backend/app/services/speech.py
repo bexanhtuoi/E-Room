@@ -47,7 +47,7 @@ def ensure_scorable_target(db: Session, user, room_id: int, target_uid: Any) -> 
 
 
 def list_my_utterances(db: Session, user, room_id: int) -> list:
-    from app.ai.speech_log import read_user_log
+    from app.ai.stt.speech_log import read_user_log
 
     ensure_room_visible(db, user, room_id)
 
@@ -55,7 +55,7 @@ def list_my_utterances(db: Session, user, room_id: int) -> list:
 
 
 def list_room_utterances(db: Session, user, room_id: int) -> dict:
-    from app.ai.speech_log import read_room_logs
+    from app.ai.stt.speech_log import read_room_logs
 
     ensure_room_visible(db, user, room_id)
 
@@ -64,7 +64,7 @@ def list_room_utterances(db: Session, user, room_id: int) -> dict:
 
 def room_summary_lines(db: Session, user, room_id: int) -> list:
     """Nguồn cho mục summary: đã gộp + ưu tiên bản user sửa."""
-    from app.ai.speech_log import get_room_transcript_for_summary
+    from app.ai.stt.speech_log import get_room_transcript_for_summary
 
     ensure_room_visible(db, user, room_id)
 
@@ -72,7 +72,7 @@ def room_summary_lines(db: Session, user, room_id: int) -> list:
 
 
 def edit_utterance(db: Session, user, room_id: int, message_id: int, corrected_text: str) -> dict:
-    from app.ai.speech_log import update_corrected_text
+    from app.ai.stt.speech_log import update_corrected_text
 
     ensure_room_visible(db, user, room_id)
 
@@ -86,7 +86,7 @@ def edit_utterance(db: Session, user, room_id: int, message_id: int, corrected_t
 
 
 def find_utterance_entry(db: Session, user, room_id: int, target_uid: Any, message_id: int) -> dict:
-    from app.ai.speech_log import read_user_log
+    from app.ai.stt.speech_log import read_user_log
 
     ensure_room_visible(db, user, room_id)
 
@@ -104,7 +104,7 @@ def utterance_needs_heavy_scoring(room_id: int, user_id: Any, message_id: Any, e
         return False
 
     try:
-        from app.ai.raw_recorder import find_attempt_by_message
+        from app.ai.stt.raw_recorder import find_attempt_by_message
 
         attempt = find_attempt_by_message(room_id, user_id, message_id)
         if attempt and attempt.get("raw_path") is not None:
@@ -113,7 +113,7 @@ def utterance_needs_heavy_scoring(room_id: int, user_id: Any, message_id: Any, e
         pass
 
     try:
-        from app.ai.speech_log import resolve_audio_path
+        from app.ai.stt.speech_log import resolve_audio_path
 
         return resolve_audio_path(room_id, entry.get("audio_file")) is not None
     except Exception:
@@ -181,7 +181,7 @@ def feedback_utterance(
     - LLM chết -> fallback rule-based từ word_details/top_errors.
     """
     from app.ai.pronunciation import request_pronun_feedback
-    from app.ai.speech_log import attach_feedback
+    from app.ai.stt.speech_log import attach_feedback
     from app.repositories.pronunciation_score import pronunciation_score_crud
 
     room = get_room_or_404(db, room_id)

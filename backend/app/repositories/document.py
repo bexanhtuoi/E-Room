@@ -14,7 +14,7 @@ def drop_doc_storage(doc) -> None:
         pass
 
     try:
-        from app.ai.vector_store import delete_document_vectors
+        from app.ai.rag.vector_store import delete_document_vectors
 
         delete_document_vectors(doc.id)
     except Exception:

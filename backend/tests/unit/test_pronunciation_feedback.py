@@ -70,7 +70,7 @@ class TestGenerateFeedback:
     def _run(self, content):
         fake = AsyncMock()
         fake.ainvoke.return_value = FakeMsg(content)
-        with patch("app.ai.ChatOpenAI", return_value=fake) as mock_cls:
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake) as mock_cls:
             out = asyncio.run(generate_feedback({"utterances": []}))
         return out, mock_cls, fake
 
@@ -93,7 +93,7 @@ class TestGenerateFeedback:
 
         fake2 = AsyncMock()
         fake2.ainvoke.return_value = FakeMsg('{"summary": "s2"}')
-        with patch("app.ai.ChatOpenAI", return_value=fake2):
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake2):
             asyncio.run(generate_feedback({}, system_prompt=SFP, user_label="session_scores"))
         messages = fake2.ainvoke.call_args[0][0]
         assert messages[0]["content"] == SFP
@@ -111,7 +111,7 @@ class TestFallbackFeedback:
             ],
             "top_errors": [{"pattern": "/θ/ → /s/", "count": 1, "examples": ["think"]}],
         }
-        with patch("app.ai.ChatOpenAI", side_effect=RuntimeError("connection refused")):
+        with patch("app.ai.llm.client.ChatOpenAI", side_effect=RuntimeError("connection refused")):
             out = asyncio.run(generate_feedback(report))
         assert "error" not in out
         assert out["fallback"] is True
@@ -123,7 +123,7 @@ class TestFallbackFeedback:
                 {"word": "think", "score": 58.5, "status": "pronunciation_error", "expected_ipa": "/θɪŋk/"}],
             "top_errors": [],
         }]}
-        with patch("app.ai.ChatOpenAI", side_effect=RuntimeError("connection refused")):
+        with patch("app.ai.llm.client.ChatOpenAI", side_effect=RuntimeError("connection refused")):
             out2 = request_pronun_feedback(session_report, system_prompt="x", user_label="session_scores")
         assert out2["fallback"] is True
         assert out2["error_words"][0]["tip"]

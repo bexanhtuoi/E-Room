@@ -5,7 +5,8 @@ from typing import List
 from app.models import DocumentKind
 
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROMPTS_DIR = os.path.join(AGENT_DIR, "prompts")
+# Thư mục prompts/*.md nằm ở app/ai/prompts (cùng cấp các subpackage).
+PROMPTS_DIR = os.path.join(os.path.dirname(AGENT_DIR), "prompts")
 
 DEFAULT_PROMPTS = {
     "main": """You are a helpful assistant with access to a document knowledge base."""

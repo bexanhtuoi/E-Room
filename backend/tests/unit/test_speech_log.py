@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from app.ai.pronunciation import heuristic_score, score_pronunciation
-from app.ai.speech_log import (
+from app.ai.stt.speech_log import (
     append_utterance,
     attach_feedback,
     attach_pronunciation,
@@ -174,7 +174,7 @@ class TestFindAttempt:
 
     def test_found_and_scoped_by_user(self, tmp_path, monkeypatch):
         import app.config as cfg
-        from app.ai.raw_recorder import find_attempt_by_message
+        from app.ai.stt.raw_recorder import find_attempt_by_message
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
         self._make_attempt(tmp_path, 11, "att1", 3, [71, 72])
@@ -189,7 +189,7 @@ class TestFindAttempt:
 
     def test_missing_raw_wav_gives_none_path(self, tmp_path, monkeypatch):
         import app.config as cfg
-        from app.ai.raw_recorder import find_attempt_by_message
+        from app.ai.stt.raw_recorder import find_attempt_by_message
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
         self._make_attempt(tmp_path, 12, "att2", 4, [81])

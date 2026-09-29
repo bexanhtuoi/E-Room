@@ -2,7 +2,7 @@ import asyncio
 
 from livekit import rtc
 
-from app.ai.participant import live_humans
+from app.ai.llm.participant import live_humans
 from app.ai.tasks import mark_room_activity, refresh_worker_lock
 from app.config import settings
 from app.integration.livekit import create_token

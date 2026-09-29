@@ -27,8 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.ai.audio_vad import calculate_audio_rms
-from app.ai.stt import normalize_pcm_int16
+from app.ai.vad.audio_vad import calculate_audio_rms
+from app.ai.stt.helpers import normalize_pcm_int16
 from app.log import get_logger
 
 log = get_logger("app.ai.raw_recorder")
@@ -58,7 +58,7 @@ def _wav_header(data_size: int, sample_rate: int, channels: int, bits: int = 16)
 
 
 def attempts_root(room_id: int) -> Path:
-    from app.ai.speech_log import room_dir
+    from app.ai.stt.speech_log import room_dir
 
     path = room_dir(room_id) / "attempts"
     path.mkdir(parents=True, exist_ok=True)

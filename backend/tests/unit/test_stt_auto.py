@@ -24,7 +24,7 @@ def _reset_caches():
 class TestServerAlive:
     def test_alive_caches_result(self):
         _reset_caches()
-        with patch("app.ai.stt.httpx.Client") as mock_client:
+        with patch("app.ai.stt.providers.httpx.Client") as mock_client:
             mock_client.return_value.__enter__.return_value.get.return_value.status_code = 200
             assert is_stt_server_alive() is True
             assert is_stt_server_alive() is True
@@ -33,7 +33,7 @@ class TestServerAlive:
 
     def test_dead_on_exception(self):
         _reset_caches()
-        with patch("app.ai.stt.httpx.Client", side_effect=RuntimeError("down")):
+        with patch("app.ai.stt.providers.httpx.Client", side_effect=RuntimeError("down")):
             assert is_stt_server_alive() is False
 
 
@@ -42,9 +42,9 @@ class TestTranscribeAuto:
         _reset_caches()
         server_out = {"text": "hello", "provider": "whisper_server_x"}
         with (
-            patch("app.ai.stt.is_stt_server_alive", return_value=True),
-            patch("app.ai.stt.transcribe_whisper_server", return_value=server_out) as mock_server,
-            patch("app.ai.stt.transcribe_faster_whisper") as mock_local,
+            patch("app.ai.stt.providers.is_stt_server_alive", return_value=True),
+            patch("app.ai.stt.providers.transcribe_whisper_server", return_value=server_out) as mock_server,
+            patch("app.ai.stt.providers.transcribe_faster_whisper") as mock_local,
         ):
             assert transcribe_auto(_audio()) == server_out
             mock_server.assert_called_once()
@@ -54,9 +54,9 @@ class TestTranscribeAuto:
         _reset_caches()
         local_out = {"text": "hello", "provider": "faster_whisper"}
         with (
-            patch("app.ai.stt.is_stt_server_alive", return_value=False),
-            patch("app.ai.stt.transcribe_whisper_server") as mock_server,
-            patch("app.ai.stt.transcribe_faster_whisper", return_value=local_out) as mock_local,
+            patch("app.ai.stt.providers.is_stt_server_alive", return_value=False),
+            patch("app.ai.stt.providers.transcribe_whisper_server") as mock_server,
+            patch("app.ai.stt.providers.transcribe_faster_whisper", return_value=local_out) as mock_local,
         ):
             assert transcribe_auto(_audio()) == local_out
             mock_server.assert_not_called()
@@ -66,9 +66,9 @@ class TestTranscribeAuto:
         _reset_caches()
         local_out = {"text": "hello", "provider": "faster_whisper"}
         with (
-            patch("app.ai.stt.is_stt_server_alive", return_value=True),
-            patch("app.ai.stt.transcribe_whisper_server", return_value=None),
-            patch("app.ai.stt.transcribe_faster_whisper", return_value=local_out) as mock_local,
+            patch("app.ai.stt.providers.is_stt_server_alive", return_value=True),
+            patch("app.ai.stt.providers.transcribe_whisper_server", return_value=None),
+            patch("app.ai.stt.providers.transcribe_faster_whisper", return_value=local_out) as mock_local,
         ):
             assert transcribe_auto(_audio()) == local_out
             mock_local.assert_called_once()
@@ -84,10 +84,10 @@ class TestTranscribeAuto:
 class TestChooseProvider:
     def test_auto_counts_as_server_when_alive(self, monkeypatch):
         monkeypatch.setattr(stt_mod.settings, "stt_cloud_api_key", "key")
-        with patch("app.ai.stt.is_stt_server_alive", return_value=True):
+        with patch("app.ai.stt.providers.is_stt_server_alive", return_value=True):
             assert choose_stt_provider("auto", {"language": "en"}, queued=5) == "cloud"
 
     def test_auto_counts_as_local_when_dead(self, monkeypatch):
         monkeypatch.setattr(stt_mod.settings, "stt_cloud_api_key", "key")
-        with patch("app.ai.stt.is_stt_server_alive", return_value=False):
+        with patch("app.ai.stt.providers.is_stt_server_alive", return_value=False):
             assert choose_stt_provider("auto", {"language": "en"}, queued=5) == "auto"

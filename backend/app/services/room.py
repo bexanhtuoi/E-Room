@@ -1,4 +1,4 @@
-﻿from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from fastapi import UploadFile
@@ -323,7 +323,7 @@ def delete_room(db: Session, user, room_id: int) -> Room:
 
 
 def get_default_prompt() -> dict:
-    from app.ai.prompt import get_main_prompt
+    from app.ai.llm.prompt import get_main_prompt
 
     return {"default_system_prompt": get_main_prompt()}
 
@@ -335,7 +335,7 @@ def get_room_documents(db: Session, user, room_id: int):
 
 
 async def upload_room_document(db: Session, user, room_id: int, file: UploadFile):
-    from app.ai.vector_store import process_document
+    from app.ai.rag.vector_store import process_document
     from app.integration.minio import delete_object, put_document
 
     room = get_host_room(db, room_id, user)

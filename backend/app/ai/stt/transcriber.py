@@ -5,9 +5,9 @@ from typing import Dict, List, Optional
 from livekit import rtc
 from sqlmodel import Session
 
-from app.ai.audio_vad import create_user_audio_state, process_audio_frame
-from app.ai.participant import live_humans
-from app.ai.raw_recorder import RawAttemptRecorder, UtteranceRef
+from app.ai.vad.audio_vad import create_user_audio_state, process_audio_frame
+from app.ai.llm.participant import live_humans
+from app.ai.stt.raw_recorder import RawAttemptRecorder, UtteranceRef
 from app.ai.stt import transcribe_audio_async
 from app.config import settings
 from app.database import engine
@@ -146,7 +146,7 @@ async def handle_speech_completion(
         # khong cham inline o day de transcript hien ngay lap tuc.
         # Best-effort: lỗi ghi file không được chặn broadcast/publish bên dưới.
         try:
-            from app.ai.speech_log import append_utterance
+            from app.ai.stt.speech_log import append_utterance
 
             append_utterance(
                 room_id=room_id,

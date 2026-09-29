@@ -150,8 +150,8 @@ def build_transcript(db: Session, db_session) -> tuple[str, int]:
 
 def build_session_agent(db_session, total_lines: int):
     from app.ai import get_agent
-    from app.ai.prompt import session_prompt
-    from app.ai.tools import TRANSCRIPT_TOOLS
+    from app.ai.llm.prompt import session_prompt
+    from app.ai.llm.tools import TRANSCRIPT_TOOLS
 
     return get_agent(
         tools=TRANSCRIPT_TOOLS,
@@ -160,8 +160,8 @@ def build_session_agent(db_session, total_lines: int):
 
 
 def build_session_messages(lines: list, full_question: str, tail: int = 50) -> list:
-    from app.ai.query import build_room_messages
-    from app.ai.tools import format_lines
+    from app.ai.llm.query import build_room_messages
+    from app.ai.llm.tools import format_lines
 
     history = [format_lines(lines[-tail:])] if lines else []
     return build_room_messages(history, full_question)
@@ -219,7 +219,7 @@ def get_session_messages_data(db: Session, user, session_id: int) -> Dict[str, A
 async def answer_session_question(
     db: Session, db_session, user_id: int, question: str,
 ) -> tuple[str, int]:
-    from app.ai.query import run_query
+    from app.ai.llm.query import run_query
 
     cleaned = (question or "").strip()
 
@@ -244,7 +244,7 @@ async def answer_session_question(
 
 
 async def stream_session_answer(db: Session, db_session, user_id: int, question: str):
-    from app.ai.query import stream_events
+    from app.ai.llm.query import stream_events
 
     cleaned = (question or "").strip()
     lines = session_lines(db, db_session)
@@ -324,7 +324,7 @@ def summarize_scored_entry(entry: dict) -> dict:
 
 
 def collect_session_summaries(db: Session, db_session) -> tuple[list, int]:
-    from app.ai.speech_log import read_user_log
+    from app.ai.stt.speech_log import read_user_log
     from app.repositories.pronunciation_score import pronunciation_score_crud
 
     start = as_naive_utc(db_session.joined_at)

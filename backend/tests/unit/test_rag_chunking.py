@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.chunking import chunking_file
+from app.ai.rag.chunking import chunking_file
 
 
 class TestRAGChunking:

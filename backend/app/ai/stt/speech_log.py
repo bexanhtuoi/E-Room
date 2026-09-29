@@ -38,11 +38,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import app.log as _app_log
 from app.log import get_logger
 
 log = get_logger("app.ai.speech_log")
 
-_DEFAULT_DIR = Path(__file__).resolve().parent.parent.parent / "log" / "speech"
+# Neo vào backend/ root qua vị trí ổn định của app.log (đúng dù file này
+# di chuyển trong nội bộ package).
+_BACKEND_ROOT = Path(_app_log.__file__).resolve().parent.parent
+_DEFAULT_DIR = _BACKEND_ROOT / "log" / "speech"
 
 
 def get_speech_log_dir() -> Path:
@@ -52,7 +56,7 @@ def get_speech_log_dir() -> Path:
     base = Path(configured) if configured else _DEFAULT_DIR
     if not base.is_absolute():
         # Resolve relative từ backend/ root
-        base = Path(__file__).resolve().parent.parent.parent / base
+        base = _BACKEND_ROOT / base
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -98,7 +102,7 @@ def save_utterance_audio(
     if not should_save_audio() or audio_data is None:
         return None
     try:
-        from app.ai.stt import convert_audio_to_wav_bytes
+        from app.ai.stt.helpers import convert_audio_to_wav_bytes
 
         wav_bytes = convert_audio_to_wav_bytes(audio_data, sample_rate=sample_rate)
         uid = user_id if user_id is not None else "unknown"

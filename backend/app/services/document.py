@@ -1,4 +1,4 @@
-﻿from sqlmodel import Session
+from sqlmodel import Session
 
 from app.repositories.document import DocumentCrud, document_crud, drop_doc_storage
 from app.services.helpers import ensure_owner

@@ -1397,7 +1397,7 @@ def request_pronun_feedback(
 
 def _load_feedback_prompts() -> Dict[str, str]:
     """Đọc 2 prompt md riêng. Fallback feedback.md cũ nếu file mới thiếu."""
-    from app.ai.prompt import load_prompt
+    from app.ai.llm.prompt import load_prompt
 
     out = {"utterance": "", "session": ""}
     utterance = load_prompt("feedback_utterance")

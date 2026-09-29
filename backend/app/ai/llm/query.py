@@ -3,8 +3,8 @@ from typing import Any, Dict, List, Union
 
 from langchain_core.messages import AIMessage
 
-from app.ai import get_agent
-from app.ai.prompt import MEMORIES_HEADER
+from app.ai.llm.client import get_agent
+from app.ai.llm.prompt import MEMORIES_HEADER
 from app.utils.retry import aresilient
 
 THINKING_LABELS = {

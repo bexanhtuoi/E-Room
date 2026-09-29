@@ -27,7 +27,7 @@ def make_speech_room(db: Session, tag: str) -> int:
 class TestScoreRoomUtterances:
     def test_scores_unscored_and_skips_scored(self, monkeypatch, tmp_path):
         from app import config as config_module
-        from app.ai import speech_log as speech_log_module
+        from app.ai.stt import speech_log as speech_log_module
 
         monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
 
@@ -71,7 +71,7 @@ class TestScoreRoomUtterances:
 
     def test_delete_room_cascades_scores(self, monkeypatch, tmp_path):
         from app import config as config_module
-        from app.ai import speech_log as speech_log_module
+        from app.ai.stt import speech_log as speech_log_module
 
         monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
 

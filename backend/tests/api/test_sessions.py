@@ -80,7 +80,7 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        with patch("app.ai.query.run_query", new=AsyncMock(return_value="They said hello.")) as mock_run:
+        with patch("app.ai.llm.query.run_query", new=AsyncMock(return_value="They said hello.")) as mock_run:
             response = client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "What was said?"})
 
         assert response.status_code == 200, response.text
@@ -94,7 +94,7 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/leave")
 
     def test_agent_tool_reads_older_lines(self):
-        from app.ai.tools import get_more_messages
+        from app.ai.llm.tools import get_more_messages
 
         session_id = make_session_with_lines([f"line {i}" for i in range(60)], room_id=771001)
 
@@ -104,7 +104,7 @@ class TestSessionAI:
         assert get_more_messages.invoke({"session_id": session_id, "start_index": 9999}).startswith("No more lines")
 
     def test_agent_tool_reports_index_range(self):
-        from app.ai.tools import transcript_info
+        from app.ai.llm.tools import transcript_info
 
         session_id = make_session_with_lines(["hi", "hello"], room_id=771002)
 
@@ -112,7 +112,7 @@ class TestSessionAI:
         assert "2 lines" in out and "0-1" in out
 
     def test_agent_tool_searches_transcript(self):
-        from app.ai.tools import search_transcript
+        from app.ai.llm.tools import search_transcript
 
         session_id = make_session_with_lines(
             ["I love rainy days", "Sunny days are best", "Rainy mood again"],
@@ -125,7 +125,7 @@ class TestSessionAI:
         assert "at least 2" in search_transcript.invoke({"session_id": session_id, "keyword": "x"})
 
     def test_agent_tool_missing_session(self):
-        from app.ai.tools import get_more_messages, search_transcript, transcript_info
+        from app.ai.llm.tools import get_more_messages, search_transcript, transcript_info
 
         assert transcript_info.invoke({"session_id": 999999999}) == "This session has no transcript lines."
         assert get_more_messages.invoke({"session_id": 999999999}).startswith("No more lines")
@@ -140,7 +140,7 @@ class TestSessionAI:
             yield {"kind": "thinking", "text": "Reading transcript…"}
             yield {"kind": "token", "text": "They said hello."}
 
-        with patch("app.ai.query.stream_events", side_effect=fake_stream):
+        with patch("app.ai.llm.query.stream_events", side_effect=fake_stream):
             with client.stream("POST", f"/api/v1/sessions/{session_id}/chat/stream", json={"question": "What was said?"}) as response:
                 assert response.status_code == 200, response.text
                 body = response.read().decode()
@@ -169,7 +169,7 @@ class TestSessionAI:
         client.post(f"/api/v1/rooms/{room['id']}/join")
         session_id = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]][0]["session"]["id"]
 
-        with patch("app.ai.query.run_query", new=AsyncMock(return_value="Saved answer.")):
+        with patch("app.ai.llm.query.run_query", new=AsyncMock(return_value="Saved answer.")):
             assert client.post(f"/api/v1/sessions/{session_id}/chat", json={"question": "Remember me?"}).status_code == 200
 
         data = client.get(f"/api/v1/sessions/{session_id}/messages").json()
@@ -177,7 +177,7 @@ class TestSessionAI:
             {"role": "user", "text": "Remember me?", "user_id": alice["id"]},
             {"role": "ai", "text": "Saved answer.", "user_id": None},
         ]
-        # Transcript van sach — Q&A khong tron vao context session
+        # Transcript vẫn sạch — Q&A không trộn vào context session
         assert "Remember me?" not in data["transcript"]
 
         # Room chat khong thay tin Q&A
