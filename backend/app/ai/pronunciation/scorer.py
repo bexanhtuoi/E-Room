@@ -38,22 +38,29 @@ scoring_gate = threading.Semaphore(max(1, settings.scoring_max_parallel))
 
 def split_words_with_spans(ref_ctc: str) -> tuple[list[str], list[list[int]]]:
     chars = list(ref_ctc)
+
     word_list: list[str] = []
+
     per_word_spans: list[list[int]] = []
+
     word, idxs = "", []
 
     for ci, ch in enumerate(chars):
         if ch == "|":
             if word:
                 word_list.append(word)
+
                 per_word_spans.append(idxs)
+
                 word, idxs = "", []
         else:
             word += ch
+
             idxs.append(ci)
 
     if word:
         word_list.append(word)
+
         per_word_spans.append(idxs)
 
     return word_list, per_word_spans
@@ -79,10 +86,15 @@ def greedy_decode(processor, pred_ids: list[int], blank_id: int) -> str:
 
 def normalize_reference(text: str, vocab: set[str]) -> str:
     t = (text or "").upper().strip()
+
     t = re.sub(r"\s+", " ", t)
+
     t = t.replace("-", " ")
+
     kept = "".join(ch for ch in t if ch in vocab or ch == " ")
+
     kept = re.sub(r"\s+", " ", kept).strip()
+
     return kept
 
 
@@ -128,7 +140,9 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
     total_frames, num_classes = log_probs.shape
 
     vocab = set(processor.tokenizer.get_vocab().keys())
+
     vocab.discard(processor.tokenizer.pad_token or "<pad>")
+
     vocab.discard(processor.tokenizer.unk_token or "<unk>")
 
     ref_norm = normalize_reference(reference_text, vocab | {"|", "'", " "})
@@ -147,8 +161,11 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
     pred_ids: list[int] = torch.argmax(logits, dim=-1).tolist()
 
     num_targets = len(target_ids)
+
     char_lp: list[float] = []
+
     char_span: list[tuple[int, int]] = []
+
     char_ok: list[bool] = []
 
     for i, tid in enumerate(target_ids):
@@ -158,12 +175,17 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
 
         if frames:
             vals = [float(log_probs[t, int(tid)]) for t in frames]
+
             char_lp.append(sum(vals) / len(vals))
+
             char_span.append((frames[0], frames[-1]))
+
             char_ok.append(True)
         else:
             char_lp.append(-10.0)
+
             char_span.append((-1, -1))
+
             char_ok.append(False)
 
     words_out: list[dict[str, Any]] = []
@@ -283,7 +305,9 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
                      accent: str = "en-US", whisper_segments: list[dict] | None = None,
                      char_words: list[dict] | None = None, greedy_text: str = "") -> dict:
     t0 = time.time()
+
     warnings: list[str] = []
+
     if not (user_corrected or "").strip():
         return {"error": "user_corrected rỗng — hãy sửa transcript trước khi chấm."}
 
@@ -395,7 +419,9 @@ def heuristic_score(
     conf_part = max(0.0, min(1.0, confidence)) * 60.0
     # avg_logprob thường nằm [-2, 0]; map về 0-25 điểm
     logprob_norm = max(0.0, min(1.0, (avg_logprob + 2.0) / 2.0))
+
     fluency = 0.0
+
     if duration > 0 and words_count > 0:
         wpm = (words_count / duration) * 60.0
         # 90-170 wpm là vùng tự nhiên cho speaking practice
@@ -406,6 +432,7 @@ def heuristic_score(
         else:
             fluency = 5.0
     score = round(conf_part + logprob_norm * 25.0 + fluency, 1)
+
     return {
         "score": min(100.0, score),
         "method": "heuristic-v1",
@@ -421,6 +448,7 @@ def heuristic_score(
 
 def report_to_hook(report: Dict[str, Any], method: str) -> Dict[str, Any]:
     scores = report.get("scores", {})
+
     return {
         "score": float(scores.get("overall", 0.0)),
         "method": method,
@@ -484,11 +512,13 @@ def score_via_pronun_service(
     language: str = "en",
 ) -> Dict[str, Any]:
     base = (settings.pronun_base_url or "").strip().rstrip("/")
+
     if not base:
         raise NotImplementedError(
             "PRONUN_BASE_URL chưa cấu hình — chấm local hoặc heuristic."
         )
     audio_bytes = Path(audio_path).read_bytes()
+
     if len(audio_bytes) > 100 * 1024 * 1024:
         raise ValueError("Audio > 100MB.")
     payload = {
@@ -497,13 +527,16 @@ def score_via_pronun_service(
         "mode": "free_speaking",
         "accent": "en-US" if (language or "en").lower().startswith("en") else "en-US",
     }
+
     with httpx.Client(timeout=settings.pronun_timeout) as client:
         resp = client.post(
             f"{base}/api/speaking/score",
             files={"audio": ("rec.wav", audio_bytes, "audio/wav")},
             data={"payload": json.dumps(payload)},
         )
+
         resp.raise_for_status()
+
         report = resp.json()
     if "error" in report and "scores" not in report:
         raise RuntimeError(f"pronun scorer: {report.get('error')}")
@@ -541,15 +574,19 @@ def score_pronunciation(
             duration=duration,
             words_count=len(words),
         )
+
         result["reason"] = reason
+
         return result
 
     if prefer_wav2vec and audio_path and reference_text.strip():
         try:
             path = Path(audio_path)
+
             if path.exists():
                 try:
                     probe_wav, probe_sr = load_wav_16k(path.read_bytes())
+
                     quality = check_audio_quality(probe_wav, probe_sr)
                 except Exception:
                     quality = {"ok": True, "peak": 0.0, "rms": 0.0, "duration_s": 0.0, "hint": ""}
@@ -558,19 +595,26 @@ def score_pronunciation(
                         "scoring skipped, audio too quiet | peak=%s rms=%s path=%s",
                         quality["peak"], quality["rms"], path,
                     )
+
                     result = heuristic("quiet_audio")
+
                     result["audio_quality"] = quality
+
                     return result
                 return score_with_wav2vec2(path, reference_text, language)
             log.warning("scoring thiếu audio (file không tồn tại: %s) — fallback heuristic", audio_path)
+
             return heuristic("no_audio")
         except NotImplementedError as error:
             log.warning("local scoring failed và chưa cấu hình pronun service — fallback heuristic | err=%s", error)
+
             return heuristic("scorer_failed")
         except Exception as error:
             log.warning("wav2vec2 scoring failed, fallback heuristic | err=%s", error)
+
             return heuristic("scorer_failed")
     if prefer_wav2vec and reference_text.strip():
         log.warning("scoring thiếu audio (audio_path=%r) — fallback heuristic", audio_path)
+
         return heuristic("no_audio")
     return heuristic("heuristic")

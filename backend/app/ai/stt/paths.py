@@ -8,7 +8,9 @@ WAV_HEADER_SIZE = 44
 
 def wav_header(data_size: int, sample_rate: int, channels: int, bits: int = 16) -> bytes:
     byte_rate = sample_rate * channels * bits // 8
+
     block_align = channels * bits // 8
+
     return struct.pack(
         "<4sI4s4sIHHIIHH4sI",
         b"RIFF",
@@ -31,13 +33,17 @@ def attempts_root(room_id: int) -> Path:
     from app.ai.stt.speech_log import room_dir
 
     path = room_dir(room_id) / "attempts"
+
     path.mkdir(parents=True, exist_ok=True)
+
     return path
 
 
 def attempt_dir(room_id: int, attempt_id: str) -> Path:
     path = attempts_root(room_id) / attempt_id
+
     path.mkdir(parents=True, exist_ok=True)
+
     return path
 
 

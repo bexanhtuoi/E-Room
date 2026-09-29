@@ -38,8 +38,11 @@ def cached_value(cache: Dict[str, Any], ttl_seconds: float, loader) -> Any:
         return cache.get("value")
 
     value = loader()
+
     cache["value"] = value
+
     cache["expires"] = now + ttl_seconds
+
     return value
 
 
@@ -49,9 +52,11 @@ def get_stt_server_url_override() -> Optional[str]:
             from app.integration.redis import get as redis_get
 
             raw = redis_get(STT_SERVER_URL_OVERRIDE_KEY)
+
             return raw.strip().rstrip("/") if raw and raw.strip() else None
         except Exception as error:
             log.warning("STT override read failed, using env | err=%s", error)
+
             return None
 
     return cached_value(STT_URL_CACHE, STT_URL_CACHE_TTL, load_override)
@@ -63,14 +68,18 @@ def is_stt_server_alive() -> bool:
             url = (get_stt_server_url_override() or settings.stt_server_base_url).rstrip("/")
             # /health nằm ở root (:8001/health), không phải dưới /v1.
             root = url[:-3] if url.endswith("/v1") else url
+
             with httpx.Client(timeout=settings.stt_server_alive_timeout) as client:
                 resp = client.get(f"{root}/health")
+
                 return resp.status_code == 200
         except Exception as error:
             log.warning("Whisper host unreachable, fallback local | err=%s", str(error)[:150])
+
             return False
 
     cached = cached_value(STT_ALIVE_CACHE, float(settings.stt_server_alive_ttl), probe)
+
     return bool(cached)
 
 
@@ -95,10 +104,13 @@ def transcribe_whisper_server(
 
     try:
         wav_bytes = convert_audio_to_wav_bytes(audio_data, sample_rate)
+
         duration = len(convert_audio_to_float32(audio_data)) / sample_rate
 
         headers = {"Authorization": f"Bearer {key}"}
+
         files = {"file": ("speech.wav", wav_bytes, "audio/wav")}
+
         data: Dict[str, Any] = {
             "model": model,
             "response_format": "verbose_json",
@@ -121,6 +133,7 @@ def transcribe_whisper_server(
 
         if response.status_code != 200:
             log.error("Whisper-server STT failed | status=%s error=%s", response.status_code, response.text[:500])
+
             return None
 
         result_json = response.json()
@@ -133,6 +146,7 @@ def transcribe_whisper_server(
         # verbose_json của faster-whisper-server: {text, language, duration, segments[], words[]}
         # segments[] mỗi cái có avg_logprob -> dùng để tính confidence giống local.
         words_data: List[Dict[str, Any]] = []
+
         raw_words = result_json.get("words") or []
 
         for seg in result_json.get("segments") or []:
@@ -149,6 +163,7 @@ def transcribe_whisper_server(
             for s in (result_json.get("segments") or [])
             if isinstance(s, dict) and "avg_logprob" in s
         ]
+
         avg_logprob = sum(logprobs) / len(logprobs) if logprobs else 0.0
 
         if avg_logprob < MIN_SEGMENT_LOGPROB:
@@ -156,6 +171,7 @@ def transcribe_whisper_server(
 
         if is_repetitive_hallucination(full_text) or is_prompt_echo(full_text, resolved_prompt):
             log.info("Dropping hallucination/prompt-echo from server | text='%s'", full_text[:80])
+
             return None
 
         confidence = float(min(max((avg_logprob + 2.0) / 2.0, 0.0), 1.0)) if logprobs else 0.95
@@ -171,5 +187,6 @@ def transcribe_whisper_server(
         }
     except Exception as error:
         log.error("Whisper-server exception | err=%s", error)
+
         return None
 

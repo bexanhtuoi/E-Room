@@ -76,14 +76,17 @@ CONFUSION_RE = re.compile(r"/([^/]+)/\s*→\s*/([^/]+)/")
 
 def normalize_base(phone: str) -> str:
     base = (phone or "").rstrip("012")
+
     return "H" if base == "HH" else base
 
 
 def parse_confusion(issue: str) -> Optional[tuple[str, str]]:
     found = CONFUSION_RE.findall(issue or "")
+
     if not found:
         return None
     exp, obs = found[0][0].strip().lower(), found[0][1].strip().lower()
+
     if not exp or not obs:
         return None
     return exp, obs
@@ -95,13 +98,16 @@ def phone_bases(arpa: List[str]) -> List[str]:
 
 def vi_reading(arpa: List[str]) -> str:
     parts = [VI_SOUND.get(normalize_base(p), normalize_base(p).lower()) for p in (arpa or [])]
+
     return " ".join(part for part in parts if part)
 
 
 def mouth_guide(arpa: List[str], limit: int = 3) -> str:
     seen: List[str] = []
+
     for base in phone_bases(arpa):
         tip = MOUTH[base]
+
         if tip not in seen:
             seen.append(tip)
         if len(seen) >= limit:
@@ -111,7 +117,9 @@ def mouth_guide(arpa: List[str], limit: int = 3) -> str:
 
 def guide_for_word(word: str, arpa: List[str], issue: str = "") -> Dict[str, str]:
     pair = parse_confusion(issue or "")
+
     how_to = ""
+
     if pair is not None:
         how_to = PATTERN_TIPS.get(f"{pair[0]}→{pair[1]}", "")
     if not how_to:

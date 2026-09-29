@@ -17,6 +17,7 @@ from app.shared.keys import room_presence_key, room_transcriber_lock_key
 log = get_logger("app.ai.transcriber")
 
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
+
 MAX_PARALLEL_STT = 2
 
 stt_gate = asyncio.Semaphore(MAX_PARALLEL_STT)
@@ -41,6 +42,7 @@ async def guarded_transcribe(
 
 def cancel_user_stream(user_tasks: Dict[str, asyncio.Task], user_identity: str) -> None:
     old_task = user_tasks.pop(user_identity, None)
+
     if old_task is not None and not old_task.done():
         old_task.cancel()
 
@@ -54,15 +56,19 @@ async def process_user_audio_stream(
     stt_tasks: set,
 ) -> None:
     audio_stream = rtc.AudioStream(track, sample_rate=16000, num_channels=1)
+
     raw = RawAttemptRecorder(room_id=room_id, user_identity=user_identity)
 
     try:
         async for event in audio_stream:
             pcm_data = event.frame.data
+
             pos_before = raw.samples_written
+
             was_speaking = user_state["is_speaking"]
 
             raw.write_frame(pcm_data)
+
             completed_speech = process_audio_frame(user_state, pcm_data)
 
             if (not was_speaking) and user_state["is_speaking"]:
@@ -70,6 +76,7 @@ async def process_user_audio_stream(
 
             if completed_speech is not None:
                 raw_ctx = raw.end_utterance(len(completed_speech))
+
                 pending = asyncio.create_task(
                     guarded_transcribe(
                         room=room,
@@ -79,7 +86,9 @@ async def process_user_audio_stream(
                         raw_ctx=raw_ctx,
                     )
                 )
+
                 stt_tasks.add(pending)
+
                 pending.add_done_callback(stt_tasks.discard)
             elif was_speaking and (not user_state["is_speaking"]):
                 raw.abandon_utterance()
@@ -100,10 +109,15 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
     from app.tasks.helpers import refresh_worker_lock
 
     lock_key = room_transcriber_lock_key(room_id)
+
     room = rtc.Room()
+
     user_states: Dict[str, Dict] = {}
+
     user_tasks: Dict[str, asyncio.Task] = {}
+
     active_tasks: List[asyncio.Task] = []
+
     stt_tasks: set = set()
 
     token = create_token(
@@ -130,10 +144,12 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
                 participant.identity,
                 track.sid,
             )
+
             if participant.identity not in user_states:
                 user_states[participant.identity] = create_user_audio_state(participant.identity)
 
             cancel_user_stream(user_tasks, participant.identity)
+
             task = asyncio.create_task(
                 process_user_audio_stream(
                     room=room,
@@ -144,7 +160,9 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
                     stt_tasks=stt_tasks,
                 )
             )
+
             user_tasks[participant.identity] = task
+
             active_tasks.append(task)
 
     @room.on("track_unsubscribed")
@@ -158,10 +176,12 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
     @room.on("participant_disconnected")
     def on_participant_disconnected(participant: rtc.RemoteParticipant) -> None:
         cancel_user_stream(user_tasks, participant.identity)
+
         if participant.identity in user_states:
             del user_states[participant.identity]
 
     await room.connect(settings.livekit_url, token)
+
     log.info("Transcriber connected to room | room_id=%s", room_id)
 
     if not await live_humans(room, room_id):
@@ -169,13 +189,16 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
 
     try:
         deadline = asyncio.get_event_loop().time() + MAX_TRANSCRIBE_SESSION_SECONDS
+
         loop_count = 0
+
         while asyncio.get_event_loop().time() < deadline:
 
             if scard(room_presence_key(room_id)) < 1:
                 break
 
             loop_count += 1
+
             if task_id and loop_count % 12 == 0:
                 refresh_worker_lock(lock_key, task_id)
             await asyncio.sleep(5)
@@ -192,4 +215,5 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
             except asyncio.TimeoutError:
                 log.info("STT drain timed out | room_id=%s pending=%s", room_id, len(stt_tasks))
         await room.disconnect()
+
         log.info("Transcriber disconnected from room | room_id=%s", room_id)

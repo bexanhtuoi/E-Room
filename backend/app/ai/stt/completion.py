@@ -48,13 +48,18 @@ async def handle_speech_completion(
     try:
         # 1. Gọi STT transcribe audio non-blocking (ngôn ngữ theo phòng)
         spoken_language = resolve_room_language(room_id)
+
         result = await transcribe_audio_async(audio_data, sample_rate=16000, language=spoken_language)
+
         if not result or not result.get("text", "").strip():
             return
 
         text = result["text"].strip()
+
         confidence = result.get("confidence", 1.0)
+
         duration = result.get("duration", 0.0)
+
         detected_language = result.get("language") or spoken_language
 
         log.info(
@@ -68,6 +73,7 @@ async def handle_speech_completion(
 
         # 2. Lưu transcript (database + JSONL), trả None khi trùng/lỗi
         saved = save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, detected_language)
+
         if saved is None:
             return
         message_id, user_id, user_name = saved
@@ -86,9 +92,13 @@ async def handle_speech_completion(
 
 def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, detected_language):
     text = result["text"].strip()
+
     confidence = result.get("confidence", 1.0)
+
     duration = result.get("duration", 0.0)
+
     avg_logprob = result.get("avg_logprob", 0.0)
+
     words = result.get("words", [])
 
     # 2. Lưu vào database (None = trùng lặp hoặc lỗi lưu → bỏ qua)
@@ -102,6 +112,7 @@ def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, 
         words_count=len(words),
         language=detected_language,
     )
+
     if message_id is None:
         return None
 
@@ -159,6 +170,7 @@ async def broadcast_completion(room, room_id, message_id, user_id, user_name, te
         await room.local_participant.publish_data(payload, reliable=True)
 
     query = strip_ai_mention(text)
+
     if query:
         from app.tasks.room_jobs import enqueue_ai_job
 
@@ -176,6 +188,7 @@ def resolve_room_language(room_id: int) -> str:
     try:
         with Session(engine) as db:
             room = room_crud.get_one(db, id=room_id)
+
             if room is not None and getattr(room, "language", None):
                 return resolve_stt_language(room.language)
     except Exception:

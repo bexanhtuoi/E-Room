@@ -21,12 +21,14 @@ def transcribe_audio(
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
     chosen_provider = (provider or settings.stt_provider).lower()
+
     transcribe_fn = STT_PROVIDERS.get(chosen_provider, transcribe_auto)
 
     # local/auto giữ language/initial_prompt (giọng cũ). cloud dùng prompt
     # cố định nên drop để khỏi lẫn.
     if transcribe_fn is transcribe_cloud_whisper:
         kwargs.pop("language", None)
+
         kwargs.pop("initial_prompt", None)
 
     return transcribe_fn(audio_data, sample_rate=sample_rate, **kwargs)
@@ -42,6 +44,7 @@ def transcribe_auto(
             out = transcribe_whisper_server(audio_data, sample_rate=sample_rate, **kwargs)
         except Exception as error:
             log.warning("Whisper host failed mid-call, fallback local | err=%s", str(error)[:150])
+
             out = None
         if out:
             return out
@@ -54,6 +57,7 @@ def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued:
     # auto được tính như whisper_server khi host đang sống (tràn cloud khi tắc),
     # như local khi host chết (không tràn).
     effective = "whisper_server" if (name == "auto" and is_stt_server_alive()) else name
+
     if (
         queued >= 4
         and effective in ("whisper_server", "faster_whisper", "local")
@@ -61,6 +65,7 @@ def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued:
         and settings.stt_cloud_api_key
     ):
         log.info("STT overflow to cloud | queued=%s", queued)
+
         return "cloud"
     return provider
 
@@ -72,10 +77,13 @@ async def transcribe_audio_async(
     **kwargs: Any,
 ) -> Optional[Dict[str, Any]]:
     loop = asyncio.get_running_loop()
+
     queued = stt_executor._work_queue.qsize()
+
     if queued >= 4:
         log.warning("STT executor congested | queued=%s", queued)
     provider = choose_stt_provider(provider, kwargs, queued)
+
     call = functools.partial(
         transcribe_audio,
         audio_data,
@@ -83,6 +91,7 @@ async def transcribe_audio_async(
         provider=provider,
         **kwargs,
     )
+
     return await loop.run_in_executor(stt_executor, call)
 
 

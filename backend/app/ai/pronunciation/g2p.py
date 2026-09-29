@@ -15,6 +15,7 @@ IPA_MAP = {
 
 def arpa_to_ipa(phone: str) -> str:
     base = phone.rstrip("012")
+
     return IPA_MAP.get(base, base.lower())
 
 
@@ -35,6 +36,7 @@ def is_vowel(phone: str) -> bool:
 @functools.lru_cache(maxsize=1)
 def get_g2p():
     from g2p_en import G2p
+
     return G2p()
 
 
@@ -47,6 +49,7 @@ def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
     phones = [t for t in raw if t.strip() and not any(c.islower() for c in t)]
     # chuẩn hoá: phone phải là chữ in hoa (+ số stress)
     phones = [t.upper() for t in phones if t.strip()]
+
     if not phones:
         return ["AH1"], True
     # đảm bảo có stress: nếu chưa có số nào, gán 1 cho nguyên âm đầu
@@ -54,12 +57,14 @@ def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
         for i, p in enumerate(phones):
             if strip_stress(p) in VOWEL_BASE:
                 phones[i] = strip_stress(p) + "1"
+
                 break
     return phones, True
 
 
 def split_syllables(arpa: list[str]) -> tuple[list[list[str]], int | None]:
     syllables: list[list[str]] = []
+
     cur: list[str] = []
 
     for ph in arpa:
@@ -67,6 +72,7 @@ def split_syllables(arpa: list[str]) -> tuple[list[list[str]], int | None]:
 
         if is_vowel(ph):
             syllables.append(cur)
+
             cur = []
 
     if cur:
@@ -84,15 +90,21 @@ def split_syllables(arpa: list[str]) -> tuple[list[list[str]], int | None]:
 
 def get_pronunciation(word: str, accent: str = "en-US") -> dict:
     w = (word or "").strip()
+
     if not w:
         return {"word": word, "arpa": [], "ipa": "", "syllables": [],
                 "stress_index": None, "num_syllables": 0, "oov": True, "accent": accent}
     wu = w.upper()
+
     oov = False
+
     arpa: list[str] | None = None
+
     try:
         import pronouncing
+
         cands = pronouncing.phones_for_word(wu.lower())
+
         if cands:
             arpa = cands[0].split()
     except Exception:
@@ -100,6 +112,7 @@ def get_pronunciation(word: str, accent: str = "en-US") -> dict:
     if arpa is None:
         arpa, oov = g2p_to_phones(wu)
     syllables, stress_index = split_syllables(arpa)
+
     return {
         "word": wu,
         "arpa": arpa,

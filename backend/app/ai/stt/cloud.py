@@ -25,6 +25,7 @@ def transcribe_cloud_whisper(
 
     if not key:
         log.warning("No STT Cloud API key configured. Skipping cloud STT.")
+
         return None
 
     try:
@@ -55,6 +56,7 @@ def transcribe_cloud_whisper(
 
         if response.status_code != 200:
             log.error("Cloud STT request failed | status=%s error=%s", response.status_code, response.text)
+
             return None
 
         result_json = response.json()
@@ -81,5 +83,6 @@ def transcribe_cloud_whisper(
         }
     except Exception as error:
         log.error("Cloud STT exception: %s", error)
+
         return None
 
