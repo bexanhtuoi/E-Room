@@ -101,3 +101,11 @@ backend/app/
 
 `uv run pytest` xanh, `npx vitest run` xanh, `ruff check` không lỗi mới,
 `docker compose build api ai-worker` + `/health` OK, smoke P6 đạt.
+
+## 8. P0 baseline (đã khóa, nhánh `refactor/clean-architecture`)
+
+- pytest: **405 passed** (124s).
+- vitest: **16 files / 77 tests passed**.
+- `ruff check app`: **50 errors** có sẵn (không dọn hàng loạt, chỉ cấm lỗi mới).
+- `ruff format --check`: 37 files chưa chuẩn format — KHÔNG chạy format hàng loạt
+  (tránh diff rác); style mới áp khi chạm file.
