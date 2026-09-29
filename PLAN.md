@@ -1,8 +1,13 @@
 # PLAN — Refactor lớn: tách lớp Backend E-Room (nhánh `refactor/clean-architecture`)
 
-> Trạng thái: ĐÃ DUYỆT — đang thực hiện. Quyết định đã chốt:
+> Trạng thái: HOÀN THÀNH P0–P6 (nhánh `refactor/clean-architecture`).
+> Quyết định đã chốt:
 > lỗi trả `{code, detail}`; đổi hết HTTPException sang domain errors;
 > helper nằm ở `helpers.py` mỗi package.
+>
+> Ghi chú P6: `services/*` giữ re-export CRUD singletons VĨNH VIỄN làm facade
+> (routers/services con, tasks, main, tests đều dùng) — chỉ dọn những gì chết hẳn.
+> Tên task Celery (`app.ai.tasks.*`) giữ nguyên để tương thích beat/jobs đang xếp hàng.
 
 ## 1. Vấn đề hiện tại (đã khảo sát)
 
@@ -109,3 +114,16 @@ backend/app/
 - `ruff check app`: **50 errors** có sẵn (không dọn hàng loạt, chỉ cấm lỗi mới).
 - `ruff format --check`: 37 files chưa chuẩn format — KHÔNG chạy format hàng loạt
   (tránh diff rác); style mới áp khi chạm file.
+
+## 9. Kết quả cuối P6
+
+- pytest: **430 passed** (405 cũ + 25 test mới). vitest: **17 files / 80 tests passed**.
+- `ruff check app`: **50 errors** — bằng đúng baseline, không lỗi mới.
+- Routers: 0 `HTTPException`, 0 chạm DB trực tiếp, 0 import `app.ai`.
+- Docker rebuild api/ai-worker/ai-transcriber/ai-beat/ai-observer: `/health` healthy,
+  `/` 200 qua nginx, lỗi trả `{code, detail}` tiếng Việt có dấu, beat gửi task
+  `app.ai.tasks.*` (tên đóng băng) worker chạy thành công.
+- UI: `fetchJson`/`toApiError` gắn thêm `error.code`, tin nhắn hiển thị giữ nguyên.
+- Lưu ý tooling: lệnh `write`/`edit` đôi khi ghi sai encoding tiếng Việt
+  (cp1258/`?`) — từ nay chuỗi tiếng Việt trong file đi qua script Python
+  với `\u` escape (ASCII-only), kiểm tra bằng audit script sau mỗi đợt.

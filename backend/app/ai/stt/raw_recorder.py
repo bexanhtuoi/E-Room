@@ -27,8 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.ai.vad.audio_vad import calculate_audio_rms
 from app.ai.stt.helpers import normalize_pcm_int16
+from app.ai.vad.audio_vad import calculate_audio_rms
 from app.log import get_logger
 
 log = get_logger("app.ai.raw_recorder")

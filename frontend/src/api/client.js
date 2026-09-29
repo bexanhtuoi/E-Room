@@ -35,6 +35,15 @@ async function refreshTokens() {
   }
 }
 
+export function toApiError(body, status) {
+  const detail = Array.isArray(body.detail)
+    ? body.detail.map((e) => e.msg).join('; ')
+    : body.detail || `Request failed with status ${status}`;
+  const error = new Error(detail);
+  if (body.code) error.code = body.code;
+  return error;
+}
+
 export async function fetchJson(path, options = {}) {
   const { access } = getTokens();
   const headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -49,10 +58,7 @@ export async function fetchJson(path, options = {}) {
       const retryResponse = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...options, headers });
       if (!retryResponse.ok) {
         const body = await retryResponse.json().catch(() => ({}));
-        const detail = Array.isArray(body.detail)
-          ? body.detail.map((e) => e.msg).join('; ')
-          : body.detail || `Request failed with status ${retryResponse.status}`;
-        throw new Error(detail);
+        throw toApiError(body, retryResponse.status);
       }
       return retryResponse.json();
     }
@@ -63,10 +69,7 @@ export async function fetchJson(path, options = {}) {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    const detail = Array.isArray(body.detail)
-      ? body.detail.map((e) => e.msg).join('; ')
-      : body.detail || `Request failed with status ${response.status}`;
-    throw new Error(detail);
+    throw toApiError(body, response.status);
   }
 
   return response.json();

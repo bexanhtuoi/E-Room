@@ -1,3 +1,9 @@
+"""Business layer facade.
+
+Submodules hold business logic; *Crud singletons are re-exported here
+from app.repositories so existing callers keep working.
+New code should import data access from app.repositories directly.
+"""
 from app.services.base import CRUDRepository
 from app.services.document import document_crud
 from app.services.message import message_crud
