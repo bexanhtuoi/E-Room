@@ -84,9 +84,13 @@ def transcribe_whisper_server(
     initial_prompt: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     url = (base_url or get_stt_server_url_override() or settings.stt_server_base_url).rstrip("/")
+
     key = api_key or settings.stt_server_api_key
+
     model = model_name or settings.stt_server_model
+
     resolved_language = resolve_stt_language(language or settings.stt_language)
+
     resolved_prompt = initial_prompt or build_stt_prompt(resolved_language)
 
     try:
@@ -103,12 +107,15 @@ def transcribe_whisper_server(
         # Pin language để skip detect (~30% nhanh hơn). "auto" = để server tự detect.
         if resolved_language in ("en", "vi"):
             data["language"] = resolved_language
+
         if resolved_prompt:
             data["prompt"] = resolved_prompt[:1500]
+
         # xin word timestamps cho pronunciation scoring + highlight
         data["timestamp_granularities[]"] = ["word", "segment"]
 
         endpoint = f"{url}/audio/transcriptions"
+
         with httpx.Client(timeout=settings.stt_server_timeout) as client:
             response = client.post(endpoint, headers=headers, files=files, data=data)
 
@@ -117,7 +124,9 @@ def transcribe_whisper_server(
             return None
 
         result_json = response.json()
+
         full_text = str(result_json.get("text", "")).strip()
+
         if not full_text:
             return None
 
@@ -141,6 +150,7 @@ def transcribe_whisper_server(
             if isinstance(s, dict) and "avg_logprob" in s
         ]
         avg_logprob = sum(logprobs) / len(logprobs) if logprobs else 0.0
+
         if avg_logprob < MIN_SEGMENT_LOGPROB:
             log.info("Dropping low-confidence server segment | logprob=%.2f", avg_logprob)
 

@@ -88,10 +88,13 @@ def normalize_reference(text: str, vocab: set[str]) -> str:
 
 def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict[str, Any]:
     torch = load_torch()
+
     processor, model = get_acoustic_model()
+
     device = next(model.parameters()).device
 
     wav = np.asarray(waveform_16k, dtype=np.float32).reshape(-1)
+
     if sample_rate != 16000:
         try:
             import librosa
@@ -99,43 +102,60 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
             wav = librosa.resample(wav, orig_sr=sample_rate, target_sr=16000).astype(np.float32)
         except Exception:
             ratio = 16000 / float(sample_rate)
+
             idx = (np.arange(int(len(wav) * ratio)) / ratio).astype(int)
+
             idx = np.clip(idx, 0, len(wav) - 1)
+
             wav = wav[idx]
+
         sample_rate = 16000
 
     duration_s = len(wav) / 16000.0
+
     if duration_s > 600:
         return {"error": "Audio dài quá 10 phút — hãy chia thành nhiều lần chấm.", "transcript_norm": ""}
 
     inputs = processor(wav, sampling_rate=16000, return_tensors="pt", padding=True)
+
     input_values = inputs.input_values.to(device)
+
     with torch.no_grad():
         logits = model(input_values).logits[0].cpu()
+
     log_probs = torch.log_softmax(logits, dim=-1)
+
     total_frames, num_classes = log_probs.shape
 
     vocab = set(processor.tokenizer.get_vocab().keys())
     vocab.discard(processor.tokenizer.pad_token or "<pad>")
     vocab.discard(processor.tokenizer.unk_token or "<unk>")
+
     ref_norm = normalize_reference(reference_text, vocab | {"|", "'", " "})
+
     if not ref_norm:
         return {"error": "Câu rỗng hoặc không có ký tự hợp lệ (A-Z).", "transcript_norm": ""}
 
     ref_ctc = ref_norm.replace(" ", "|")
+
     target_ids = processor.tokenizer(ref_ctc).input_ids
+
     blank_id = model.config.pad_token_id if model.config.pad_token_id is not None else 0
 
     align, path_score = ctc_forced_align(log_probs, list(target_ids), int(blank_id))
+
     pred_ids: list[int] = torch.argmax(logits, dim=-1).tolist()
 
     num_targets = len(target_ids)
     char_lp: list[float] = []
     char_span: list[tuple[int, int]] = []
     char_ok: list[bool] = []
+
     for i, tid in enumerate(target_ids):
         s = 2 * i + 1
+
         frames = [t for t in range(total_frames) if align[t] == s]
+
         if frames:
             vals = [float(log_probs[t, int(tid)]) for t in frames]
             char_lp.append(sum(vals) / len(vals))
@@ -147,35 +167,51 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
             char_ok.append(False)
 
     words_out: list[dict[str, Any]] = []
+
     word_list, per_word_spans = split_words_with_spans(ref_ctc)
 
     for wstr, idxs in zip(word_list, per_word_spans):
         lps = [char_lp[i] for i in idxs if 0 <= i < len(char_lp)]
+
         oks = [char_ok[i] for i in idxs if 0 <= i < len(char_ok)]
+
         starts = [char_span[i][0] for i in idxs if 0 <= i < len(char_span) and char_span[i][0] >= 0]
+
         ends = [char_span[i][1] for i in idxs if 0 <= i < len(char_span) and char_span[i][1] >= 0]
+
         if starts and ends:
             f0, f1 = min(starts), max(ends)
+
             span_frames = list(range(f0, f1 + 1))
+
             n_blank = sum(1 for t in span_frames if pred_ids[t] == blank_id)
+
             blank_ratio = n_blank / max(1, len(span_frames))
+
             start_s = round(f0 * FRAME_STRIDE_S, 2)
+
             end_s = round((f1 + 1) * FRAME_STRIDE_S, 2)
         else:
             blank_ratio, start_s, end_s = 1.0, 0.0, 0.0
+
         if not any(oks):
             status = "no_evidence"
         elif blank_ratio > BLANK_RATIO_MISALIGNED:
             status = "misaligned"
         else:
             status = "scored"
+
         if status == "scored":
             avg = sum(lps) / len(lps) if lps else -10.0
+
             prob = math.exp(max(avg, -10.0))
+
             score = round(max(0.0, min(100.0, prob * 100.0)), 1)
         else:
             avg = sum(lps) / len(lps) if lps else -10.0
+
             score = 0.0
+
         words_out.append(
             {
                 "word": wstr,
@@ -189,17 +225,23 @@ def score_utterance(waveform_16k, sample_rate: int, reference_text: str) -> dict
         )
 
     scored = [x for x in words_out if x["status"] == "scored"]
+
     no_ev = [x for x in words_out if x["status"] != "scored"]
+
     if scored:
         overall = sum(x["score_0_100"] for x in scored) / len(scored)
+
         avg_lp_all = sum(x["avg_log_prob"] for x in scored) / len(scored)
     else:
         overall, avg_lp_all = 0.0, -10.0
 
     try:
         ctc = torch.nn.CTCLoss(blank=int(blank_id), zero_infinity=True)
+
         input_lengths = torch.tensor([total_frames])
+
         target_lengths = torch.tensor([num_targets])
+
         loss = float(ctc(log_probs.unsqueeze(1), torch.tensor([target_ids]), input_lengths, target_lengths))
     except Exception:
         loss = float("nan")
@@ -244,53 +286,97 @@ def score_attempt_v2(wav: np.ndarray, sr: int, whisper_raw: str, user_corrected:
     warnings: list[str] = []
     if not (user_corrected or "").strip():
         return {"error": "user_corrected rỗng — hãy sửa transcript trước khi chấm."}
+
     aligned = align_transcripts(whisper_raw, user_corrected, whisper_segments)
+
     if char_words:
         aligned = apply_forced_spans(aligned, char_words)
     else:
         warnings.append("missing forced aligner spans — stress/sounds dùng whisper hint, độ tin cậy thấp")
 
     snd = None
+
     gop_model = None
+
     try:
         ph = score_phones(wav, sr, user_corrected, accent)
+
         if "error" not in ph:
-            snd = {"sounds": ph["sounds"], "word_details": ph["word_details"],
-                   "phonemes": ph["phonemes"], "top_errors": ph["top_errors"]}
+            snd = {
+                "sounds": ph["sounds"],
+                "word_details": ph["word_details"],
+                "phonemes": ph["phonemes"],
+                "top_errors": ph["top_errors"],
+            }
+
             gop_model = ph.get("model")
+
     except Exception as e:
         warnings.append(f"phoneme GOP failed ({str(e)[:120]}), fallback char-level acoustic")
+
     if snd is None:
         # Fallback char-level: KHÔNG gọi là GOP, chỉ là acoustic likelihood.
         snd = score_sounds(char_words or [], greedy_text=greedy_text or whisper_raw, accent=accent)
+
         warnings.append("Điểm Sounds hiện tại là char-level acoustic likelihood, KHÔNG phải GOP chuẩn")
 
     st = score_stress(snd.get("word_details") or char_words or [], wav, sr, accent)
+
     segs, pauses = vad_segments(wav, sr)
-    fl = score_fluency(len(wav)/sr, len([w for w in aligned if w["alignment"] != "deletion"]),
-                       pauses, whisper_raw)
+
+    fl = score_fluency(len(wav) / sr, len([w for w in aligned if w["alignment"] != "deletion"]), pauses, whisper_raw)
 
     details = snd["word_details"]
+
     no_evidence_count = sum(1 for d in details if d.get("status") == "no_evidence")
+
     cp = score_completeness(original_text, user_corrected, mode, details)
+
     if mode != "read_aloud" and cp.get("missing_words"):
         names = ", ".join(cp["missing_words"][:6])
+
         warnings.append(f"{len(cp['missing_words'])} từ chưa hoàn thiện, 0 điểm hoặc không tìm thấy ({names}).")
+
     f0 = extract_f0(wav, sr)
+
     monotone = f0["std_f0"] < 15 and f0["voiced_ratio"] > 0.1
+
     overall = calculate_overall(snd["sounds"], st["stress"], fl["score"], cp["score"])
+
     return {
-        "scores": {"sounds": snd["sounds"], "stress": st["stress"], "fluency": fl["score"],
-                   "completeness": cp["score"], "intonation": None, "overall": overall},
-        "texts": {"original": original_text, "whisper_raw": whisper_raw, "user_corrected": user_corrected},
-        "reference": {"accent": accent, "voice_id": "af_heart"},
-        "word_details": snd["word_details"], "phonemes": snd["phonemes"],
+        "scores": {
+            "sounds": snd["sounds"],
+            "stress": st["stress"],
+            "fluency": fl["score"],
+            "completeness": cp["score"],
+            "intonation": None,
+            "overall": overall,
+        },
+        "texts": {
+            "original": original_text,
+            "whisper_raw": whisper_raw,
+            "user_corrected": user_corrected,
+        },
+        "reference": {
+            "accent": accent,
+            "voice_id": "af_heart",
+        },
+        "word_details": snd["word_details"],
+        "phonemes": snd["phonemes"],
         "stress_detail": st["details"],
-        "intonation": {"median_f0": f0["median_f0"], "std_f0": f0["std_f0"], "range_f0": f0["range_f0"],
-                       "final_slope": f0["final_slope"], "monotone": monotone,
-                       "note": "MVP: monotone detection only, DTW vs Kokoro deferred to v1.1"},
-        "fluency": {**fl}, "completeness": cp, "top_errors": snd["top_errors"],
-        "alignment": aligned, "speech_segments": segs,
+        "intonation": {
+            "median_f0": f0["median_f0"],
+            "std_f0": f0["std_f0"],
+            "range_f0": f0["range_f0"],
+            "final_slope": f0["final_slope"],
+            "monotone": monotone,
+            "note": "MVP: monotone detection only, DTW vs Kokoro deferred to v1.1",
+        },
+        "fluency": {**fl},
+        "completeness": cp,
+        "top_errors": snd["top_errors"],
+        "alignment": aligned,
+        "speech_segments": segs,
         "scorer_version": "scorer-v2-mvp",
         "gop_model": gop_model,
         "n_scored": len(details) - no_evidence_count,
@@ -372,9 +458,10 @@ def score_local(
         waited = time.monotonic() - queued_at
 
         if waited > 1.0:
-            log.info("scoring queued %.1fs (nhieu nguoi cham cung luc)", waited)
+            log.info("scoring queued %.1fs (nhiều người chấm cùng lúc)", waited)
 
         wav, sr = load_wav_16k(raw)
+
         r = score_utterance(wav, int(sr), reference_text)
 
         if "error" in r and "words" not in r:

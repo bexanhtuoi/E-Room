@@ -18,7 +18,9 @@ def transcribe_cloud_whisper(
     model_name: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     key = api_key or settings.stt_cloud_api_key
+
     url = (base_url or settings.stt_cloud_base_url).rstrip("/")
+
     model = model_name or settings.stt_cloud_model
 
     if not key:
@@ -27,14 +29,17 @@ def transcribe_cloud_whisper(
 
     try:
         wav_bytes = convert_audio_to_wav_bytes(audio_data, sample_rate)
+
         duration = len(convert_audio_to_float32(audio_data)) / sample_rate
 
         headers = {
             "Authorization": f"Bearer {key}",
         }
+
         files = {
             "file": ("speech.wav", wav_bytes, "audio/wav"),
         }
+
         data = {
             "model": model,
             "language": "en",
@@ -44,6 +49,7 @@ def transcribe_cloud_whisper(
         }
 
         endpoint = f"{url}/audio/transcriptions"
+
         with httpx.Client(timeout=30.0) as client:
             response = client.post(endpoint, headers=headers, files=files, data=data)
 
@@ -52,7 +58,9 @@ def transcribe_cloud_whisper(
             return None
 
         result_json = response.json()
+
         full_text = result_json.get("text", "").strip()
+
         if not full_text:
             return None
 
