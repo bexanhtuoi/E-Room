@@ -15,13 +15,13 @@ Mic/user ──▶ VAD cắt câu ──▶ Whisper STT (raw, pronunciation=None
 
 | Bước | API | Luật |
 |---|---|---|
-| Sửa câu | `PATCH /rooms/{room_id}/speech-logs/{message_id}` `{corrected_text}` | Sửa sau khi đã chấm → `pronunciation` + `feedback` reset về `None`, bắt chấm lại (`app/ai/speech_log.py::update_corrected_text`) |
-| Chấm điểm | `POST /rooms/{room_id}/speech-logs/{message_id}/score` | Dùng audio ĐẦU–CUỐI của attempt + toàn bộ `corrected_text` lượt nói; log cũ (không attempt) mới rớt về wav VAD từng câu (`app/api/routers/speech.py::rescore_utterance`) |
-| Nhận xét | `POST /rooms/{room_id}/speech-logs/{message_id}/feedback` | Chỉ chạy khi đã có `pronunciation.report`; chưa chấm → **409** `"Chưa có điểm phát âm — chấm điểm trước"` |
+| Sửa câu | `PATCH /rooms/{room_id}/speech-logs/{message_id}` `{corrected_text}` | Sửa sau khi đã chấm → `pronunciation` + `feedback` reset về `None`, bắt chấm lại (`app/ai/stt/speech_log.py::update_corrected_text`) |
+| Chấm điểm | `POST /rooms/{room_id}/speech-logs/{message_id}/score` | Dùng audio ĐẦU–CUỐI của attempt + toàn bộ `corrected_text` lượt nói; log cũ (không attempt) mới rớt về wav VAD từng câu (`app/services/speech.py::score_utterance`) |
+| Nhận xét | `POST /rooms/{room_id}/speech-logs/{message_id}/feedback` | Chỉ chạy khi đã có `pronunciation.report`; chưa chấm → **409** `{"code": "NO_SCORE_REPORT"}` |
 
 ### Scorer (deterministic, không phải LLM)
 
-`app/ai/pronunciation.py::score_attempt_v2` (Part 9, gộp từ scoring_pipeline) trả `ScoringReport`:
+`app/ai/pronunciation/scorer.py::score_attempt_v2` trả `ScoringReport`:
 
 - `scores`: `sounds` (âm), `stress` (nhấn), `fluency` (trôi chảy), `completeness` (đủ chữ), `overall` (trung bình trọng số). `intonation` = `None` ở MVP (chỉ detect monotone).
 - `word_details[]`: `{word, score, status, expected_ipa}` — `status` ∈ `ok` (≥70) · `pronunciation_error` · `no_evidence` (loại khỏi mẫu số, UI hiện "Không nghe rõ").
@@ -85,7 +85,7 @@ await fetchJson(`/rooms/${roomId}/speech-logs/${messageId}/feedback`, { method: 
 - **Máy host tự tính**: scorer local (wav2vec2 + XLSR phoneme) chạy trên backend máy host.
   `PRONUN_BASE_URL` để trống. TTS (`:8002`) và STT (`:8001`) chạy Docker cùng máy host.
 - **Chấm tuần tự**: `threading.Semaphore(SCORING_MAX_PARALLEL=1)` quanh `score_local`
-  (`app/ai/pronunciation.py`) — 3-4 người bấm chấm cùng lúc thì xếp hàng, không OOM.
+  (`app/ai/pronunciation/scorer.py`) — 3-4 người bấm chấm cùng lúc thì xếp hàng, không OOM.
   Frontend khóa các nút chấm khác khi đang có 1 lượt chạy (`scoreDisabled`).
 - **Điểm vào DB**: bảng `pronunciation_scores` (`app/models/pronunciation_score.py`,
   tự tạo bởi `create_all`). POST `.../score` upsert (chấm lại cùng câu không đẻ dòng mới,
@@ -94,7 +94,7 @@ await fetchJson(`/rooms/${roomId}/speech-logs/${messageId}/feedback`, { method: 
 - **Session**: `SessionDetailPage` đọc `GET /rooms/{id}/speech-logs/me`, lọc theo
   `joined_at–left_at`, render `ReadingScoreCard` từng câu (mục *My pronunciation scores*).
 - **AI feedbacks**: `POST /sessions/{id}/feedback` — gộp câu đã chấm trong session (đọc DB,
-  fallback JSONL cho điểm cũ), gửi LLM local với `SESSION_FEEDBACK_PROMPT` (mục ## session trong feedback.md, gọn ~120 từ,
+  fallback JSONL cho điểm cũ), gửi LLM local với `SESSION_FEEDBACK_PROMPT (`app/ai/prompts/assessment.md`, gọn ~200 từ,
   chỉ nêu từ sai/mất hơi + tip + 3 bước luyện). Chưa chấm câu nào → 409.
 - **Nghe mẫu**: mỗi dòng *What was said* có nút loa (Kokoro `POST /tts/speak`, cache theo
   giọng+câu) + `VoicePicker` 4 giọng (Heart/Adam/Emma/George). Giọng chỉ ảnh hưởng phần

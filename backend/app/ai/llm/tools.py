@@ -9,7 +9,8 @@ from app.ai.rag.retrieval import retrieve_relevant_documents
 from app.config import settings
 from app.database import engine
 from app.log import log_call
-from app.services.session import session_crud, session_lines
+from app.repositories.session import session_crud
+from app.services.session import session_lines
 
 MAX_TOOL_LINES = 100
 MAX_SEARCH_HITS = 20

@@ -14,7 +14,7 @@ from app.database import engine
 from app.integration.livekit import create_token
 from app.integration.redis import scard
 from app.log import get_logger
-from app.services import message_crud, room_crud
+from app.repositories import message_crud, room_crud
 from app.utils.chat import strip_ai_mention
 
 log = get_logger("app.ai.transcriber")
@@ -252,7 +252,7 @@ async def process_user_audio_stream(
 
 
 async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
-    from app.ai.tasks import refresh_worker_lock
+    from app.tasks.helpers import refresh_worker_lock
 
     lock_key = f"room:{room_id}:transcriber_running"
     room = rtc.Room()

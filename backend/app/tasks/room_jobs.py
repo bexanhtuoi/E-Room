@@ -18,7 +18,7 @@ from app.integration.celery import celery_app
 from app.integration.redis import acquire_slot, decr, delete, expire, get, incr, release_slot, scard, set
 from app.log import get_logger
 from app.models import MessageRole
-from app.services import document_crud, message_crud, room_crud
+from app.repositories import document_crud, message_crud, room_crud
 from app.tasks.helpers import (
     get_pending_key,
     get_running_key,

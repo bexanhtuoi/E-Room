@@ -5,7 +5,7 @@ from sqlmodel import Session
 from app.database import engine
 from app.integration.celery import celery_app
 from app.log import get_logger
-from app.services import pronunciation_score_crud, room_crud, session_crud
+from app.repositories import pronunciation_score_crud, room_crud, session_crud
 
 log = get_logger("app.tasks", level="INFO")
 

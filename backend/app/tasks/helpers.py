@@ -13,7 +13,7 @@ from app.integration.redis import (
 from app.integration.redis import keys as scan_keys
 from app.log import get_logger
 from app.models import MessageRole
-from app.services import message_crud, user_crud
+from app.repositories import message_crud, user_crud
 from app.utils.datetime_utils import now_utc
 
 log = get_logger("app.tasks", level="INFO")

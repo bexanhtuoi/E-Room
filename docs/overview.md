@@ -110,10 +110,10 @@ Presence (ai đang trong phòng) lưu ở Redis `room:{id}:participants` — web
 ```
 E-Room/
 ├── backend/app/
-│   ├── ai/            # agent, STT, VAD, transcriber/observer, RAG, tasks
-│   ├── api/routers/   # auth, google_auth, user, room, message, document, notification
+│   ├── ai/            # llm, rag, stt, tts, vad, pronunciation (package con + helpers)
+│   ├── api/routers/   # mong: validate -> service -> response
 │   ├── integration/   # livekit, redis, celery, minio
-│   ├── models/ schemas/ services/ seeds/
+│   ├── models/ schemas/ repositories/ services/ shared/ tasks/ seeds/
 │   └── config.py database.py security.py main.py server.py
 ├── backend/alembic/   # migrations — luôn chạy `alembic upgrade head`
 ├── backend/tests/     # unit / api / e2e / integration / security
@@ -130,7 +130,7 @@ E-Room/
 
 ## 8. Quy ước quan trọng (đồng nghiệp mới đọc trước khi code)
 
-1. **Service layer chỉ CRUD** — business logic nằm ở router/tasks, không query DB trong router.
+1. **Tầng rõ ràng** — routers mỏng (validate → service → response), không query DB trực tiếp, không raise HTTPException; services giữ business, repositories giữ CRUD/query, lỗi domain gom ở `shared/exceptions.py` (trả `{code, detail}`).
 2. **AI workers join phòng dưới identity `ai_*`** — webhook + UI đều phải loại chúng ra khỏi seat/danh sách.
 3. **Token LiveKit**: backend ký (`room = str(room_id)`), user identity = `user_id` → **1 tài khoản vào 2 máy cùng lúc sẽ đá nhau** (LiveKit duplicate identity).
 4. **Mic/cam cần HTTPS** (trừ localhost) — test mobile/LAN phải dùng bản HTTPS.

@@ -10,6 +10,9 @@ celery_app = Celery(
     include=["app.tasks.helpers", "app.tasks.room_jobs", "app.tasks.maintenance", "app.tasks.scoring"],
 )
 
+# LUU Y: ten task "app.ai.tasks.*" la dinh danh Celery (beat schedule +
+# job dang xep hang), GIU NGUYEN du code da chuyen sang app.tasks.*.
+# Doi ten = beat mat lich + job cu rot. Xem app/tasks/__init__.py.
 celery_app.conf.update(
     task_default_queue=settings.ai_queue_name,
     task_routes={

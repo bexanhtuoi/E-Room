@@ -6,7 +6,7 @@ from app.integration.celery import celery_app
 from app.integration.redis import delete, exists, get, scard, set_if_absent
 from app.log import get_logger
 from app.models import RoomStatus
-from app.services import room_crud
+from app.repositories import room_crud
 from app.tasks.helpers import get_activity_key, get_pending_key, get_running_key, mark_room_activity
 from app.tasks.room_jobs import enqueue_ai_job, enqueue_room_observer, enqueue_room_transcriber
 from app.utils.datetime_utils import as_naive_utc, now_utc
