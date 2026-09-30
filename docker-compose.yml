@@ -61,6 +61,8 @@ services:
     image: mher/flower:2.0
     container_name: flower
     command: celery --broker=redis://redis:6379/0 flower --port=5555 --persistent=True --dbm-path=/tmp/flower.db
+    environment:
+      FLOWER_UNAUTHENTICATED_API: "true"
     restart: unless-stopped
     cpus: 0.5
     mem_limit: 512m
