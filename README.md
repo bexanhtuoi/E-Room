@@ -5,7 +5,7 @@
 ## Tính năng chính
 
 1. **Room nói chuyện theo chủ đề, tối đa 6 người** — LiveKit WebRTC (mic/cam/share màn hình, hand-raise, emoji reactions), mỗi phòng gắn topics, trần 6 seats (mặc định 4), vòng đời `idle` → `active` → `ended` (hết người về idle, bỏ hoang 24h mới ended).
-2. **`@ai` trò chuyện và hỏi đáp** — mention `@ai` trong chat (hoặc nói "@ai ..." vào mic); đáp án stream từng từ qua LiveKit data channel, kèm thinking của model và quote lại câu hỏi gốc.
+2. **`@ai` trò chuyện và hỏi đáp** — mention `@ai` trong chat (chỉ chat mới gọi được AI, nói vào mic thì không); đáp án stream từng từ qua LiveKit data channel, kèm thinking của model và quote lại câu hỏi gốc.
 3. **RAG tài liệu trong room** — agent tự tra tài liệu upload (Qdrant vector store + reranker) và Tavily web search khi cần, stream thinking ("Searching documents…") trước đáp án.
 4. **AI Summary / Recap / Analyze / Q&A session** — `POST /sessions/{session_id}/feedback` phân tích cả buổi (gọn, chỉ nêu phần sai kèm quote + cách sửa; `409` nếu chưa chấm câu nào), `POST /sessions/{session_id}/chat` (+ `/chat/stream` SSE) hỏi đáp trên transcript, `GET .../speech-logs/summary` gộp transcript toàn room sort theo giờ.
 5. **AI heartbeat** — phòng đang live mà im lặng quá lâu sẽ được AI gợi chuyện bằng 1 câu hỏi (beat 15s, cần ≥2 người + bật `enable_heartbeat`).

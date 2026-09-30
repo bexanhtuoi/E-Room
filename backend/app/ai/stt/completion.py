@@ -9,7 +9,6 @@ from app.ai.stt.recorder import UtteranceRef
 from app.database import engine
 from app.log import get_logger
 from app.repositories import message_crud, room_crud
-from app.utils.chat import strip_ai_mention
 
 log = get_logger("app.ai.stt.completion")
 
@@ -168,18 +167,6 @@ async def broadcast_completion(room, room_id, message_id, user_id, user_name, te
 
     if hasattr(room, "local_participant") and room.local_participant:
         await room.local_participant.publish_data(payload, reliable=True)
-
-    query = strip_ai_mention(text)
-
-    if query:
-        from app.tasks.room_jobs import enqueue_ai_job
-
-        enqueue_ai_job(
-            room_id,
-            "answer",
-            query,
-            message_id,
-        )
 
 
 def resolve_room_language(room_id: int) -> str:

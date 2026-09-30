@@ -29,7 +29,7 @@ Video grid lọc `ai_*`; trần 6 seats chỉ tính người thật (token endpo
 - Gửi/nhận tin nhắn text (`POST /api/v1/messages/`), optimistic render, poll 4s bắt kịp khi miss realtime.
 - Tin **voice** hiện như tin thường + **icon mic sau tên** (không card riêng).
 - Lịch sử + quote: AI trả lời luôn quote lại câu hỏi gốc (`source_message_id`).
-- Hỏi AI: gõ `@ai ...` trong chat **hoặc nói "@ai ..." vào mic** → agent stream **từng từ** qua LiveKit data channel (pace 40ms/từ).
+- Hỏi AI: gõ `@ai ...` trong chat (chỉ chat mới gọi được AI) → agent stream **từng từ** qua LiveKit data channel (pace 40ms/từ).
 - **Thinking stream trước đáp án**, gồm 2 nguồn thật:
   1. **Reasoning của model** (kênh `reasoning_content`; system prompt bắt nghĩ trước trừ chào hỏi).
   2. **Tool calls** ("Searching documents…") + "Got N result(s) — composing answer…" khi tool xong.

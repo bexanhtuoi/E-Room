@@ -8,7 +8,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 
 - **Video call real-time** (LiveKit WebRTC): mic/cam/share màn hình (desktop), hand-raise, emoji reactions.
 - **Transcript live từng người nói**: worker nghe audio mỗi participant, VAD cắt câu, STT chuyển thành chữ, hiện ngay trong chat kèm confidence badge.
-- **Trợ lý AI `@ai`**: mention `@ai` trong chat **hoặc nói "@ai ..." vào mic** → đáp án **stream từng từ** về browser, kèm **thinking của model** và quote lại câu hỏi gốc.
+- **Trợ lý AI `@ai`**: mention `@ai` trong chat (chỉ chat mới gọi được AI) → đáp án **stream từng từ** về browser, kèm **thinking của model** và quote lại câu hỏi gốc.
 - **Chấm điểm phát âm + ngữ pháp AI**: điểm tổng + 4 tiêu chí, điểm từng chữ ẩn mặc định (xem `reading-score.md`); góp ý từng từ yếu gồm khẩu hình + phiên âm Việt.
 - **Session AI**: feedback cả buổi, hỏi đáp trên transcript (sync + SSE stream), transcript gộp sort theo giờ.
 - **RAG + web search**: agent tự tra tài liệu upload (Qdrant + reranker) và Tavily web search khi câu hỏi cần.

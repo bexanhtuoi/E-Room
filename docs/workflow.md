@@ -71,7 +71,7 @@ sequenceDiagram
     U->>U: poll 4s đón bản DB, xóa bubble tạm
 ```
 
-## 5. Voice → transcript → `@ai` bằng miệng
+## 5. Voice → transcript (nói chỉ ra chữ, không gọi AI)
 
 ```mermaid
 flowchart LR
@@ -81,12 +81,13 @@ flowchart LR
     subgraph B2[ai-transcriber worker]
         L1[LiveKit room] -->|track_subscribed| VAD[VAD cắt câu<br/>im 2s chốt]
         VAD --> TRIM[Cắt silence cuối<br/>+0.25s đệm]
-        TRIM --> STT[dispatch auto:<br/>server GPU / local / cloud]
+        TRIM --> STT[dispatch:<br/>server GPU / local / cloud]
         STT --> SAVE[(DB message<br/>speech_to_text + confidence)]
-        STT -->|chứa @ai| Q[(enqueue agent)]
     end
     SAVE -->|broadcast data| B
 ```
+
+> Nói vào mic chỉ ra transcript — muốn gọi AI thì gõ `@ai` trong chat (luồng 3).
 
 Điểm gãy từng gặp: `event.frame.data` là `memoryview` (không phải `bytes`) → normalize ở `normalize_pcm_int16`. Model whisper cache ở volume để restart không tải lại.
 

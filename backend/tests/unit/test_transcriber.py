@@ -374,7 +374,7 @@ class TestTranscriberFunctions:
         assert data["is_final"] is True
 
     @pytest.mark.asyncio
-    async def test_handle_speech_completion_broadcast_and_at_ai(self):
+    async def test_handle_speech_completion_broadcast_without_voice_ai_trigger(self):
         mock_room = MagicMock()
         mock_room.local_participant = MagicMock()
         mock_room.local_participant.publish_data = AsyncMock()
@@ -407,13 +407,8 @@ class TestTranscriberFunctions:
             assert payload["type"] == "transcript"
             assert payload["text"] == "@ai explain dependency inversion"
 
-            # Check @ai trigger
-            assert mock_enqueue_ai.called
-            mock_enqueue_ai.assert_called_once()
-            args = mock_enqueue_ai.call_args[0]
-            assert args[0] == 1
-            assert args[1] == "answer"
-            assert args[2] == "explain dependency inversion"
+            # Voice transcript never triggers AI — only chat does.
+            assert not mock_enqueue_ai.called
 
     def test_cancel_user_stream_replaces_old_pipeline(self):
         old_task = MagicMock()
