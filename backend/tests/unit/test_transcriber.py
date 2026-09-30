@@ -339,11 +339,11 @@ class TestSTTFunctions:
         with patch.object(stt_settings, "stt_cloud_api_key", ""):
             assert choose_stt_provider(None, {"language": "en"}, 5) is None
         with patch.object(stt_settings, "stt_cloud_api_key", "gsk_test"):
-            assert choose_stt_provider(None, {"language": "en"}, 5) == "cloud"
-            assert choose_stt_provider(None, {"language": "vi"}, 9) is None
-            assert choose_stt_provider(None, {"language": "auto"}, 9) is None
+            assert choose_stt_provider(None, {"language": "en"}, 17) == "cloud"
+            assert choose_stt_provider(None, {"language": "vi"}, 17) is None
+            assert choose_stt_provider(None, {"language": "auto"}, 17) is None
             assert choose_stt_provider(None, {"language": "en"}, 0) is None
-            assert choose_stt_provider("groq", {"language": "en"}, 9) == "groq"
+            assert choose_stt_provider("groq", {"language": "en"}, 17) == "groq"
 
     @pytest.mark.asyncio
     async def test_async_forwards_language_kwarg(self):

@@ -84,7 +84,7 @@ class TestChooseProvider:
     def test_auto_counts_as_server_when_alive(self, monkeypatch):
         monkeypatch.setattr(stt_mod.settings, "stt_cloud_api_key", "key")
         with patch("app.ai.stt.dispatch.is_stt_server_alive", return_value=True):
-            assert choose_stt_provider("auto", {"language": "en"}, queued=5) == "cloud"
+            assert choose_stt_provider("auto", {"language": "en"}, queued=17) == "cloud"
 
     def test_auto_counts_as_local_when_dead(self, monkeypatch):
         monkeypatch.setattr(stt_mod.settings, "stt_cloud_api_key", "key")

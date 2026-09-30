@@ -77,7 +77,7 @@ services:
   ai-transcriber:
     build: ./backend
     container_name: ai-transcriber
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --pool=threads --concurrency=12 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --pool=threads --concurrency=50 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
     cpus: 4.0

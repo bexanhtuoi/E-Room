@@ -18,9 +18,7 @@ log = get_logger("app.ai.transcriber")
 
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
 
-MAX_PARALLEL_STT = 2
-
-stt_gate = asyncio.Semaphore(MAX_PARALLEL_STT)
+MAX_PARALLEL_STT_PER_ROOM = 6
 
 
 async def guarded_transcribe(
@@ -29,7 +27,11 @@ async def guarded_transcribe(
     user_identity: str,
     audio_data,
     raw_ctx: Optional[UtteranceRef] = None,
+    stt_gate: Optional[asyncio.Semaphore] = None,
 ) -> None:
+    if stt_gate is None:
+        stt_gate = asyncio.Semaphore(MAX_PARALLEL_STT_PER_ROOM)
+
     async with stt_gate:
         await handle_speech_completion(
             room=room,
@@ -54,6 +56,7 @@ async def process_user_audio_stream(
     track: rtc.RemoteAudioTrack,
     user_state: Dict,
     stt_tasks: set,
+    stt_gate: Optional[asyncio.Semaphore] = None,
 ) -> None:
     audio_stream = rtc.AudioStream(track, sample_rate=16000, num_channels=1)
 
@@ -84,6 +87,7 @@ async def process_user_audio_stream(
                         user_identity=user_identity,
                         audio_data=completed_speech,
                         raw_ctx=raw_ctx,
+                        stt_gate=stt_gate,
                     )
                 )
 
@@ -119,6 +123,8 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
     active_tasks: List[asyncio.Task] = []
 
     stt_tasks: set = set()
+
+    stt_gate = asyncio.Semaphore(MAX_PARALLEL_STT_PER_ROOM)
 
     token = create_token(
         room_name=str(room_id),
@@ -158,6 +164,7 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
                     track=track,
                     user_state=user_states[participant.identity],
                     stt_tasks=stt_tasks,
+                    stt_gate=stt_gate,
                 )
             )
 

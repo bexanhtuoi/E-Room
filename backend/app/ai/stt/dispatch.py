@@ -59,7 +59,7 @@ def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued:
     effective = "whisper_server" if (name == "auto" and is_stt_server_alive()) else name
 
     if (
-        queued >= 4
+        queued >= STT_OVERFLOW_QUEUED
         and effective in ("whisper_server", "faster_whisper", "local")
         and str((kwargs or {}).get("language") or "en").lower() == "en"
         and settings.stt_cloud_api_key
@@ -68,6 +68,11 @@ def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued:
 
         return "cloud"
     return provider
+
+
+STT_EXECUTOR_WORKERS = 16
+
+STT_OVERFLOW_QUEUED = 16
 
 
 async def transcribe_audio_async(
@@ -80,7 +85,7 @@ async def transcribe_audio_async(
 
     queued = stt_executor._work_queue.qsize()
 
-    if queued >= 4:
+    if queued >= STT_OVERFLOW_QUEUED:
         log.warning("STT executor congested | queued=%s", queued)
     provider = choose_stt_provider(provider, kwargs, queued)
 
@@ -95,7 +100,7 @@ async def transcribe_audio_async(
     return await loop.run_in_executor(stt_executor, call)
 
 
-stt_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="stt_worker")
+stt_executor = ThreadPoolExecutor(max_workers=STT_EXECUTOR_WORKERS, thread_name_prefix="stt_worker")
 
 
 STT_PROVIDERS: Dict[str, Callable] = {
