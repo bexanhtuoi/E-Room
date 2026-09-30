@@ -8,8 +8,8 @@ services:
     restart: unless-stopped
     env_file: ./backend/.env.docker
     cpus: 2.0
-    mem_limit: 1536m
-    mem_reservation: 512m
+    mem_limit: 2g
+    mem_reservation: 768m
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
@@ -30,8 +30,8 @@ services:
     restart: unless-stopped
     env_file: ./backend/.env.docker
     cpus: 3.0
-    mem_limit: 3g
-    mem_reservation: 1g
+    mem_limit: 4g
+    mem_reservation: 1536m
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
@@ -81,8 +81,8 @@ services:
     restart: unless-stopped
     env_file: ./backend/.env.docker
     cpus: 4.0
-    mem_limit: 3g
-    mem_reservation: 1g
+    mem_limit: 4g
+    mem_reservation: 1536m
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
