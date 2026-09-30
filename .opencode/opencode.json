@@ -1,0 +1,43 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+     "codegraph": {
+    "type": "local",
+    "command": [
+      "codegraph",
+      "serve",
+      "--mcp"
+    ],
+    "enabled": true
+  },
+    "obsidian-vault": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y", 
+        "@mauricio.wolff/mcp-obsidian",
+        "C:/Users/PC/Documents/Obsidian Vault"
+      ],
+      "enabled": true,
+      "timeout": 60000
+    },
+    "jina": {
+      "type": "remote",
+      "url": "https://mcp.jina.ai/v1",
+      "headers": {
+        "Authorization": "Bearer jina_837731f6b2964b78bcd94df2e2cce4b98usrp9lKpI9m6Yfcm8xVK8CBQZQw"
+      }
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
+    }
+
+  },
+  "instructions": [
+    ".opencode/AGENTS.md",
+    ".opencode/rules/python-coding-style.md",
+    ".opencode/rules/api-design.md",
+    ".opencode/rules/backend-architecture.md"
+  ]
+}
