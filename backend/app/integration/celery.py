@@ -16,6 +16,7 @@ celery_app.conf.update(
         "app.tasks.room_jobs.stream_ai_response": {"queue": settings.ai_queue_name},
         "app.tasks.maintenance.check_room_heartbeats": {"queue": settings.ai_queue_name},
         "app.tasks.maintenance.ensure_room_workers": {"queue": settings.ai_queue_name},
+        "app.tasks.maintenance.cleanup_old_speech": {"queue": settings.ai_queue_name},
         "app.tasks.room_jobs.observe_room_audio": {"queue": settings.ai_observer_queue_name},
         "app.tasks.room_jobs.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
     },
@@ -27,6 +28,10 @@ celery_app.conf.update(
         "ensure-room-workers": {
             "task": "app.tasks.maintenance.ensure_room_workers",
             "schedule": 60.0,
+        },
+        "cleanup-old-speech": {
+            "task": "app.tasks.maintenance.cleanup_old_speech",
+            "schedule": 86400.0,
         },
     },
     task_serializer="json",

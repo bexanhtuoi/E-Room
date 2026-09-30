@@ -3,6 +3,7 @@ from sqlmodel import Session
 from app.config import settings
 from app.database import engine
 from app.integration.celery import celery_app
+from app.integration.minio import delete_object, get_minio_client
 from app.integration.redis import delete, exists, get, scard, set_if_absent
 from app.log import get_logger
 from app.models import RoomStatus
@@ -61,6 +62,45 @@ def end_stale_empty_rooms(db: Session, now: float) -> int:
         ended_count += 1
 
     return ended_count
+
+
+def cleanup_old_speech_audio(db: Session, now: float) -> int:
+    from datetime import datetime, timezone
+
+    retention_days = settings.speech_retention_days
+
+    if retention_days <= 0:
+        return 0
+
+    deleted_count = 0
+    client = get_minio_client()
+
+    for obj in client.list_objects(settings.minio_bucket, prefix="speech/", recursive=True):
+        last_modified = getattr(obj, "last_modified", None)
+
+        if last_modified is None:
+            continue
+
+        age_days = (datetime.now(timezone.utc) - last_modified).days
+
+        if age_days < retention_days:
+            continue
+
+        try:
+            delete_object(obj.object_name)
+            deleted_count += 1
+        except Exception as error:
+            log.warning("Speech cleanup delete failed | object=%s err=%s", obj.object_name, error)
+
+    return deleted_count
+
+
+@celery_app.task(name="app.tasks.maintenance.cleanup_old_speech")
+def cleanup_old_speech() -> int:
+    now = now_utc().timestamp()
+
+    with Session(engine) as db:
+        return cleanup_old_speech_audio(db, now)
 
 
 @celery_app.task(name="app.tasks.maintenance.ensure_room_workers")

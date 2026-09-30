@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_eroom.db"
+os.environ["MINIO_BUCKET"] = "eroom-test"
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["SECRET_KEY"] = "test-secret-key-32-characters-minimum!"
@@ -38,6 +39,17 @@ def _create_test_tables():
         from app.integration.redis import get_redis_client
 
         get_redis_client().flushdb()
+    except Exception:
+        pass
+
+    try:
+        from app.config import settings
+        from app.integration.minio import delete_object, get_minio_client
+
+        client = get_minio_client()
+        if client.bucket_exists(settings.minio_bucket):
+            for obj in client.list_objects(settings.minio_bucket, recursive=True):
+                delete_object(obj.object_name)
     except Exception:
         pass
 

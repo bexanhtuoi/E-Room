@@ -218,6 +218,7 @@ Prefix `/api/v1`, chi tiết đầy đủ ở Swagger `http://localhost:8000/doc
 | `docs/overview.md` | Kiến trúc tổng thể, tech stack, vòng đời phòng, bố cục repo, quy ước code |
 | `docs/features.md` | Chi tiết 9 tính năng + auth/pages/subscription |
 | `docs/workflow.md` | Sơ đồ các luồng (join/leave, chat, `@ai`, transcript, heartbeat, chấm điểm, session, RAG, TTS, public hosting) |
+| `docs/flows.md` | Luồng kỹ thuật chi tiết (task → worker → Redis key → DB) + ghi chú vận hành |
 | `docs/setup.md` | Cài đặt: dev local, full docker, public qua Tailscale + troubleshooting |
 | `docs/reading-score.md` | Logic chấm điểm phát âm + ngữ pháp, thiết kế UI, wiring session/DB |
 | `.opencode/rules/` | Quy chuẩn kiến trúc backend + style Python/API (version cùng repo) |
