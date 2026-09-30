@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from app.ai.pronunciation import heuristic_score, score_pronunciation
-from app.ai.speech_log import (
+from app.ai.stt.speech_log import (
     append_utterance,
     attach_feedback,
     attach_pronunciation,
@@ -86,7 +86,6 @@ class TestSpeechLog:
         assert update_corrected_text(5555, 1, 999999, "x") is None
 
     def test_raw_edit_rescore_flow(self, tmp_path, monkeypatch):
-        """whisper lưu raw (chưa chấm) -> user sửa -> chấm -> sửa nữa thì mất điểm cũ."""
         import app.config as cfg
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
@@ -125,7 +124,6 @@ class TestSpeechLog:
         assert updated3["pronunciation"]["scored_text"] == "you're using a satellite"
 
     def test_feedback_flow_and_reset_on_edit(self, tmp_path, monkeypatch):
-        """chấm -> gắn feedback -> sửa text thì cả điểm + feedback đều reset."""
         import app.config as cfg
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
@@ -174,7 +172,7 @@ class TestFindAttempt:
 
     def test_found_and_scoped_by_user(self, tmp_path, monkeypatch):
         import app.config as cfg
-        from app.ai.raw_recorder import find_attempt_by_message
+        from app.ai.stt.recorder import find_attempt_by_message
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
         self._make_attempt(tmp_path, 11, "att1", 3, [71, 72])
@@ -189,7 +187,7 @@ class TestFindAttempt:
 
     def test_missing_raw_wav_gives_none_path(self, tmp_path, monkeypatch):
         import app.config as cfg
-        from app.ai.raw_recorder import find_attempt_by_message
+        from app.ai.stt.recorder import find_attempt_by_message
 
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
         self._make_attempt(tmp_path, 12, "att2", 4, [81])
@@ -275,20 +273,20 @@ class TestSttServerUrlOverride:
     def test_redis_override_wins_over_env(self):
         import app.ai.stt as stt_module
 
-        stt_module._STT_URL_CACHE.update({"value": None, "expires": 0.0})
+        stt_module.STT_URL_CACHE.update({"value": None, "expires": 0.0})
         with patch("app.integration.redis.get", return_value="http://100.105.201.65:8001/v1/"):
             assert stt_module.get_stt_server_url_override() == "http://100.105.201.65:8001/v1"
 
     def test_empty_redis_falls_back_to_env(self):
         import app.ai.stt as stt_module
 
-        stt_module._STT_URL_CACHE.update({"value": None, "expires": 0.0})
+        stt_module.STT_URL_CACHE.update({"value": None, "expires": 0.0})
         with patch("app.integration.redis.get", return_value=None):
             assert stt_module.get_stt_server_url_override() is None
 
     def test_redis_error_fail_open(self):
         import app.ai.stt as stt_module
 
-        stt_module._STT_URL_CACHE.update({"value": None, "expires": 0.0})
+        stt_module.STT_URL_CACHE.update({"value": None, "expires": 0.0})
         with patch("app.integration.redis.get", side_effect=RuntimeError("down")):
             assert stt_module.get_stt_server_url_override() is None

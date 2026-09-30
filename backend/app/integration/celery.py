@@ -7,25 +7,25 @@ celery_app = Celery(
     "eroom",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.ai.tasks"],
+    include=["app.tasks.helpers", "app.tasks.room_jobs", "app.tasks.maintenance", "app.tasks.scoring"],
 )
 
 celery_app.conf.update(
     task_default_queue=settings.ai_queue_name,
     task_routes={
-        "app.ai.tasks.stream_ai_response": {"queue": settings.ai_queue_name},
-        "app.ai.tasks.check_room_heartbeats": {"queue": settings.ai_queue_name},
-        "app.ai.tasks.ensure_room_workers": {"queue": settings.ai_queue_name},
-        "app.ai.tasks.observe_room_audio": {"queue": settings.ai_observer_queue_name},
-        "app.ai.tasks.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
+        "app.tasks.room_jobs.stream_ai_response": {"queue": settings.ai_queue_name},
+        "app.tasks.maintenance.check_room_heartbeats": {"queue": settings.ai_queue_name},
+        "app.tasks.maintenance.ensure_room_workers": {"queue": settings.ai_queue_name},
+        "app.tasks.room_jobs.observe_room_audio": {"queue": settings.ai_observer_queue_name},
+        "app.tasks.room_jobs.transcribe_room_audio": {"queue": settings.ai_transcriber_queue_name},
     },
     beat_schedule={
         "check-room-heartbeats": {
-            "task": "app.ai.tasks.check_room_heartbeats",
+            "task": "app.tasks.maintenance.check_room_heartbeats",
             "schedule": 15.0,
         },
         "ensure-room-workers": {
-            "task": "app.ai.tasks.ensure_room_workers",
+            "task": "app.tasks.maintenance.ensure_room_workers",
             "schedule": 60.0,
         },
     },
@@ -51,7 +51,7 @@ def get_celery_app() -> Celery:
 @worker_ready.connect
 def clear_locks_on_worker_start(sender=None, **kwargs) -> None:
     try:
-        from app.ai.tasks import clear_stale_worker_locks
+        from app.tasks.helpers import clear_stale_worker_locks
 
         clear_stale_worker_locks()
     except Exception:

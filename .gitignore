@@ -24,9 +24,11 @@ frontend/build/
 # misc
 .vscode/
 .idea/
+log/
+tempt/
+backend/log/speech/
 
 .codegraph/
-.opencode/
 
 # model weights
 backend/app/weight/

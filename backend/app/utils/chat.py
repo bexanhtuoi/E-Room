@@ -2,6 +2,8 @@ import json
 import re
 from typing import Optional
 
+from app.shared.constants import SESSION_CHAT_KEY
+
 AI_MENTION_PATTERN = re.compile(r"(?:^|\s)@ai\b", re.IGNORECASE)
 
 
@@ -26,6 +28,6 @@ def scrub_meta(raw) -> Optional[str]:
     except (TypeError, ValueError):
         return None
 
-    meta.pop("session_chat", None)
+    meta.pop(SESSION_CHAT_KEY, None)
     meta.pop("session_id", None)
     return json.dumps(meta) if meta else None

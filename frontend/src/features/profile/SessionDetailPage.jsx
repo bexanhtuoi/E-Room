@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiPaperAirplane, HiSparkles, HiUsers } from 'react-icons/hi2';
-import { API_BASE_URL, fetchJson, getTokens } from '../../lib/api';
+import { API_BASE_URL, fetchJson, toApiError } from '../../lib/api';
 import { Face } from '../../components/common/Faces';
 import '../../styles/ProfilePage.css';
 
@@ -142,16 +142,15 @@ export function SessionDetailPage() {
     });
 
     try {
-      const { access } = getTokens();
       const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/chat/stream`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...(access ? { Authorization: `Bearer ${access}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: clean }),
       });
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || `Request failed with status ${response.status}`);
+        throw toApiError(body, response.status);
       }
 
       for await (const event of readSseEvents(response)) {

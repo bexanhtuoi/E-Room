@@ -1,88 +1,115 @@
-﻿from datetime import date, datetime, timedelta
-from typing import Optional
+import json
 
+from fastapi import UploadFile
 from sqlmodel import Session
 
-from app.models import User
-from app.services.base import CRUDRepository
-from app.services.document import document_crud
-from app.services.message import message_crud
-from app.services.notification import notification_crud
-from app.services.pronunciation_score import pronunciation_score_crud
-from app.utils.datetime_utils import as_naive_utc, now_utc
+from app.repositories.user import user_crud
+from app.security import hash_password
+from app.services.base import ServiceBase
+from app.services.helpers import avatar_marker, ensure_owner
+from app.shared.exceptions import AvatarNotFoundError, UserNotFoundError
+from app.utils.datetime_utils import now_utc
+from app.utils.upload import read_upload
+
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
+AVATAR_TYPES = {"jpg", "png", "webp"}
+
+__all__ = [
+    "UserService",
+    "user_service",
+]
 
 
-def count_streak(active_days: set, today: date) -> int:
-    cursor = today if today in active_days else today - timedelta(days=1)
-
-    streak = 0
-    while cursor in active_days:
-        streak += 1
-        cursor -= timedelta(days=1)
-
-    return streak
+class UserService(ServiceBase):
+    def list_users(self, db: Session, skip: int = 0, limit: int = 10) -> list:
+        return user_crud.get_many(db, skip=skip, limit=limit)
 
 
-def peak_day(day_counts: dict) -> tuple[Optional[str], int]:
-    if not day_counts:
-        return None, 0
-
-    best_day = max(sorted(day_counts), key=lambda day: day_counts[day])
-
-    return best_day.isoformat(), day_counts[best_day]
+    def count_users(self, db: Session) -> int:
+        return user_crud.count(db)
 
 
-class UserCrud(CRUDRepository):
-    def __init__(self) -> None:
-        super().__init__(model=User)
+    def get_user_or_404(self, db: Session, user_id: int):
+        return self.one_or_404(user_crud.get_one, UserNotFoundError, db, id=user_id)
 
-    def delete_cascade(self, db: Session, user_id: int) -> None:
-        from app.services.room import room_crud
 
-        for room in room_crud.get_many(db, host_id=user_id):
-            room_crud.delete_cascade(db, room.id)
+    def get_user_by_email_or_404(self, db: Session, email: str):
+        return self.one_or_404(user_crud.get_one, UserNotFoundError, db, email=email)
 
-        for message in message_crud.get_many(db, user_id=user_id):
-            message_crud.delete(db, db_obj=message)
-        for notif in notification_crud.get_many(db, user_id=user_id):
-            notification_crud.delete(db, db_obj=notif)
-        for doc in document_crud.get_many(db, user_id=user_id):
-            document_crud.delete(db, db_obj=doc)
-        for score in pronunciation_score_crud.get_many(db, user_id=user_id):
-            pronunciation_score_crud.delete(db, db_obj=score)
 
-    def week_counts(self, db: Session, user_id: int) -> dict:
-        now = as_naive_utc(now_utc())
-        today = now.date()
-        monday = today - timedelta(days=today.weekday())
-        last_monday = monday - timedelta(weeks=1)
+    def get_users_by_role(self, db: Session, role: str, skip: int = 0, limit: int = 10) -> list:
+        return user_crud.get_many(db, role=role, skip=skip, limit=limit)
 
-        times = message_crud.get_message_times(
+
+    def my_stats(self, db: Session, user) -> dict:
+        return user_crud.week_counts(db, user.id)
+
+
+    def update_user(self, db: Session, user, user_id: int, user_in):
+        db_user = self.get_user_or_404(db, user_id)
+        ensure_owner(db_user.id, user)
+
+        obj_in_data = user_in.model_dump(exclude_unset=True)
+
+        if "role" in obj_in_data and user.role != "admin":
+            obj_in_data.pop("role")
+
+        if "password" in obj_in_data:
+            obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
+
+        if "interests" in obj_in_data and obj_in_data["interests"] is not None:
+            obj_in_data["interests"] = json.dumps(obj_in_data["interests"])
+
+        obj_in_data["updated_at"] = now_utc()
+
+        return user_crud.update(db, db_obj=db_user, obj_in=obj_in_data)
+
+
+    def delete_user(self, db: Session, user, user_id: int):
+        db_user = self.get_user_or_404(db, user_id)
+        ensure_owner(db_user.id, user)
+
+        user_crud.delete_cascade(db, user_id)
+
+        return user_crud.delete(db, db_obj=db_user)
+
+
+    async def upload_avatar(self, db: Session, user, file: UploadFile):
+        from app.integration.minio import put_avatar
+
+        raw, _ = await read_upload(file, AVATAR_TYPES, MAX_AVATAR_BYTES, "Avatar")
+        put_avatar(raw, user.id)
+
+        return user_crud.update(
             db,
-            user_id=user_id,
-            since=datetime.combine(last_monday, datetime.min.time()),
+            db_obj=user,
+            obj_in={"avatar_url": avatar_marker(user.id), "updated_at": now_utc()},
         )
-        days = [as_naive_utc(moment).date() for moment in times]
-
-        this_week = sum(1 for day in days if day >= monday)
-        last_week = sum(1 for day in days if last_monday <= day < monday)
-
-        recent_counts: dict = {}
-        for day in days:
-            if day >= today - timedelta(days=6):
-                recent_counts[day] = recent_counts.get(day, 0) + 1
-
-        best_day, best_count = peak_day(recent_counts)
-
-        return {
-            "messages_total": message_crud.count(db, user_id=user_id),
-            "messages_this_week": this_week,
-            "messages_last_week": last_week,
-            "week_delta": this_week - last_week,
-            "streak_days": count_streak(set(days), today),
-            "most_active_day": best_day,
-            "most_active_day_count": best_count,
-        }
 
 
-user_crud = UserCrud()
+    def download_avatar_data(self, db: Session, user_id: int) -> dict:
+        from app.integration.minio import get_object
+
+        db_user = user_crud.get_one(db, id=user_id)
+
+        if not db_user or db_user.avatar_url != avatar_marker(user_id):
+            raise AvatarNotFoundError()
+
+        try:
+            data = get_object(f"avatars/{user_id}")
+        except Exception:
+            raise AvatarNotFoundError(detail="Không tìm thấy ảnh trong kho lưu trữ.")
+
+        if data[:2] == b"\xff\xd8":
+            media_type = "image/jpeg"
+        elif data[:8] == b"\x89PNG\r\n\x1a\n":
+            media_type = "image/png"
+        elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            media_type = "image/webp"
+        else:
+            media_type = "application/octet-stream"
+
+        return {"data": data, "media_type": media_type}
+
+
+user_service = UserService()

@@ -5,14 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from app.ai.audio_vad import create_user_audio_state, process_audio_frame
-from app.ai.raw_recorder import (
+from app.ai.stt.completion import handle_speech_completion
+from app.ai.stt.paths import metadata_path, raw_audio_path
+from app.ai.stt.recorder import (
     RawAttemptRecorder,
     UtteranceRef,
-    metadata_path,
-    raw_audio_path,
 )
-from app.ai.transcriber import handle_speech_completion
+from app.ai.vad.vad import create_user_audio_state, process_audio_frame
 
 
 def _voice_frame(n: int = 1600) -> np.ndarray:
@@ -267,47 +266,38 @@ class TestRecorderWithVad:
     def test_cooperates_with_real_vad_pipeline(self, speech_dir):
         rec = _make_recorder(end_silence_seconds=0.05, energy_threshold=0.01)
         state = create_user_audio_state("7")
+        calls = {"n": 0}
 
+        def fake_iterator(window, return_seconds=False):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                return {"start": 0}
+            if calls["n"] == 8:
+                return {"end": 0}
+            return None
+
+        state["vad_iterator"] = fake_iterator
         voice = _voice_frame(1600)
-        silence = _silence_frame(1600)
 
-        # speech segment
-        for _ in range(10):
+        ref = None
+        for _ in range(4):
             pos_before = rec.samples_written
             was = state["is_speaking"]
             rec.write_frame(voice)
             done = process_audio_frame(
                 state,
                 voice,
-                energy_threshold=0.01,
-                silence_seconds=0.0,
+                silence_seconds=30.0,
                 min_speech_seconds=0.05,
-                max_speech_seconds=5.0,
+                max_speech_seconds=60.0,
             )
             if (not was) and state["is_speaking"]:
                 rec.begin_utterance(pos_before)
             if done is not None:
-                rec.end_utterance(len(done))
-        assert state["is_speaking"] is True
-        assert rec.is_open
-
-        # silence → VAD finalize
-        pos_before = rec.samples_written
-        was = state["is_speaking"]
-        rec.write_frame(silence)
-        done = process_audio_frame(
-            state,
-            silence,
-            energy_threshold=0.01,
-            silence_seconds=0.0,
-            min_speech_seconds=0.05,
-            max_speech_seconds=5.0,
-        )
-        if done is not None:
-            ref = rec.end_utterance(len(done))
-        elif was and not state["is_speaking"]:
-            rec.abandon_utterance()
+                ref = rec.end_utterance(len(done))
+                break
         rec.check_limits()
+        rec.close()
 
         assert done is not None
         assert ref is not None
@@ -344,7 +334,7 @@ class TestHandleSpeechCompletionAttach:
         }
 
         with patch(
-            "app.ai.transcriber.transcribe_audio_async",
+            "app.ai.stt.completion.transcribe_audio_async",
             AsyncMock(return_value=stt_result),
         ):
             await handle_speech_completion(

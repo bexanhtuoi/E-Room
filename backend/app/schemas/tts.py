@@ -2,8 +2,6 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
-from app.ai.tts import is_supported_voice
-
 
 class TTSVoiceOption(BaseModel):
     id: str
@@ -28,6 +26,8 @@ class TTSSpeakRequest(BaseModel):
     @field_validator("voice")
     @classmethod
     def validate_voice(cls, value: Optional[str]) -> Optional[str]:
+        from app.ai.tts import is_supported_voice
+
         if value is None:
             return None
         if not is_supported_voice(value):

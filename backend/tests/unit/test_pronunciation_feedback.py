@@ -1,4 +1,3 @@
-"""Nhan xet AI: 2 prompt md rieng (feedback_utterance.md + assessment.md) + LLM local."""
 import asyncio
 from unittest.mock import AsyncMock, patch
 
@@ -7,7 +6,7 @@ import numpy as np
 from app.ai.pronunciation import (
     SESSION_FEEDBACK_PROMPT,
     SYSTEM_PROMPT,
-    _extract_json,
+    extract_json,
     generate_feedback,
 )
 
@@ -28,10 +27,10 @@ class TestPromptSections:
         assert "TIẾNG VIỆT" in SESSION_FEEDBACK_PROMPT
 
     def test_extract_json(self):
-        assert _extract_json('{"summary": "ok"}') == {"summary": "ok"}
-        assert _extract_json('nhan xet: {"summary": "ok"} het') == {"summary": "ok"}
-        assert _extract_json("text thuan khong json") is None
-        assert _extract_json("") is None
+        assert extract_json('{"summary": "ok"}') == {"summary": "ok"}
+        assert extract_json('nhan xet: {"summary": "ok"} het') == {"summary": "ok"}
+        assert extract_json("text thuan khong json") is None
+        assert extract_json("") is None
 
     def test_prompt_forbids_thinking(self):
         assert "ONLY the JSON" in SYSTEM_PROMPT
@@ -39,11 +38,11 @@ class TestPromptSections:
         assert "ONLY the JSON" in SESSION_FEEDBACK_PROMPT
 
     def test_extract_json_strips_think_block(self):
-        from app.ai.pronunciation import _strip_reasoning
+        from app.ai.pronunciation import strip_reasoning
 
         raw = "<think>reasoning in english</think>{\"summary\": \"ok\"}"
-        assert _strip_reasoning(raw) == '{"summary": "ok"}'
-        assert _extract_json(raw) == {"summary": "ok"}
+        assert strip_reasoning(raw) == '{"summary": "ok"}'
+        assert extract_json(raw) == {"summary": "ok"}
 
     def test_thinking_plus_json_returns_parsed_not_raw(self):
         out, _, _ = TestGenerateFeedback()._run(
@@ -70,7 +69,7 @@ class TestGenerateFeedback:
     def _run(self, content):
         fake = AsyncMock()
         fake.ainvoke.return_value = FakeMsg(content)
-        with patch("app.ai.ChatOpenAI", return_value=fake) as mock_cls:
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake) as mock_cls:
             out = asyncio.run(generate_feedback({"utterances": []}))
         return out, mock_cls, fake
 
@@ -93,7 +92,7 @@ class TestGenerateFeedback:
 
         fake2 = AsyncMock()
         fake2.ainvoke.return_value = FakeMsg('{"summary": "s2"}')
-        with patch("app.ai.ChatOpenAI", return_value=fake2):
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake2):
             asyncio.run(generate_feedback({}, system_prompt=SFP, user_label="session_scores"))
         messages = fake2.ainvoke.call_args[0][0]
         assert messages[0]["content"] == SFP
@@ -111,7 +110,7 @@ class TestFallbackFeedback:
             ],
             "top_errors": [{"pattern": "/θ/ → /s/", "count": 1, "examples": ["think"]}],
         }
-        with patch("app.ai.ChatOpenAI", side_effect=RuntimeError("connection refused")):
+        with patch("app.ai.llm.client.ChatOpenAI", side_effect=RuntimeError("connection refused")):
             out = asyncio.run(generate_feedback(report))
         assert "error" not in out
         assert out["fallback"] is True
@@ -123,7 +122,7 @@ class TestFallbackFeedback:
                 {"word": "think", "score": 58.5, "status": "pronunciation_error", "expected_ipa": "/θɪŋk/"}],
             "top_errors": [],
         }]}
-        with patch("app.ai.ChatOpenAI", side_effect=RuntimeError("connection refused")):
+        with patch("app.ai.llm.client.ChatOpenAI", side_effect=RuntimeError("connection refused")):
             out2 = request_pronun_feedback(session_report, system_prompt="x", user_label="session_scores")
         assert out2["fallback"] is True
         assert out2["error_words"][0]["tip"]

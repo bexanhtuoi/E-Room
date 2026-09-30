@@ -67,7 +67,8 @@ def put_avatar(file_bytes: bytes, user_id: int | str) -> str:
     return object_name
 
 
-def put_document(file_bytes: bytes, filename: str) -> str:
-    object_name = f"documents/{uuid4().hex}_{filename}"
+def put_document(file_bytes: bytes, filename: str, room_id: int | str | None = None) -> str:
+    scope = f"room_{room_id}" if room_id is not None else "general"
+    object_name = f"documents/{scope}/{uuid4().hex}_{filename}"
     put_object(object_name, file_bytes)
     return object_name

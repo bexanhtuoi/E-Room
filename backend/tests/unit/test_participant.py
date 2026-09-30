@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.ai.participant import split_words, stream_to_room
+from app.ai.llm.participant import split_words, stream_to_room
 
 
 class TestSplitWords:
@@ -35,9 +35,9 @@ class TestStreamToRoom:
         mock_room = make_mock_room()
 
         with (
-            patch("app.ai.participant.rtc.Room", return_value=mock_room),
-            patch("app.ai.participant.create_token", return_value="tok"),
-            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+            patch("app.ai.llm.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.llm.participant.create_token", return_value="tok"),
+            patch("app.ai.llm.participant.asyncio.sleep", new=AsyncMock()),
         ):
             full = await stream_to_room(7, fake_events())
 
@@ -62,9 +62,9 @@ class TestStreamToRoom:
         mock_room = make_mock_room()
 
         with (
-            patch("app.ai.participant.rtc.Room", return_value=mock_room),
-            patch("app.ai.participant.create_token", return_value="tok"),
-            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+            patch("app.ai.llm.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.llm.participant.create_token", return_value="tok"),
+            patch("app.ai.llm.participant.asyncio.sleep", new=AsyncMock()),
         ):
             full = await stream_to_room(7, fake_events())
 
@@ -85,9 +85,9 @@ class TestStreamToRoom:
         mock_room = make_mock_room()
 
         with (
-            patch("app.ai.participant.rtc.Room", return_value=mock_room),
-            patch("app.ai.participant.create_token", return_value="tok"),
-            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+            patch("app.ai.llm.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.llm.participant.create_token", return_value="tok"),
+            patch("app.ai.llm.participant.asyncio.sleep", new=AsyncMock()),
         ):
             assert await stream_to_room(7, fake_events()) == "hello"
 
@@ -100,9 +100,9 @@ class TestStreamToRoom:
         mock_room = make_mock_room()
 
         with (
-            patch("app.ai.participant.rtc.Room", return_value=mock_room),
-            patch("app.ai.participant.create_token", return_value="tok"),
-            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+            patch("app.ai.llm.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.llm.participant.create_token", return_value="tok"),
+            patch("app.ai.llm.participant.asyncio.sleep", new=AsyncMock()),
         ):
             await stream_to_room(7, fake_events(), identity="ai_assistant_abc123", job_id="abc123")
 
@@ -120,9 +120,9 @@ class TestStreamToRoom:
         mock_room = make_mock_room()
 
         with (
-            patch("app.ai.participant.rtc.Room", return_value=mock_room),
-            patch("app.ai.participant.create_token", return_value="tok") as mock_token,
-            patch("app.ai.participant.asyncio.sleep", new=AsyncMock()),
+            patch("app.ai.llm.participant.rtc.Room", return_value=mock_room),
+            patch("app.ai.llm.participant.create_token", return_value="tok") as mock_token,
+            patch("app.ai.llm.participant.asyncio.sleep", new=AsyncMock()),
         ):
             await stream_to_room(7, fake_events())
             assert mock_token.call_args[1]["user_id"] == "ai_assistant"

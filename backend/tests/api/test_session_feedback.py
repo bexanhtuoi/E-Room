@@ -16,7 +16,7 @@ def _make_room_and_session(client: TestClient, alice: dict) -> tuple[dict, int]:
 
 
 def _write_jsonl_utterance(room_id: int, user_id: int, scored: bool) -> None:
-    from app.ai.speech_log import append_utterance, attach_pronunciation
+    from app.ai.stt.speech_log import append_utterance, attach_pronunciation
 
     append_utterance(room_id, user_id, "Tester", message_id=1, text="I think this is good")
     if scored:
@@ -37,7 +37,7 @@ def _write_db_score(room_id: int, user_id: int) -> None:
     from sqlmodel import Session as DBSession
 
     from app.database import engine
-    from app.services.pronunciation_score import pronunciation_score_crud
+    from app.repositories.pronunciation_score import pronunciation_score_crud
 
     with DBSession(engine) as db:
         pronunciation_score_crud.upsert_score(
@@ -70,7 +70,7 @@ class TestSessionFeedback:
         room, session_id = _make_room_and_session(client, alice)
         _write_db_score(room["id"], alice["id"])
 
-        with patch("app.api.routers.session.request_pronun_feedback", return_value={"summary": "Short."}) as mock_fb:
+        with patch("app.ai.pronunciation.request_pronun_feedback", return_value={"summary": "Short."}) as mock_fb:
             resp = client.post(f"/api/v1/sessions/{session_id}/feedback")
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -86,7 +86,7 @@ class TestSessionFeedback:
         room, session_id = _make_room_and_session(client, alice)
         _write_jsonl_utterance(room["id"], alice["id"], scored=True)
 
-        with patch("app.api.routers.session.request_pronun_feedback", return_value={"summary": "Legacy."}):
+        with patch("app.ai.pronunciation.request_pronun_feedback", return_value={"summary": "Legacy."}):
             resp = client.post(f"/api/v1/sessions/{session_id}/feedback")
         assert resp.status_code == 200, resp.text
         assert resp.json()["scored_count"] == 1
@@ -105,10 +105,9 @@ class TestSessionFeedback:
 
 class TestScoreDbWriteThrough:
     def test_audio_utterance_returns_202_and_enqueues(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
-        """Có audio -> viec nang -> 202 + enqueue, khong cham sync (het 504)."""
         import numpy as np
 
-        from app.ai.speech_log import append_utterance
+        from app.ai.stt.speech_log import append_utterance
 
         monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
         room, _ = _make_room_and_session(client, alice)
@@ -117,18 +116,63 @@ class TestScoreDbWriteThrough:
             audio_data=np.zeros(16000, dtype=np.int16),
         )
 
-        with patch("app.api.routers.speech.score_single_utterance") as mock_task:
+        with patch("app.tasks.scoring.score_single_utterance") as mock_task:
             resp = client.post(f"/api/v1/rooms/{room['id']}/speech-logs/2/score")
             assert resp.status_code == 202, resp.text
             assert resp.json()["status"] == "queued"
             mock_task.apply_async.assert_called_once()
 
+    def test_patch_resets_score_and_feedback(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
+        from sqlmodel import Session as DBSession
+
+        from app.ai.stt.speech_log import read_user_log
+        from app.database import engine
+        from app.repositories.pronunciation_score import pronunciation_score_crud
+
+        monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
+        room, _ = _make_room_and_session(client, alice)
+        _write_jsonl_utterance(room["id"], alice["id"], scored=False)
+
+        resp = client.post(f"/api/v1/rooms/{room['id']}/speech-logs/1/score")
+        assert resp.status_code == 200, resp.text
+
+        with DBSession(engine) as db:
+            rows = pronunciation_score_crud.scored_in_window(
+                db, room["id"], alice["id"], start="2000-01-01T00:00:00"
+            )
+        assert len(rows) == 1
+
+        resp = client.patch(
+            f"/api/v1/rooms/{room['id']}/speech-logs/1",
+            json={"corrected_text": "I think this is great"},
+        )
+        assert resp.status_code == 200, resp.text
+
+        with DBSession(engine) as db:
+            rows = pronunciation_score_crud.scored_in_window(
+                db, room["id"], alice["id"], start="2000-01-01T00:00:00"
+            )
+        assert rows == []
+
+        entries = read_user_log(room["id"], alice["id"])
+        assert entries[0]["pronunciation"] is None
+
+    def test_utterance_feedback_409_when_not_scored(
+        self, client: TestClient, alice: dict, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
+        room, _ = _make_room_and_session(client, alice)
+        _write_jsonl_utterance(room["id"], alice["id"], scored=False)
+
+        resp = client.post(f"/api/v1/rooms/{room['id']}/speech-logs/1/feedback", json={})
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "NO_SCORE_REPORT"
+
     def test_heuristic_rescore_writes_db(self, client: TestClient, alice: dict, tmp_path, monkeypatch):
-        """Không audio -> heuristic (nhẹ, không cần model) nhưng vẫn write-through DB."""
         from sqlmodel import Session as DBSession
 
         from app.database import engine
-        from app.services.pronunciation_score import pronunciation_score_crud
+        from app.repositories.pronunciation_score import pronunciation_score_crud
 
         monkeypatch.setattr(settings, "speech_log_dir", str(tmp_path))
         room, _ = _make_room_and_session(client, alice)

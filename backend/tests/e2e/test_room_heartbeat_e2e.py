@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, patch
 
 from sqlmodel import Session
 
-from app.ai.tasks import check_room_heartbeats, stream_ai_response
+from app.tasks.maintenance import check_room_heartbeats
+from app.tasks.room_jobs import stream_ai_response
 from app.database import engine
 from app.models import MessageRole, RoomStatus
 from app.services import message_crud, room_crud
@@ -28,11 +29,11 @@ class TestRoomHeartbeatE2E:
 
         # 2. Mock Redis co 3 participant va phong khong co hoat dong trong thoi gian dai
         with (
-            patch("app.ai.tasks.scard", return_value=3),
-            patch("app.ai.tasks.exists", return_value=False),
-            patch("app.ai.tasks.get", return_value=str(100.0)),  # Last activity rat xa trong qua khu
-            patch("app.ai.tasks.set_if_absent", return_value=True),
-            patch("app.ai.tasks.enqueue_ai_job") as mock_enqueue_job,
+            patch("app.tasks.maintenance.scard", return_value=3),
+            patch("app.tasks.maintenance.exists", return_value=False),
+            patch("app.tasks.maintenance.get", return_value=str(100.0)),  # Last activity rat xa trong qua khu
+            patch("app.tasks.maintenance.set_if_absent", return_value=True),
+            patch("app.tasks.maintenance.enqueue_ai_job") as mock_enqueue_job,
         ):
             # Chay Celery Beat task kiem tra heartbeat
             queued_count = check_room_heartbeats()
@@ -53,10 +54,10 @@ class TestRoomHeartbeatE2E:
             return "What ethical concerns do you think are most critical when deploying AI in healthcare?"
 
         with (
-            patch("app.ai.tasks.acquire_slot", return_value=True),
-            patch("app.ai.tasks.stream_to_room", side_effect=fake_stream_to_room),
-            patch("app.ai.tasks.delete"),
-            patch("app.ai.tasks.release_slot"),
+            patch("app.tasks.room_jobs.acquire_slot", return_value=True),
+            patch("app.tasks.room_jobs.stream_to_room", side_effect=fake_stream_to_room),
+            patch("app.tasks.room_jobs.delete"),
+            patch("app.tasks.room_jobs.release_slot"),
         ):
             # Chay worker task stream_ai_response truc tiep
             message_id = stream_ai_response.apply(
@@ -76,7 +77,7 @@ class TestRoomHeartbeatE2E:
 
 class TestEnsureRoomWorkers:
     def test_revives_transcriber_for_live_room(self):
-        from app.ai.tasks import ensure_room_workers
+        from app.tasks.maintenance import ensure_room_workers
 
         room_name = f"e2e-revive-room-{uuid.uuid4().hex[:8]}"
         with Session(engine) as db:
@@ -87,9 +88,9 @@ class TestEnsureRoomWorkers:
             room_id = room.id
 
         with (
-            patch("app.ai.tasks.scard", return_value=2),
-            patch("app.ai.tasks.enqueue_room_transcriber") as mock_transcriber,
-            patch("app.ai.tasks.enqueue_room_observer") as mock_observer,
+            patch("app.tasks.maintenance.scard", return_value=2),
+            patch("app.tasks.maintenance.enqueue_room_transcriber") as mock_transcriber,
+            patch("app.tasks.maintenance.enqueue_room_observer") as mock_observer,
         ):
             ensured = ensure_room_workers()
             assert ensured >= 1
@@ -101,12 +102,12 @@ class TestEnsureRoomWorkers:
         )
 
     def test_skips_empty_rooms(self):
-        from app.ai.tasks import ensure_room_workers
+        from app.tasks.maintenance import ensure_room_workers
 
         with (
-            patch("app.ai.tasks.scard", return_value=0),
-            patch("app.ai.tasks.enqueue_room_transcriber") as mock_transcriber,
-            patch("app.ai.tasks.enqueue_room_observer") as mock_observer,
+            patch("app.tasks.maintenance.scard", return_value=0),
+            patch("app.tasks.maintenance.enqueue_room_transcriber") as mock_transcriber,
+            patch("app.tasks.maintenance.enqueue_room_observer") as mock_observer,
         ):
             ensure_room_workers()
             mock_transcriber.assert_not_called()
@@ -124,8 +125,8 @@ class TestStaleEmptyRooms:
             room_id = room.id
 
         with (
-            patch("app.ai.tasks.scard", return_value=0),
-            patch("app.ai.tasks.get", return_value=str(100.0)),
+            patch("app.tasks.maintenance.scard", return_value=0),
+            patch("app.tasks.maintenance.get", return_value=str(100.0)),
         ):
             check_room_heartbeats()
 
@@ -144,8 +145,8 @@ class TestStaleEmptyRooms:
             room_id = room.id
 
         with (
-            patch("app.ai.tasks.scard", return_value=0),
-            patch("app.ai.tasks.get", return_value=str(time.time())),
+            patch("app.tasks.maintenance.scard", return_value=0),
+            patch("app.tasks.maintenance.get", return_value=str(time.time())),
         ):
             check_room_heartbeats()
 

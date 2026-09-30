@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from app.ai.query import stream_events, think_lines
+from app.ai.llm.query import stream_events, think_lines
 
 
 def make_tool_message(tool_name: str) -> AIMessage:
@@ -63,7 +63,7 @@ class TestStreamEvents:
             ("messages", (AIMessage(content="lo"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         assert out[0] == {"kind": "thinking", "text": "Searching documents…"}
@@ -79,7 +79,7 @@ class TestStreamEvents:
             ("messages", (AIMessage(content="Hi"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         assert out[0] == {"kind": "thinking", "text": "Searching the web…"}
@@ -93,7 +93,7 @@ class TestStreamEvents:
             ("messages", (AIMessage(content="Hi"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         kinds = [(e["kind"], e["text"]) for e in out]
@@ -116,7 +116,7 @@ class TestReasoningThinking:
             ("messages", (AIMessage(content="Hi"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         assert out[0] == {"kind": "thinking", "text": "Let me think"}
@@ -129,7 +129,7 @@ class TestReasoningThinking:
             ("messages", (AIMessage(content="", additional_kwargs={"reasoning_content": "abc"}), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         assert out == [
@@ -146,7 +146,7 @@ class TestReasoningThinking:
             ("messages", (AIMessage(content="Hi"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         assert out.count({"kind": "thinking", "text": "Searching the web…"}) == 1
@@ -158,7 +158,7 @@ class TestReasoningThinking:
             ("messages", (AIMessage(content="keep"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event async for event in stream_events("hi")]
 
         assert out == [{"kind": "token", "text": "keep"}]
@@ -170,7 +170,7 @@ class TestReasoningThinking:
             ("messages", (AIMessage(content="Hi"), {"langgraph_node": "model"})),
         ]
 
-        with patch("app.ai.query.get_agent", return_value=FakeAgent(events)):
+        with patch("app.ai.llm.query.get_agent", return_value=FakeAgent(events)):
             out = [event["text"] async for event in stream_events("hi") if event.get("kind") == "token"]
 
         assert out == ["Hi"]

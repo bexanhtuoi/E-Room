@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.models import MessageRole
-from app.services.session import session_lines
+from app.services.session import session_service
 
 
 def make_message(role, user_id, text):
@@ -38,7 +38,7 @@ class TestSessionLinesSpeaker:
             patch("app.services.session.message_crud.get_many", return_value=messages),
             patch("app.services.session.user_crud.get_by_ids", return_value=users),
         ):
-            lines = session_lines(object(), make_session(9))
+            lines = session_service.session_lines(object(), make_session(9))
 
         assert [line["speaker"] for line in lines] == ["Pham Huy Hoang", "AI", "Other Guy"]
 
@@ -51,7 +51,7 @@ class TestSessionLinesSpeaker:
             patch("app.services.session.message_crud.get_many", return_value=messages),
             patch("app.services.session.user_crud.get_by_ids", return_value=[]),
         ):
-            lines = session_lines(object(), make_session(9))
+            lines = session_service.session_lines(object(), make_session(9))
 
         assert len(lines) == 1
         assert lines[0]["speaker"] == "AI"

@@ -31,8 +31,8 @@ def make_client(tag: str) -> TestClient:
 
 def join_quiet(client: TestClient, room_id: int):
     with (
-        patch("app.api.routers.room.enqueue_room_observer"),
-        patch("app.api.routers.room.enqueue_room_transcriber"),
+        patch("app.tasks.room_jobs.enqueue_room_observer"),
+        patch("app.tasks.room_jobs.enqueue_room_transcriber"),
     ):
         return client.post(f"/api/v1/rooms/{room_id}/join")
 
@@ -72,6 +72,27 @@ class TestRoomCapacity:
         finally:
             redis_delete(key)
 
+    def test_seventh_user_rejected_from_six_seat_room(self):
+        from app.integration.redis import delete as redis_delete
+
+        host = make_client("sixhost")
+        room = host.post("/api/v1/rooms/", json={"name": f"six-{uuid.uuid4().hex[:6]}", "max_participants": 6}).json()
+        key = f"room:{room['id']}:participants"
+
+        try:
+            members = [make_client(f"six{i}") for i in range(6)]
+            for member in members:
+                assert join_quiet(member, room["id"]).status_code == 200
+
+            outsider = make_client("six-outsider")
+            assert join_quiet(outsider, room["id"]).status_code == 403
+            assert outsider.post(f"/api/v1/rooms/{room['id']}/token").status_code == 403
+
+            for member in members:
+                member.post(f"/api/v1/rooms/{room['id']}/leave")
+        finally:
+            redis_delete(key)
+
     def test_join_stays_open_when_presence_unavailable(self):
         from app.integration.redis import delete as redis_delete
 
@@ -80,7 +101,7 @@ class TestRoomCapacity:
         key = f"room:{room['id']}:participants"
 
         try:
-            with patch("app.api.routers.room.scard", side_effect=RedisError("redis down")):
+            with patch("app.services.room.scard", side_effect=RedisError("redis down")):
                 assert join_quiet(host, room["id"]).status_code == 200
         finally:
             host.post(f"/api/v1/rooms/{room['id']}/leave")
@@ -89,7 +110,7 @@ class TestRoomCapacity:
     def test_participants_unavailable_when_presence_down(self, client: TestClient, alice: dict):
         room = client.post("/api/v1/rooms/", json={"name": f"partdown-{alice['id']}"}).json()
 
-        with patch("app.api.routers.room.smembers", side_effect=RedisError("redis down")):
+        with patch("app.services.room.smembers", side_effect=RedisError("redis down")):
             assert client.get(f"/api/v1/rooms/{room['id']}/participants").status_code == 503
 
 

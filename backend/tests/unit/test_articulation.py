@@ -1,4 +1,4 @@
-from app.ai.articulation import guide_for_word, mouth_guide, parse_confusion, vi_reading
+from app.ai.pronunciation.articulation import guide_for_word, mouth_guide, parse_confusion, vi_reading
 
 
 class TestParseConfusion:

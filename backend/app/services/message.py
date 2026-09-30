@@ -1,102 +1,166 @@
-﻿import json
-from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from app.database import engine
 from app.log import get_logger
-from app.models import Message, MessageRole, User
-from app.services.base import CRUDRepository
-from app.utils.datetime_utils import as_naive_utc, now_utc
+from app.models import MessageRole
+from app.repositories.message import message_crud
+from app.repositories.room import room_crud
+from app.services.base import ServiceBase
+from app.services.helpers import ensure_owner, is_session_chat
+from app.shared.exceptions import (
+    BadRequestError,
+    MessageNotFoundError,
+    NotAuthorizedError,
+    RoomNotFoundError,
+)
+from app.utils.chat import scrub_meta, strip_ai_mention
 
 log = get_logger("app.services.message")
 
-DUPLICATE_TRANSCRIPT_SECONDS = 10
+__all__ = [
+    "MessageService",
+    "message_service",
+]
 
 
-def is_recent_duplicate(db: Session, room_id: int, user_id: Optional[int], text: str) -> bool:
-    cutoff = as_naive_utc(now_utc()) - timedelta(seconds=DUPLICATE_TRANSCRIPT_SECONDS)
-    existing = db.exec(
-        select(Message)
-        .where(
-            Message.room_id == room_id,
-            Message.user_id == user_id,
-            Message.text == text,
-            Message.created_at >= cutoff,
-        )
-        .limit(1)
-    ).first()
-    return existing is not None
-
-
-class MessageCrud(CRUDRepository):
-    def __init__(self) -> None:
-        super().__init__(model=Message)
-
-    def get_message_times(
-        self,
+class MessageService(ServiceBase):
+    def list_messages(self,
         db: Session,
-        user_id: int,
-        since: Optional[datetime] = None,
-    ) -> List[datetime]:
+        user,
+        room_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        role: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> list:
+        from app.services.room import room_service
 
-        stmt = select(Message.created_at).where(Message.user_id == user_id)
+        if room_id is not None:
+            room = room_crud.get_one(db, id=room_id)
 
-        if since is not None:
-            stmt = stmt.where(Message.created_at >= since)
+            if room is not None:
+                room_service.ensure_room_access(room, user)
 
-        return list(db.exec(stmt).all())
+        is_self_lookup = user_id is not None and str(user_id) == str(user.id)
 
-    def save_transcript(
-        self,
-        room_id: int,
-        user_identity: str,
-        text: str,
-        duration: float,
-        confidence: float,
-        avg_logprob: float,
-        words_count: int,
-        language: Optional[str] = None,
-    ) -> tuple[Optional[int], Optional[int], str]:
-        user_id: Optional[int] = None
-        user_name = user_identity
+        if user_id is not None and room_id is None:
+            if not is_self_lookup and user.role != "admin":
+                raise NotAuthorizedError()
+
+        if room_id is None and not is_self_lookup and user.role != "admin":
+            raise BadRequestError(detail="Cần truyền room_id.")
+
+        filter_kwargs = {}
+
+        if room_id is not None:
+            filter_kwargs["room_id"] = room_id
+
+        if user_id is not None:
+            filter_kwargs["user_id"] = user_id
+
+        if role is not None:
+            filter_kwargs["role"] = role
+
+        messages = message_crud.get_many(db, skip=skip, limit=limit, order_by="id", desc=True, **filter_kwargs)
+
+        return [message for message in messages if not is_session_chat(message)]
+
+
+
+    def count_messages(self,
+        db: Session,
+        user,
+        room_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        role: Optional[str] = None,
+    ) -> int:
+        from app.services.room import room_service
+
+        if room_id is not None:
+            room = room_crud.get_one(db, id=room_id)
+
+            if room is not None:
+                room_service.ensure_room_access(room, user)
+
+        if room_id is None and user_id is None and user.role != "admin":
+            raise BadRequestError(detail="Cần truyền room_id hoặc user_id.")
+
+        if user_id is not None and room_id is None:
+            if str(user_id) != str(user.id) and user.role != "admin":
+                raise NotAuthorizedError()
+
+        filter_kwargs = {}
+
+        if room_id is not None:
+            filter_kwargs["room_id"] = room_id
+
+        if user_id is not None:
+            filter_kwargs["user_id"] = user_id
+
+        if role is not None:
+            filter_kwargs["role"] = role
+
+        return message_crud.count(db, **filter_kwargs)
+
+
+
+    def get_message_data(self, db: Session, user, message_id: int):
+        from app.services.room import room_service
+
+        message = self.one_or_404(message_crud.get_one, MessageNotFoundError, db, id=message_id)
+        room = room_crud.get_one(db, id=message.room_id)
+
+        if room is not None:
+            room_service.ensure_room_access(room, user)
+
+        return message
+
+
+
+    def create_message(self, db: Session, user, message_in):
+        from app.services.room import room_service
+        from app.tasks.helpers import mark_room_activity
+        from app.tasks.room_jobs import enqueue_ai_job
+
+        room = self.one_or_404(room_crud.get_one, RoomNotFoundError, db, id=message_in.room_id)
+        room_service.ensure_room_access(room, user)
+
+        obj_in_data = message_in.model_dump()
+        obj_in_data["user_id"] = user.id
+        obj_in_data["role"] = MessageRole.USER
+        obj_in_data["meta_data"] = scrub_meta(obj_in_data.get("meta_data"))
+
+        new_message = message_crud.create(db, obj_in=obj_in_data)
 
         try:
-            user_id = int(user_identity)
-        except ValueError:
-            pass
+            mark_room_activity(message_in.room_id)
+            query = strip_ai_mention(message_in.text)
 
-        with Session(engine) as db:
-            if user_id:
-                user_obj = db.exec(select(User).where(User.id == user_id)).first()
-                if user_obj:
-                    user_name = user_obj.full_name
+            if query:
+                enqueue_ai_job(
+                    message_in.room_id,
+                    "answer",
+                    query,
+                    new_message.id,
+                )
+        except Exception as error:
+            log.warning("Message post-processing skipped | room_id=%s error=%s", message_in.room_id, error)
 
-            if is_recent_duplicate(db, room_id, user_id, text):
-                log.info("Dropping duplicate transcript | room_id=%s user=%s text='%s'", room_id, user_identity, text[:80])
-                return None, user_id, user_name
-
-            meta_data = {
-                "source": "speech_to_text",
-                "language": language or "en",
-                "duration": duration,
-                "confidence": confidence,
-                "avg_logprob": avg_logprob,
-                "words_count": words_count,
-            }
-
-            message = self.create(
-                db,
-                obj_in={
-                    "room_id": room_id,
-                    "user_id": user_id,
-                    "role": MessageRole.USER,
-                    "text": text,
-                    "meta_data": json.dumps(meta_data),
-                },
-            )
-            return message.id, user_id, user_name
+        return new_message
 
 
-message_crud = MessageCrud()
+
+    def delete_message(self, db: Session, user, message_id: int):
+        message = message_crud.get_one(db, id=message_id)
+
+        if not message:
+            raise MessageNotFoundError()
+
+        ensure_owner(message.user_id, user)
+
+        return message_crud.delete(db, db_obj=message)
+
+
+
+message_service = MessageService()

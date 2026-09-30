@@ -1,6 +1,4 @@
-﻿from datetime import timedelta
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
@@ -8,8 +6,8 @@ from sqlmodel import Session
 from app.config import settings
 from app.database import get_session
 from app.schemas import UserCreateSchema, UserResponse
-from app.security import create_access_token, hash_password, set_auth_cookie, verify_password
-from app.services import user_crud
+from app.security import set_auth_cookie
+from app.services.auth import auth_service
 from app.utils.rate_limit import check_rate_limit
 
 router = APIRouter()
@@ -28,19 +26,7 @@ def register(
         settings.rate_limit_register_window_seconds,
     )
 
-    db_user = user_crud.get_one(db, email=user_in.email)
-
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
-
-    obj_in_data = user_in.model_dump()
-    obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
-    new_user = user_crud.create(db, obj_in=obj_in_data)
-
-    return new_user
+    return auth_service.register_user(db, user_in)
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)
@@ -56,25 +42,10 @@ def login(
         settings.rate_limit_login_window_seconds,
     )
 
-    db_user = user_crud.get_one(db, email=form_data.username)
-
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect email or password",
-        )
-
-    if not verify_password(form_data.password, db_user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect email or password",
-        )
-
-    access_token_expires = timedelta(minutes=settings.access_token_expires_minutes)
-    access_token = create_access_token(data=db_user.id, expires_delta=access_token_expires)
+    _, token, expires = auth_service.login_user(db, form_data.username, form_data.password)
 
     response = JSONResponse(content={"message": "Login successful"})
-    set_auth_cookie(response, access_token, access_token_expires)
+    set_auth_cookie(response, token, expires)
 
     return response
 
@@ -85,4 +56,3 @@ def logout() -> JSONResponse:
     response.delete_cookie(key="access_token")
 
     return response
-

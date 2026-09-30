@@ -1,12 +1,12 @@
-﻿from typing import List
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlmodel import Session
 
 from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
-from app.services import notification_crud
+from app.services.notification import notification_service
 
 router = APIRouter()
 
@@ -19,13 +19,8 @@ def get_notifications(
     _: str = Depends(require_auth),
 ) -> List[NotificationResponse]:
     skip, limit = pagination
-    notifications = notification_crud.get_many(
-        db,
-        skip=skip,
-        limit=limit,
-        user_id=request.state.current_user.id,
-    )
-    return notifications
+
+    return notification_service.list_notifications(db, request.state.current_user, skip=skip, limit=limit)
 
 
 @router.get("/count")
@@ -34,7 +29,8 @@ def count_notifications(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    count = notification_crud.count(db, user_id=request.state.current_user.id)
+    count = notification_service.count_notifications(db, request.state.current_user)
+
     return {"count": count}
 
 
@@ -45,11 +41,7 @@ def create_notification(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> NotificationResponse:
-    obj_in_data = notification_in.model_dump()
-    obj_in_data["user_id"] = request.state.current_user.id
-    new_notification = notification_crud.create(db, obj_in=obj_in_data)
-
-    return new_notification
+    return notification_service.create_notification(db, request.state.current_user, notification_in)
 
 
 @router.patch("/{notification_id}", response_model=NotificationResponse)
@@ -60,15 +52,7 @@ def update_notification(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> NotificationResponse:
-    db_notification = notification_crud.get_one(db, id=notification_id)
-    if not db_notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-
-    if db_notification.user_id != request.state.current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-
-    updated_notification = notification_crud.update(db, db_obj=db_notification, obj_in=notification_in)
-    return updated_notification
+    return notification_service.update_notification(db, request.state.current_user, notification_id, notification_in)
 
 
 @router.delete("/{notification_id}", response_model=NotificationResponse)
@@ -78,13 +62,4 @@ def delete_notification(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> NotificationResponse:
-    db_notification = notification_crud.get_one(db, id=notification_id)
-    if not db_notification:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-
-    if db_notification.user_id != request.state.current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-
-    deleted_notification = notification_crud.delete(db, db_obj=db_notification)
-    return deleted_notification
-
+    return notification_service.delete_notification(db, request.state.current_user, notification_id)

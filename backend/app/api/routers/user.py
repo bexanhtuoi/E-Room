@@ -1,16 +1,13 @@
-﻿import json
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
+from fastapi.responses import Response
 from sqlmodel import Session
 
-from app.api.dependencies import authorize_owner, get_pagination_params, require_auth
+from app.api.dependencies import get_pagination_params, require_auth
 from app.database import get_session
 from app.schemas import UserResponse, UserStatsResponse, UserUpdateSchema
-from app.security import hash_password
-from app.services import user_crud
-from app.utils.datetime_utils import now_utc
-from app.utils.upload import read_upload
+from app.services.user import user_service
 
 router = APIRouter()
 
@@ -28,15 +25,7 @@ def count_users(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> dict:
-    return {"count": user_crud.count(db)}
-
-
-MAX_AVATAR_BYTES = 2 * 1024 * 1024
-AVATAR_TYPES = {"jpg", "png", "webp"}
-
-
-def avatar_marker(user_id: int) -> str:
-    return f"avatar:{user_id}"
+    return {"count": user_service.count_users(db)}
 
 
 @router.post("/me/avatar", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -46,47 +35,14 @@ async def upload_my_avatar(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserResponse:
-    current_user = request.state.current_user
-
-    raw, suffix = await read_upload(file, AVATAR_TYPES, MAX_AVATAR_BYTES, "Avatar")
-
-    from app.integration.minio import put_avatar
-
-    put_avatar(raw, current_user.id)
-
-    updated_user = user_crud.update(
-        db,
-        db_obj=current_user,
-        obj_in={"avatar_url": avatar_marker(current_user.id), "updated_at": now_utc()},
-    )
-    return updated_user
+    return await user_service.upload_avatar(db, request.state.current_user, file)
 
 
 @router.get("/{user_id}/avatar/file")
 def download_avatar(user_id: int, db: Session = Depends(get_session)):
-    from fastapi.responses import Response
+    data = user_service.download_avatar_data(db, user_id)
 
-    db_user = user_crud.get_one(db, id=user_id)
-    if not db_user or db_user.avatar_url != avatar_marker(user_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
-
-    from app.integration.minio import get_object
-
-    try:
-        data = get_object(f"avatars/{user_id}")
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found in storage")
-
-    if data[:2] == b"\xff\xd8":
-        media_type = "image/jpeg"
-    elif data[:8] == b"\x89PNG\r\n\x1a\n":
-        media_type = "image/png"
-    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        media_type = "image/webp"
-    else:
-        media_type = "application/octet-stream"
-
-    return Response(content=data, media_type=media_type)
+    return Response(content=data["data"], media_type=data["media_type"])
 
 
 @router.get("/me/stats", response_model=UserStatsResponse)
@@ -95,7 +51,7 @@ def get_my_stats(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserStatsResponse:
-    return UserStatsResponse(**user_crud.week_counts(db, request.state.current_user.id))
+    return UserStatsResponse(**user_service.my_stats(db, request.state.current_user))
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -104,10 +60,7 @@ def get_user(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserResponse:
-    db_user = user_crud.get_one(db, id=user_id)
-    if not db_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return db_user
+    return user_service.get_user_or_404(db, user_id)
 
 
 @router.get("/", response_model=List[UserResponse])
@@ -117,8 +70,8 @@ def get_users(
     _: str = Depends(require_auth),
 ) -> List[UserResponse]:
     skip, limit = pagination
-    users = user_crud.get_many(db, skip=skip, limit=limit)
-    return users
+
+    return user_service.list_users(db, skip=skip, limit=limit)
 
 
 @router.get("/email/{email}", response_model=UserResponse)
@@ -127,10 +80,7 @@ def get_user_by_email(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserResponse:
-    db_user = user_crud.get_one(db, email=email)
-    if not db_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return db_user
+    return user_service.get_user_by_email_or_404(db, email)
 
 
 @router.get("/role/{role}", response_model=List[UserResponse])
@@ -141,8 +91,8 @@ def get_users_by_role(
     _: str = Depends(require_auth),
 ) -> List[UserResponse]:
     skip, limit = pagination
-    users = user_crud.get_many(db, role=role, skip=skip, limit=limit)
-    return users
+
+    return user_service.get_users_by_role(db, role, skip=skip, limit=limit)
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
@@ -153,23 +103,7 @@ def update_user(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserResponse:
-    db_user = user_crud.get_one(db, id=user_id)
-    if not db_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    authorize_owner(db_user.id, request)
-
-    obj_in_data = user_in.model_dump(exclude_unset=True)
-    if "role" in obj_in_data and request.state.current_user.role != "admin":
-        obj_in_data.pop("role")
-    if "password" in obj_in_data:
-        obj_in_data["password_hash"] = hash_password(obj_in_data.pop("password"))
-    if "interests" in obj_in_data and obj_in_data["interests"] is not None:
-        obj_in_data["interests"] = json.dumps(obj_in_data["interests"])
-    obj_in_data["updated_at"] = now_utc()
-
-    updated_user = user_crud.update(db, db_obj=db_user, obj_in=obj_in_data)
-    return updated_user
+    return user_service.update_user(db, request.state.current_user, user_id, user_in)
 
 
 @router.delete("/{user_id}", response_model=UserResponse)
@@ -179,12 +113,4 @@ def delete_user(
     db: Session = Depends(get_session),
     _: str = Depends(require_auth),
 ) -> UserResponse:
-    db_user = user_crud.get_one(db, id=user_id)
-    if not db_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    authorize_owner(db_user.id, request)
-
-    user_crud.delete_cascade(db, user_id)
-    deleted_user = user_crud.delete(db, db_obj=db_user)
-    return deleted_user
+    return user_service.delete_user(db, request.state.current_user, user_id)

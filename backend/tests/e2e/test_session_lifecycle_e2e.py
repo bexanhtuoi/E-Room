@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.ai.transcriber import handle_speech_completion
+from app.ai.stt.transcriber import handle_speech_completion
 from app.database import engine
 from app.integration.livekit import create_webhook_token
 from app.models import MessageRole, RoomStatus
@@ -77,8 +77,8 @@ class TestSessionLifecycleE2E:
 
         # Mock STT va Background Task
         with (
-            patch("app.ai.transcriber.transcribe_audio_async", AsyncMock(return_value=stt_mock_result)),
-            patch("app.ai.tasks.enqueue_ai_job") as mock_enqueue_ai,
+            patch("app.ai.stt.completion.transcribe_audio_async", AsyncMock(return_value=stt_mock_result)),
+            patch("app.tasks.room_jobs.enqueue_ai_job") as mock_enqueue_ai,
         ):
             audio_bytes = np.zeros(16000 * 3, dtype=np.int16)
             await handle_speech_completion(
@@ -106,12 +106,8 @@ class TestSessionLifecycleE2E:
             assert sent_payload["text"] == "Hello Bob, @ai what is synchronous vs asynchronous?"
             assert sent_payload["user_id"] == alice["id"]
 
-            # Kiem tra @ai duoc trigger
-            assert mock_enqueue_ai.called
-            args = mock_enqueue_ai.call_args[0]
-            assert args[0] == room_id
-            assert args[1] == "answer"
-            assert args[2] == "what is synchronous vs asynchronous?"
+            # Voice transcript KHONG trigger AI — chi chat moi goi duoc AI.
+            assert not mock_enqueue_ai.called
 
         # 6. User roi phong qua Webhook
         assert post_event("participant_left", str(alice["id"])).status_code == 200

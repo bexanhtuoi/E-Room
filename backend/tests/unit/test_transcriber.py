@@ -1,17 +1,9 @@
 import json
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
 
-from app.ai.audio_vad import (
-    calculate_audio_rms,
-    create_user_audio_state,
-    finalize_speech_frames,
-    process_audio_frame,
-    trim_trailing_silence,
-)
 from app.ai.stt import (
     build_stt_prompt,
     choose_stt_provider,
@@ -26,12 +18,11 @@ from app.ai.stt import (
     transcribe_cloud_whisper,
     transcribe_whisper_server,
 )
-from app.ai.transcriber import (
-    build_transcript_payload,
-    cancel_user_stream,
-    handle_speech_completion,
-)
-from app.services.message import is_recent_duplicate, message_crud
+from app.ai.stt.completion import build_transcript_payload, handle_speech_completion
+from app.ai.stt.transcriber import cancel_user_stream
+from app.ai.vad.helpers import calculate_audio_rms, trim_trailing_silence
+from app.ai.vad.vad import create_user_audio_state, finalize_speech_frames, process_audio_frame
+from app.repositories.message import is_recent_duplicate, message_crud
 
 
 def make_loud_frame(n: int = 1600) -> np.ndarray:
@@ -56,17 +47,9 @@ class TestAudioVADFunctions:
         loud = memoryview(make_loud_frame().tobytes())
 
         assert process_audio_frame(state, loud) is None
-        assert state["is_speaking"] is True
 
         quiet = memoryview(np.zeros(1600, dtype=np.int16).tobytes())
-        done = process_audio_frame(
-            state,
-            quiet,
-            silence_seconds=0.0,
-            min_speech_seconds=0.05,
-        )
-        assert done is not None
-        assert len(done) > 0
+        assert process_audio_frame(state, quiet) is None
 
     def test_calculate_rms_memoryview_matches_array(self):
         sine = make_loud_frame()
@@ -111,36 +94,33 @@ class TestAudioVADFunctions:
 
     def test_process_audio_frame_vad_lifecycle(self):
         state = create_user_audio_state("user123")
+        calls = {"n": 0}
 
-        t = np.linspace(0, 0.02, 320)
-        voice_frame = (np.sin(2 * np.pi * 440 * t) * 16000).astype(np.int16)
-        silence_frame = np.zeros(320, dtype=np.int16)
+        def fake_iterator(window, return_seconds=False):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                return {"start": 0}
+            if calls["n"] == 6:
+                return {"end": 0}
+            return None
 
-        # 1. Noi 10 frames (0.2s)
-        for _ in range(10):
-            res = process_audio_frame(
+        state["vad_iterator"] = fake_iterator
+        voice_frame = make_loud_frame()
+
+        done = None
+        for _ in range(4):
+            out = process_audio_frame(
                 state,
                 voice_frame,
-                energy_threshold=0.01,
-                silence_seconds=0.1,
-                min_speech_seconds=0.1,
-                max_speech_seconds=5.0,
+                silence_seconds=30.0,
+                min_speech_seconds=0.05,
+                max_speech_seconds=60.0,
             )
-            assert res is None
-        assert state["is_speaking"] is True
-
-        # 2. Im lang qua 0.1s
-        time.sleep(0.12)
-        res = process_audio_frame(
-            state,
-            silence_frame,
-            energy_threshold=0.01,
-            silence_seconds=0.1,
-            min_speech_seconds=0.1,
-            max_speech_seconds=5.0,
-        )
-        assert res is not None
-        assert len(res) >= 3200
+            if out is not None:
+                done = out
+                break
+        assert done is not None
+        assert len(done) > 0
         assert state["is_speaking"] is False
 
     def test_finalize_too_short_audio_returns_none(self):
@@ -148,6 +128,45 @@ class TestAudioVADFunctions:
         state["frames"].append(np.zeros(160, dtype=np.int16))  # 0.01s
         result = finalize_speech_frames(state, min_speech_seconds=0.5)
         assert result is None
+
+    def test_silero_path_buffers_and_finalizes_on_end_event(self):
+
+        state = create_user_audio_state("user1")
+        calls = {"n": 0}
+
+        def fake_iterator(window, return_seconds=False):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                return {"start": 0}
+            if calls["n"] == 5:
+                return {"end": 0}
+            return None
+
+        state["vad_iterator"] = fake_iterator
+        done = None
+        for _ in range(5):
+            out = process_audio_frame(
+                state,
+                make_loud_frame(),
+                silence_seconds=30.0,
+                min_speech_seconds=0.05,
+                max_speech_seconds=60.0,
+            )
+            if out is not None:
+                done = out
+                break
+        assert done is not None
+        assert len(done) > 0
+        assert state["is_speaking"] is False
+
+    def test_silero_unavailable_skips_frame_without_crash(self):
+        import app.ai.vad.vad as vad_mod
+
+        state = create_user_audio_state("user1")
+        loud = make_loud_frame()
+        with patch.object(vad_mod, "get_silero_model", return_value=None):
+            assert process_audio_frame(state, loud) is None
+            assert state["is_speaking"] is False
 
 
 class TestSTTFunctions:
@@ -342,16 +361,16 @@ class TestSTTFunctions:
         with patch.object(stt_settings, "stt_cloud_api_key", ""):
             assert choose_stt_provider(None, {"language": "en"}, 5) is None
         with patch.object(stt_settings, "stt_cloud_api_key", "gsk_test"):
-            assert choose_stt_provider(None, {"language": "en"}, 5) == "cloud"
-            assert choose_stt_provider(None, {"language": "vi"}, 9) is None
-            assert choose_stt_provider(None, {"language": "auto"}, 9) is None
+            assert choose_stt_provider(None, {"language": "en"}, 17) == "cloud"
+            assert choose_stt_provider(None, {"language": "vi"}, 17) is None
+            assert choose_stt_provider(None, {"language": "auto"}, 17) is None
             assert choose_stt_provider(None, {"language": "en"}, 0) is None
-            assert choose_stt_provider("groq", {"language": "en"}, 9) == "groq"
+            assert choose_stt_provider("groq", {"language": "en"}, 17) == "groq"
 
     @pytest.mark.asyncio
     async def test_async_forwards_language_kwarg(self):
         audio = np.zeros(16000, dtype=np.int16)
-        with patch("app.ai.stt.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
+        with patch("app.ai.stt.dispatch.transcribe_audio", return_value={"text": "hi"}) as mock_sync:
             result = await transcribe_audio_async(audio, language="vi")
             assert result == {"text": "hi"}
             _, kwargs = mock_sync.call_args
@@ -377,7 +396,7 @@ class TestTranscriberFunctions:
         assert data["is_final"] is True
 
     @pytest.mark.asyncio
-    async def test_handle_speech_completion_broadcast_and_at_ai(self):
+    async def test_handle_speech_completion_broadcast_without_voice_ai_trigger(self):
         mock_room = MagicMock()
         mock_room.local_participant = MagicMock()
         mock_room.local_participant.publish_data = AsyncMock()
@@ -392,8 +411,8 @@ class TestTranscriberFunctions:
         }
 
         with (
-            patch("app.ai.transcriber.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
-            patch("app.ai.tasks.enqueue_ai_job") as mock_enqueue_ai,
+            patch("app.ai.stt.completion.transcribe_audio_async", AsyncMock(return_value=sample_stt_result)),
+            patch("app.tasks.room_jobs.enqueue_ai_job") as mock_enqueue_ai,
         ):
             audio_data = np.zeros(16000 * 2, dtype=np.int16)
             await handle_speech_completion(
@@ -410,13 +429,8 @@ class TestTranscriberFunctions:
             assert payload["type"] == "transcript"
             assert payload["text"] == "@ai explain dependency inversion"
 
-            # Check @ai trigger
-            assert mock_enqueue_ai.called
-            mock_enqueue_ai.assert_called_once()
-            args = mock_enqueue_ai.call_args[0]
-            assert args[0] == 1
-            assert args[1] == "answer"
-            assert args[2] == "explain dependency inversion"
+            # Voice transcript never triggers AI — only chat does.
+            assert not mock_enqueue_ai.called
 
     def test_cancel_user_stream_replaces_old_pipeline(self):
         old_task = MagicMock()
