@@ -106,12 +106,8 @@ class TestSessionLifecycleE2E:
             assert sent_payload["text"] == "Hello Bob, @ai what is synchronous vs asynchronous?"
             assert sent_payload["user_id"] == alice["id"]
 
-            # Kiem tra @ai duoc trigger
-            assert mock_enqueue_ai.called
-            args = mock_enqueue_ai.call_args[0]
-            assert args[0] == room_id
-            assert args[1] == "answer"
-            assert args[2] == "what is synchronous vs asynchronous?"
+            # Voice transcript KHONG trigger AI — chi chat moi goi duoc AI.
+            assert not mock_enqueue_ai.called
 
         # 6. User roi phong qua Webhook
         assert post_event("participant_left", str(alice["id"])).status_code == 200

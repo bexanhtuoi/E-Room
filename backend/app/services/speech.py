@@ -104,15 +104,15 @@ class SpeechService(ServiceBase):
             from app.ai.stt.recorder import find_attempt_by_message
 
             attempt = find_attempt_by_message(room_id, user_id, message_id)
-            if attempt and attempt.get("raw_path") is not None:
+            if attempt and (attempt.get("raw_path") is not None or attempt.get("raw_object")):
                 return True
         except Exception:
             pass
 
         try:
-            from app.ai.stt.speech_log import resolve_audio_path
+            from app.ai.stt.audio_store import has_audio
 
-            return resolve_audio_path(room_id, entry.get("audio_file")) is not None
+            return has_audio(room_id, entry.get("audio_file"))
         except Exception:
             return False
 

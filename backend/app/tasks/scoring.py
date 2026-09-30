@@ -18,6 +18,7 @@ def score_room_utterance(
     session_id: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
     from app.ai.pronunciation import score_pronunciation
+    from app.ai.stt.audio_store import fetch_audio_bytes, is_s3_ref, materialize_temp_wav
     from app.ai.stt.recorder import find_attempt_by_message
     from app.ai.stt.speech_log import attach_pronunciation, read_user_log, resolve_audio_path
 
@@ -38,9 +39,12 @@ def score_room_utterance(
     except Exception:
         attempt = None
 
+    import os
+
     audio_path = None
     attempt_id: Any = None
-    if attempt and attempt.get("raw_path") is not None:
+    temp_paths: list = []
+    if attempt and (attempt.get("raw_path") is not None or attempt.get("raw_object")):
         by_id = {e.get("message_id"): e for e in entries}
         parts = [
             (by_id[mid].get("corrected_text") or by_id[mid].get("text", ""))
@@ -48,21 +52,41 @@ def score_room_utterance(
             if mid in by_id and (by_id[mid].get("corrected_text") or by_id[mid].get("text", "")).strip()
         ]
         if parts:
-            audio_path = attempt["raw_path"]
-            reference = " ".join(parts)
-            attempt_id = attempt.get("attempt_id")
+            if attempt.get("raw_path") is not None:
+                audio_path = attempt["raw_path"]
+            else:
+                raw_bytes = fetch_audio_bytes(room_id, attempt.get("raw_object"))
+                if raw_bytes is not None:
+                    audio_path = materialize_temp_wav(raw_bytes)
+                    temp_paths.append(audio_path)
+            if audio_path is not None:
+                reference = " ".join(parts)
+                attempt_id = attempt.get("attempt_id")
     if audio_path is None:
-        audio_path = resolve_audio_path(room_id, entry.get("audio_file"))
+        audio_file = entry.get("audio_file")
+        audio_path = resolve_audio_path(room_id, audio_file)
+        if audio_path is None and is_s3_ref(audio_file):
+            raw_bytes = fetch_audio_bytes(room_id, audio_file)
+            if raw_bytes is not None:
+                audio_path = materialize_temp_wav(raw_bytes)
+                temp_paths.append(audio_path)
 
-    score = score_pronunciation(
-        audio_path=audio_path,
-        reference_text=reference,
-        language=entry.get("language", "en"),
-        confidence=entry.get("confidence", 1.0),
-        avg_logprob=entry.get("avg_logprob", 0.0),
-        duration=entry.get("duration", 0.0),
-        words=entry.get("words", []),
-    )
+    try:
+        score = score_pronunciation(
+            audio_path=audio_path,
+            reference_text=reference,
+            language=entry.get("language", "en"),
+            confidence=entry.get("confidence", 1.0),
+            avg_logprob=entry.get("avg_logprob", 0.0),
+            duration=entry.get("duration", 0.0),
+            words=entry.get("words", []),
+        )
+    finally:
+        for temp_path in temp_paths:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
     score["scored_text"] = reference
     if attempt_id is not None:
         score["attempt_id"] = attempt_id

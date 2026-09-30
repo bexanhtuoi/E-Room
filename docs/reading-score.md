@@ -107,7 +107,10 @@ await fetchJson(`/api/v1/rooms/${roomId}/speech-logs/${messageId}/feedback`, { m
   Frontend khóa các nút chấm khác khi đang có 1 lượt chạy (`scoreDisabled`).
 - **Điểm vào DB**: bảng `pronunciation_scores` (`app/models/pronunciation_score.py`).
   POST `.../score` upsert (chấm lại cùng câu không đẻ dòng mới, reset feedback cũ);
-  POST `.../feedback` điền `feedback_json`. JSONL giữ làm log raw/audio.
+  POST `.../feedback` điền `feedback_json`. JSONL giữ làm log chữ + trỏ audio;
+  file `.wav` nằm trên MinIO (`speech/room_{id}/...`, ref `s3:...` trong JSONL/metadata,
+  local chỉ là cache — MinIO chết thì tự rớt về local). Script migrate file cũ:
+  `backend/scripts/migrate_speech_to_minio.py`.
   Lỗi ghi DB không làm rớt điểm vừa chấm (log warning).
 - **Session**: `SessionDetailPage` đọc `GET /api/v1/rooms/{id}/speech-logs/me`, lọc theo
   `joined_at–left_at`, render `ReadingScoreCard` từng câu (mục *My pronunciation scores*).

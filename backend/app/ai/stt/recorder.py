@@ -294,12 +294,33 @@ class RawAttemptRecorder:
 
         end_sec = last["end_sec"] if last else duration_sec
 
+        raw_object: Optional[str] = None
+
+        try:
+            from app.ai.stt.audio_store import object_name_for_attempt, put_audio
+
+            raw_path = raw_audio_path(self.room_id, self._attempt_id)
+
+            if raw_path.exists():
+                raw_object = put_audio(
+                    object_name_for_attempt(self.room_id, self._attempt_id),
+                    raw_path.read_bytes(),
+                )
+        except Exception as error:
+            log.warning(
+                "Raw attempt MinIO upload failed | room=%s user=%s err=%s",
+                self.room_id,
+                self.user_identity,
+                error,
+            )
+
         metadata: Dict[str, Any] = {
             "attempt_id": self._attempt_id,
             "user_id": self.user_id,
             "user_identity": self.user_identity,
             "room_id": self.room_id,
             "raw_audio_path": f"attempts/{self._attempt_id}/raw.wav",
+            "raw_audio_object": raw_object,
             "duration_sec": round(duration_sec, 3),
             "sample_rate": self.sample_rate,
             "channels": self.channels,
@@ -493,6 +514,7 @@ def find_attempt_by_message(
             return {
                 "attempt_id": meta.get("attempt_id") or meta_file.parent.name,
                 "raw_path": raw if raw.exists() else None,
+                "raw_object": meta.get("raw_audio_object"),
                 "utterances": ordered,
                 "message_ids": mids,
             }

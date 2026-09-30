@@ -76,6 +76,7 @@ def save_utterance_audio(
     if not should_save_audio() or audio_data is None:
         return None
     try:
+        from app.ai.stt.audio_store import object_name_for_utterance, put_audio
         from app.ai.stt.helpers import convert_audio_to_wav_bytes
 
         wav_bytes = convert_audio_to_wav_bytes(audio_data, sample_rate=sample_rate)
@@ -85,6 +86,11 @@ def save_utterance_audio(
         mid = message_id if message_id is not None else int(datetime.now(timezone.utc).timestamp() * 1000)
 
         filename = f"user_{uid}_{mid}.wav"
+
+        ref = put_audio(object_name_for_utterance(room_id, filename), wav_bytes)
+
+        if ref is not None:
+            return ref
 
         dest = user_audio_dir(room_id) / filename
 
