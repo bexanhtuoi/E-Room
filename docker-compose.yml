@@ -7,6 +7,9 @@ services:
       - "8000:8000"
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    cpus: 2.0
+    mem_limit: 1536m
+    mem_reservation: 512m
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
@@ -23,9 +26,12 @@ services:
   ai-worker:
     build: ./backend
     container_name: ai-worker
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 -O fair --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    cpus: 3.0
+    mem_limit: 3g
+    mem_reservation: 1g
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
@@ -42,6 +48,9 @@ services:
     command: uv run celery -A app.integration.celery.celery_app beat --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    cpus: 0.5
+    mem_limit: 1g
+    mem_reservation: 256m
     volumes:
       - ./backend/app:/app/app
     depends_on:
@@ -51,9 +60,12 @@ services:
   ai-observer:
     build: ./backend
     container_name: ai-observer
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=2 -O fair --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    cpus: 1.0
+    mem_limit: 1536m
+    mem_reservation: 384m
     volumes:
       - ./backend/app:/app/app
     depends_on:
@@ -65,9 +77,12 @@ services:
   ai-transcriber:
     build: ./backend
     container_name: ai-transcriber
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --concurrency=4 -O fair --max-tasks-per-child=30 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --concurrency=2 -O fair --max-tasks-per-child=30 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    cpus: 4.0
+    mem_limit: 3g
+    mem_reservation: 1g
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
@@ -82,6 +97,9 @@ services:
     image: pingcap/tidb:v8.5.0
     container_name: tidb
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 3g
+    mem_reservation: 512m
     ports:
       - "4000:4000"
       - "10080:10080"
@@ -160,6 +178,8 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 2g
     ports:
       - "11434:11434"
     volumes:
