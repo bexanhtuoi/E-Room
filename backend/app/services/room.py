@@ -300,7 +300,7 @@ class RoomService(ServiceBase):
         room = self.get_host_room(db, room_id, user)
 
         raw, suffix = await read_upload(file, ROOM_FILE_TYPES, MAX_ROOM_FILE_BYTES, "File")
-        object_name = put_document(raw, file.filename or f"room-{room_id}.{suffix}")
+        object_name = put_document(raw, file.filename or f"room-{room_id}.{suffix}", room_id=room.id)
 
         new_doc = document_crud.create(
             db,

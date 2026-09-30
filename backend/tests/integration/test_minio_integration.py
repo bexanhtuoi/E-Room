@@ -26,6 +26,16 @@ class TestMinioIntegration:
 
         with patch("app.integration.minio.get_minio_client", return_value=mock_minio_client):
             obj_name = put_document(b"%PDF-1.4...", "lesson1.pdf")
-            assert obj_name.startswith("documents/")
+            assert obj_name.startswith("documents/general/")
+            assert obj_name.endswith("_lesson1.pdf")
+            assert mock_minio_client.put_object.called
+
+    def test_put_document_file_scoped_by_room(self):
+        mock_minio_client = MagicMock()
+        mock_minio_client.bucket_exists.return_value = True
+
+        with patch("app.integration.minio.get_minio_client", return_value=mock_minio_client):
+            obj_name = put_document(b"%PDF-1.4...", "lesson1.pdf", room_id=5)
+            assert obj_name.startswith("documents/room_5/")
             assert obj_name.endswith("_lesson1.pdf")
             assert mock_minio_client.put_object.called
