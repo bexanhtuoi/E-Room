@@ -106,6 +106,7 @@ class Settings:
     stt_server_api_key: str = os.getenv("STT_SERVER_API_KEY", "cant-be-empty")
     stt_server_model: str = os.getenv("STT_SERVER_MODEL", "mobiuslabsgmbh/faster-whisper-large-v3-turbo")
     stt_server_timeout: float = float(os.getenv("STT_SERVER_TIMEOUT", 30.0))
+    stt_local_enabled: bool = os.getenv("STT_LOCAL_ENABLED", "true").lower() in ("true", "1", "yes")
     stt_vad_silence_seconds: float = float(os.getenv("STT_VAD_SILENCE_SECONDS", 2.0))
     stt_vad_min_speech_seconds: float = float(os.getenv("STT_VAD_MIN_SPEECH_SECONDS", 0.5))
     stt_vad_max_speech_seconds: float = float(os.getenv("STT_VAD_MAX_SPEECH_SECONDS", 20.0))

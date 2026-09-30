@@ -95,6 +95,9 @@ def transcribe_faster_whisper(
     language: Optional[str] = None,
     initial_prompt: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
+    if not settings.stt_local_enabled:
+        return None
+
     try:
         audio = convert_audio_to_float32(audio_data)
 
