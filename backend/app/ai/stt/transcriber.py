@@ -1,11 +1,11 @@
 import asyncio
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from livekit import rtc
 
 from app.ai.llm.participant import live_humans
 from app.ai.stt.completion import handle_speech_completion
-from app.ai.stt.recorder import RawAttemptRecorder, UtteranceRef
+from app.ai.stt.recorder import RawAttemptRecorder
 from app.ai.vad.audio_vad import create_user_audio_state, process_audio_frame
 from app.config import settings
 from app.integration.livekit import create_token
@@ -15,24 +15,7 @@ from app.shared.constants import AI_IDENTITY_PREFIX, AI_TRANSCRIBER_IDENTITY
 from app.shared.keys import room_presence_key, room_transcriber_lock_key
 
 log = get_logger("app.ai.transcriber")
-
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
-
-
-async def guarded_transcribe(
-    room,
-    room_id: int,
-    user_identity: str,
-    audio_data,
-    raw_ctx: Optional[UtteranceRef] = None,
-) -> None:
-    await handle_speech_completion(
-        room=room,
-        room_id=room_id,
-        user_identity=user_identity,
-        audio_data=audio_data,
-        raw_ctx=raw_ctx,
-    )
 
 
 def cancel_user_stream(user_tasks: Dict[str, asyncio.Task], user_identity: str) -> None:
@@ -73,7 +56,7 @@ async def process_user_audio_stream(
                 raw_ctx = raw.end_utterance(len(completed_speech))
 
                 pending = asyncio.create_task(
-                    guarded_transcribe(
+                    handle_speech_completion(
                         room=room,
                         room_id=room_id,
                         user_identity=user_identity,
