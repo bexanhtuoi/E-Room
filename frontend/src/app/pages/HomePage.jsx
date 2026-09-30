@@ -117,11 +117,12 @@ export function HomePage() {
       if (res?.room?.id) navigate(`/rooms/${res.room.id}`);
       else setMatchNote('No open rooms right now — browse below or create one.');
     } catch (err) {
-      const msg = String(err?.message || '');
-      if (msg.includes('404') || msg.toLowerCase().includes('no open rooms')) {
+      if (err?.code === 'NO_OPEN_ROOMS') {
         setMatchNote('No open rooms right now — browse below or create one.');
-      } else {
+      } else if (err?.status === 401) {
         navigate('/login');
+      } else {
+        setMatchNote(err?.message || 'Quick match failed — try again.');
       }
     } finally {
       setMatching(false);

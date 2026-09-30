@@ -69,6 +69,18 @@ class PronunciationScoreCrud(CRUDRepository):
             db, row, obj_in={"feedback_json": json.dumps(feedback, ensure_ascii=False), "updated_at": now_utc()}
         )
 
+    def delete_for_utterance(
+        self, db: Session, room_id: int, user_id: int, message_id: Any
+    ) -> bool:
+        row = self.find_for_utterance(db, room_id, user_id, message_id)
+
+        if row is None:
+            return False
+
+        self.delete(db, row)
+
+        return True
+
     def scored_in_window(
         self, db: Session, room_id: int, user_id: int, start, end=None, session_id=None
     ) -> List[PronunciationScore]:

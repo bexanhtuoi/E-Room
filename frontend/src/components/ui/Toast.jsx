@@ -64,7 +64,8 @@ export function useToast() {
 
 export function showApiError(addToast, error, fallback = 'Something went wrong') {
   const message = error?.detail || error?.message || fallback;
-  addToast(message, 'error');
+  const code = error?.code ? ` [${error.code}]` : '';
+  addToast(`${message}${code}`, 'error');
 }
 
 export { ToastContext };

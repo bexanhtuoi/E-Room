@@ -12,8 +12,12 @@ async function fetchMe() {
 
 function parseError(body, fallback) {
   const detail = body?.detail;
-  if (Array.isArray(detail)) return detail.map((e) => e.msg).join('; ');
-  return detail || fallback;
+  const message = Array.isArray(detail)
+    ? detail.map((e) => e.msg).join('; ')
+    : detail || fallback;
+  const error = new Error(message);
+  if (body?.code) error.code = body.code;
+  return error;
 }
 
 export function AuthProvider({ children }) {
@@ -25,6 +29,9 @@ export function AuthProvider({ children }) {
       .then((me) => { if (me) setUser(me); })
       .catch(() => {})
       .finally(() => setLoading(false));
+    const onLogout = () => setUser(null);
+    window.addEventListener('auth:logout', onLogout);
+    return () => window.removeEventListener('auth:logout', onLogout);
   }, []);
 
   const login = useCallback(async (email, password) => {
@@ -36,7 +43,7 @@ export function AuthProvider({ children }) {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(parseError(body, 'Login failed'));
+      throw parseError(body, 'Login failed');
     }
     const me = await fetchMe();
     if (!me) throw new Error('Login succeeded but session was not created. Please try again.');
@@ -54,7 +61,7 @@ export function AuthProvider({ children }) {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(parseError(body, 'Registration failed'));
+      throw parseError(body, 'Registration failed');
     }
     return response.json();
   }, []);

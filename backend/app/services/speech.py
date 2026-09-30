@@ -67,6 +67,7 @@ class SpeechService(ServiceBase):
 
     def edit_utterance(self, db: Session, user, room_id: int, message_id: int, corrected_text: str) -> dict:
         from app.ai.stt.speech_log import update_corrected_text
+        from app.repositories.pronunciation_score import pronunciation_score_crud
 
         self.ensure_room_visible(db, user, room_id)
 
@@ -75,6 +76,8 @@ class SpeechService(ServiceBase):
         if updated is None:
             # Cho host/admin sửa hộ? V1 chỉ cho sửa câu của chính mình.
             raise UtteranceNotFoundError()
+
+        pronunciation_score_crud.delete_for_utterance(db, room_id, user.id, message_id)
 
         return updated
 

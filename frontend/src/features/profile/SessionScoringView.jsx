@@ -186,8 +186,13 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     storeVoice(next);
   }
 
+  const hasScored = useMemo(
+    () => myUtterances.some((u) => u?.pronunciation?.report),
+    [myUtterances],
+  );
+
   async function askSessionFeedback() {
-    if (fbLoading) return;
+    if (fbLoading || !hasScored) return;
     setFbLoading(true);
     setFbError('');
     try {
@@ -195,7 +200,11 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       setSessionFb(res?.feedback || null);
       setSessionFbCount({ scored: res?.scored_count ?? 0, total: res?.total_utterances ?? 0 });
     } catch (error) {
-      setFbError(error?.message || 'AI could not answer right now');
+      setFbError(
+        error?.code === 'SESSION_NO_SCORED_UTTERANCES'
+          ? 'Chưa có câu nào được chấm trong session này — chấm ít nhất 1 câu ở mục dưới trước.'
+          : error?.message || 'AI could not answer right now',
+      );
     } finally {
       setFbLoading(false);
     }
@@ -368,7 +377,13 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                   AI đọc điểm các câu bạn đã chấm trong session này rồi góp ý gọn:
                   chỉ nêu từ sai / mất hơi, cách sửa và 3 bước luyện. Chưa chấm câu nào thì chấm ở mục dưới trước.
                 </p>
-                <button type="button" className="er-btn" disabled={fbLoading} onClick={askSessionFeedback}>
+                <button
+                  type="button"
+                  className="er-btn"
+                  disabled={fbLoading || !hasScored}
+                  title={hasScored ? undefined : 'Chấm ít nhất 1 câu ở mục dưới trước'}
+                  onClick={askSessionFeedback}
+                >
                   {fbLoading ? 'AI đang đọc điểm…' : 'Get AI feedback'}
                 </button>
                 {fbError && <div className="er-alert er-alert--err" style={{ marginTop: 8 }}>{fbError}</div>}

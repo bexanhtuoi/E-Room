@@ -72,6 +72,27 @@ class TestRoomCapacity:
         finally:
             redis_delete(key)
 
+    def test_seventh_user_rejected_from_six_seat_room(self):
+        from app.integration.redis import delete as redis_delete
+
+        host = make_client("sixhost")
+        room = host.post("/api/v1/rooms/", json={"name": f"six-{uuid.uuid4().hex[:6]}", "max_participants": 6}).json()
+        key = f"room:{room['id']}:participants"
+
+        try:
+            members = [make_client(f"six{i}") for i in range(6)]
+            for member in members:
+                assert join_quiet(member, room["id"]).status_code == 200
+
+            outsider = make_client("six-outsider")
+            assert join_quiet(outsider, room["id"]).status_code == 403
+            assert outsider.post(f"/api/v1/rooms/{room['id']}/token").status_code == 403
+
+            for member in members:
+                member.post(f"/api/v1/rooms/{room['id']}/leave")
+        finally:
+            redis_delete(key)
+
     def test_join_stays_open_when_presence_unavailable(self):
         from app.integration.redis import delete as redis_delete
 
