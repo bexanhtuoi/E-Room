@@ -1,17 +1,9 @@
 import json
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
 
-from app.ai.vad.audio_vad import (
-    calculate_audio_rms,
-    create_user_audio_state,
-    finalize_speech_frames,
-    process_audio_frame,
-    trim_trailing_silence,
-)
 from app.ai.stt import (
     build_stt_prompt,
     choose_stt_provider,
@@ -28,6 +20,8 @@ from app.ai.stt import (
 )
 from app.ai.stt.completion import build_transcript_payload, handle_speech_completion
 from app.ai.stt.transcriber import cancel_user_stream
+from app.ai.vad.helpers import calculate_audio_rms, trim_trailing_silence
+from app.ai.vad.vad import create_user_audio_state, finalize_speech_frames, process_audio_frame
 from app.repositories.message import is_recent_duplicate, message_crud
 
 
@@ -53,17 +47,9 @@ class TestAudioVADFunctions:
         loud = memoryview(make_loud_frame().tobytes())
 
         assert process_audio_frame(state, loud) is None
-        assert state["is_speaking"] is True
 
         quiet = memoryview(np.zeros(1600, dtype=np.int16).tobytes())
-        done = process_audio_frame(
-            state,
-            quiet,
-            silence_seconds=0.0,
-            min_speech_seconds=0.05,
-        )
-        assert done is not None
-        assert len(done) > 0
+        assert process_audio_frame(state, quiet) is None
 
     def test_calculate_rms_memoryview_matches_array(self):
         sine = make_loud_frame()
@@ -108,36 +94,33 @@ class TestAudioVADFunctions:
 
     def test_process_audio_frame_vad_lifecycle(self):
         state = create_user_audio_state("user123")
+        calls = {"n": 0}
 
-        t = np.linspace(0, 0.02, 320)
-        voice_frame = (np.sin(2 * np.pi * 440 * t) * 16000).astype(np.int16)
-        silence_frame = np.zeros(320, dtype=np.int16)
+        def fake_iterator(window, return_seconds=False):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                return {"start": 0}
+            if calls["n"] == 6:
+                return {"end": 0}
+            return None
 
-        # 1. Noi 10 frames (0.2s)
-        for _ in range(10):
-            res = process_audio_frame(
+        state["vad_iterator"] = fake_iterator
+        voice_frame = make_loud_frame()
+
+        done = None
+        for _ in range(4):
+            out = process_audio_frame(
                 state,
                 voice_frame,
-                energy_threshold=0.01,
-                silence_seconds=0.1,
-                min_speech_seconds=0.1,
-                max_speech_seconds=5.0,
+                silence_seconds=30.0,
+                min_speech_seconds=0.05,
+                max_speech_seconds=60.0,
             )
-            assert res is None
-        assert state["is_speaking"] is True
-
-        # 2. Im lang qua 0.1s
-        time.sleep(0.12)
-        res = process_audio_frame(
-            state,
-            silence_frame,
-            energy_threshold=0.01,
-            silence_seconds=0.1,
-            min_speech_seconds=0.1,
-            max_speech_seconds=5.0,
-        )
-        assert res is not None
-        assert len(res) >= 3200
+            if out is not None:
+                done = out
+                break
+        assert done is not None
+        assert len(done) > 0
         assert state["is_speaking"] is False
 
     def test_finalize_too_short_audio_returns_none(self):
@@ -145,6 +128,45 @@ class TestAudioVADFunctions:
         state["frames"].append(np.zeros(160, dtype=np.int16))  # 0.01s
         result = finalize_speech_frames(state, min_speech_seconds=0.5)
         assert result is None
+
+    def test_silero_path_buffers_and_finalizes_on_end_event(self):
+
+        state = create_user_audio_state("user1")
+        calls = {"n": 0}
+
+        def fake_iterator(window, return_seconds=False):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                return {"start": 0}
+            if calls["n"] == 5:
+                return {"end": 0}
+            return None
+
+        state["vad_iterator"] = fake_iterator
+        done = None
+        for _ in range(5):
+            out = process_audio_frame(
+                state,
+                make_loud_frame(),
+                silence_seconds=30.0,
+                min_speech_seconds=0.05,
+                max_speech_seconds=60.0,
+            )
+            if out is not None:
+                done = out
+                break
+        assert done is not None
+        assert len(done) > 0
+        assert state["is_speaking"] is False
+
+    def test_silero_unavailable_skips_frame_without_crash(self):
+        import app.ai.vad.vad as vad_mod
+
+        state = create_user_audio_state("user1")
+        loud = make_loud_frame()
+        with patch.object(vad_mod, "get_silero_model", return_value=None):
+            assert process_audio_frame(state, loud) is None
+            assert state["is_speaking"] is False
 
 
 class TestSTTFunctions:

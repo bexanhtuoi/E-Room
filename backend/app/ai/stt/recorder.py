@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from app.ai.stt.helpers import normalize_pcm_int16
 from app.ai.stt.paths import attempt_dir, attempts_root, metadata_path, raw_audio_path, resolve_user_id, utcnow_iso, wav_header
-from app.ai.vad.audio_vad import calculate_audio_rms
+from app.ai.vad.helpers import calculate_audio_rms
 from app.log import get_logger
 
 log = get_logger("app.ai.stt.recorder")

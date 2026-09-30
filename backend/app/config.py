@@ -111,6 +111,7 @@ class Settings:
     stt_vad_min_speech_seconds: float = float(os.getenv("STT_VAD_MIN_SPEECH_SECONDS", 0.5))
     stt_vad_max_speech_seconds: float = float(os.getenv("STT_VAD_MAX_SPEECH_SECONDS", 20.0))
     stt_vad_energy_threshold: float = float(os.getenv("STT_VAD_ENERGY_THRESHOLD", 0.01))
+    stt_vad_threshold: float = float(os.getenv("STT_VAD_THRESHOLD", 0.5))
 
     # ─── TTS (Kokoro server rieng, OpenAI-compatible, :8002) ───────────────
     tts_base_url: str = os.getenv("TTS_BASE_URL", "http://localhost:8002/v1")

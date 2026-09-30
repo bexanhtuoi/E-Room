@@ -6,7 +6,7 @@ from livekit import rtc
 from app.ai.llm.participant import live_humans
 from app.ai.stt.completion import handle_speech_completion
 from app.ai.stt.recorder import RawAttemptRecorder
-from app.ai.vad.audio_vad import create_user_audio_state, process_audio_frame
+from app.ai.vad.vad import create_user_audio_state, process_audio_frame
 from app.config import settings
 from app.integration.livekit import create_token
 from app.integration.redis import scard
