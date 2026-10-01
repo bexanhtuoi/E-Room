@@ -78,6 +78,8 @@ services:
     mem_reservation: 32m
     network_mode: host
     environment:
+      # Lay KEY that (ssh-ed25519...) trong Beszel → Add System, roi dien vao .env
+      # hoac export BESZEL_AGENT_KEY truoc khi up.
       KEY: ${BESZEL_AGENT_KEY:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
