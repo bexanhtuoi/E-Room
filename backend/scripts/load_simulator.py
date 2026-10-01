@@ -102,22 +102,50 @@ def user_loop(base: str, tag: int, interval: float, stop_at: float, with_ai: boo
                 client.post("/api/v1/messages/", json={"room_id": room_id, "text": text})
                 time.sleep(random.uniform(1.0, 3.0))
 
-            roll = random.random()
-            if roll < 0.25:
-                client.get("/api/v1/sessions/mine")
-            elif roll < 0.40:
-                client.get("/api/v1/users/me/stats")
-            elif roll < 0.50:
-                client.get("/api/v1/documents/")
-            elif roll < 0.60:
-                client.get("/api/v1/notifications/")
-            elif roll < 0.70:
-                client.get("/api/v1/tts/voices")
-            elif roll < 0.78:
-                client.post("/api/v1/rooms/match", json={})
+            for _ in range(random.randint(2, 4)):
+                roll = random.random()
+                if roll < 0.18:
+                    client.get("/api/v1/sessions/mine")
+                elif roll < 0.30:
+                    client.get("/api/v1/users/me")
+                elif roll < 0.40:
+                    client.get("/api/v1/users/me/stats")
+                elif roll < 0.48:
+                    client.get("/api/v1/users/", params={"limit": 5})
+                elif roll < 0.56:
+                    client.get("/api/v1/rooms/count")
+                elif roll < 0.62:
+                    client.get("/api/v1/messages/count", params={"room_id": room_id})
+                elif roll < 0.68:
+                    client.get("/api/v1/documents/")
+                elif roll < 0.74:
+                    client.get("/api/v1/documents/count")
+                elif roll < 0.80:
+                    client.get("/api/v1/notifications/")
+                elif roll < 0.85:
+                    client.get("/api/v1/notifications/count")
+                elif roll < 0.90:
+                    client.get("/api/v1/tts/voices")
+                elif roll < 0.94:
+                    client.post("/api/v1/rooms/match", json={})
+                elif roll < 0.97:
+                    client.get("/api/v1/sessions/count")
+                else:
+                    client.get("/api/v1/rooms/prompt-default")
 
             if random.random() < bad_rate:
-                client.get("/api/v1/rooms/999999999")
+                bad_roll = random.random()
+                if bad_roll < 0.4:
+                    client.get("/api/v1/rooms/999999999")
+                elif bad_roll < 0.7:
+                    client.post(
+                        "/api/v1/auth/login",
+                        data={"username": "khong-co-that@gmail.com", "password": "sai-roi"},
+                    )
+                elif bad_roll < 0.9:
+                    client.get("/api/v1/users/999999999")
+                else:
+                    client.post("/api/v1/messages/", json={"room_id": 999999999, "text": "loi co y"})
 
             client.get(f"/api/v1/rooms/{room_id}/speech-logs/summary")
             client.get(f"/api/v1/rooms/{room_id}/speech-logs/me")
