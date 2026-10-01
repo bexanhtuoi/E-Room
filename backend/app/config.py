@@ -146,6 +146,9 @@ class Settings:
     speech_raw_end_silence_seconds: float = float(os.getenv("SPEECH_RAW_END_SILENCE_SECONDS", 8.0))
     speech_raw_max_attempt_seconds: float = float(os.getenv("SPEECH_RAW_MAX_ATTEMPT_SECONDS", 300.0))
     speech_raw_flush_bytes: int = int(os.getenv("SPEECH_RAW_FLUSH_BYTES", 65536))
+    otel_enabled: bool = os.getenv("OTEL_ENABLED", "false").lower() in ("true", "1", "yes")
+    otel_service_name: str = os.getenv("OTEL_SERVICE_NAME", "eroom")
+    otel_exporter_otlp_endpoint: str = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4318")
 
     # ─── Qdrant ─────────────────────────────────────
     qdrant_host: str = os.getenv("QDRANT_HOST", "localhost")

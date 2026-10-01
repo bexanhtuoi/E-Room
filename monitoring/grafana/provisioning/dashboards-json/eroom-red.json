@@ -1,0 +1,56 @@
+{
+  "title": "E-Room API RED",
+  "uid": "eroom-red",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests per second (by route)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(eroom_http_requests_total[$__rate_interval]))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "title": "Error rate (4xx + 5xx share)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(eroom_http_requests_total{status=~\"4..|5..\"}[$__rate_interval])) / sum by (route) (rate(eroom_http_requests_total[$__rate_interval]))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "title": "Latency p50 / p95 / p99 (by route)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p50 {{route}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95 {{route}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p99 {{route}}"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+    }
+  ]
+}

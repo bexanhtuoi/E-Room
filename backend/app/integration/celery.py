@@ -56,3 +56,15 @@ def clear_locks_on_worker_start(sender=None, **kwargs) -> None:
         clear_stale_worker_locks()
     except Exception:
         pass
+
+
+try:
+    from celery.signals import worker_process_init
+
+    @worker_process_init.connect(weak=False)
+    def init_worker_tracing(**kwargs) -> None:
+        from app.integration.observability import setup_tracing
+
+        setup_tracing()
+except Exception:
+    pass

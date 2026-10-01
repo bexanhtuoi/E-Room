@@ -10,6 +10,7 @@ from app.api import api_router
 from app.config import settings
 from app.database import create_db_and_tables, engine
 from app.database import health as db_health
+from app.integration.observability import setup_fastapi_tracing, setup_metrics, setup_tracing
 from app.log import get_logger
 from app.security import decode_token
 from app.seeds import seed_all
@@ -113,6 +114,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+setup_metrics(app)
+setup_tracing()
+setup_fastapi_tracing(app)
 
 app.include_router(api_router, prefix="/api/v1")
 

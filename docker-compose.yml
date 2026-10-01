@@ -29,6 +29,8 @@ services:
     command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=4 -O fair --max-tasks-per-child=100 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    environment:
+      OTEL_SERVICE_NAME: eroom-worker
     cpus: 3.0
     mem_limit: 4g
     mem_reservation: 1536m
@@ -57,52 +59,14 @@ services:
       redis:
         condition: service_healthy
 
-  beszel-hub:
-    image: henrygd/beszel:0.18
-    container_name: beszel-hub
-    restart: unless-stopped
-    cpus: 0.5
-    mem_limit: 256m
-    mem_reservation: 64m
-    ports:
-      - "8090:8090"
-    volumes:
-      - beszel_data:/beszel_data
-
-  beszel-agent:
-    image: henrygd/beszel-agent:0.18
-    container_name: beszel-agent
-    restart: unless-stopped
-    cpus: 0.2
-    mem_limit: 128m
-    mem_reservation: 32m
-    ports:
-      - "45876:45876"
-    environment:
-      # Lay KEY that (ssh-ed25519...) trong Beszel → Add System, roi dien vao .env
-      # hoac export BESZEL_AGENT_KEY truoc khi up.
-      KEY: ${BESZEL_AGENT_KEY:-}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
-  uptime-kuma:
-    image: louislam/uptime-kuma:2
-    container_name: uptime-kuma
-    restart: unless-stopped
-    cpus: 0.5
-    mem_limit: 512m
-    mem_reservation: 128m
-    ports:
-      - "8091:3001"
-    volumes:
-      - uptime_kuma_data:/app/data
-
   ai-observer:
     build: ./backend
     container_name: ai-observer
     command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    environment:
+      OTEL_SERVICE_NAME: eroom-observer
     cpus: 1.0
     mem_limit: 1536m
     mem_reservation: 384m
@@ -120,6 +84,8 @@ services:
     command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --pool=threads --concurrency=50 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
+    environment:
+      OTEL_SERVICE_NAME: eroom-transcriber
     cpus: 4.0
     mem_limit: 4g
     mem_reservation: 1536m
@@ -278,6 +244,84 @@ services:
       - api
       - livekit
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api:
+        condition: service_started
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    user: "0:0"
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./monitoring/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/tmp/tempo
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    volumes:
+      - ./monitoring/loki/loki.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/tmp/loki
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    restart: unless-stopped
+    cpus: 0.3
+    mem_limit: 256m
+    mem_reservation: 64m
+    volumes:
+      - ./monitoring/promtail/promtail.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/provisioning/dashboards-json:/etc/grafana/provisioning/dashboards-json:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+
 volumes:
   redis_data:
   minio_data:
@@ -288,5 +332,8 @@ volumes:
   qdrant_data:
   ollama_data:
   reranker_data:
-  beszel_data:
-  uptime_kuma_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+
