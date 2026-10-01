@@ -3,7 +3,7 @@
   "uid": "eroom-red",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "time": { "from": "now-30m", "to": "now" },
   "refresh": "15s",
   "panels": [
@@ -177,7 +177,7 @@
         "overrides": []
       },
       "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 }
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 16 }
     },
     {
       "id": 4,
@@ -208,7 +208,7 @@
         "overrides": []
       },
       "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 }
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 25 }
     },
     {
       "id": 5,
@@ -238,7 +238,7 @@
         "overrides": []
       },
       "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 }
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 34 }
     }
   ]
 }
