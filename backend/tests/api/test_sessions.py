@@ -32,6 +32,31 @@ def make_session_with_lines(texts: list, room_id: int) -> int:
         return db_session.id
 
 
+class TestSessionListing:
+    def test_mine_caps_at_20_with_correct_counts(self, client: TestClient, alice: dict):
+        from sqlmodel import Session as DBSession
+
+        from app.database import engine
+        from app.models import MessageRole
+        from app.repositories.session import session_crud
+        from app.services import message_crud
+
+        room = client.post("/api/v1/rooms/", json={"name": f"sess-cap-{alice['id']}"}).json()
+
+        with DBSession(engine) as db:
+            for _ in range(25):
+                db_session = session_crud.create(db, obj_in={"user_id": alice["id"], "room_id": room["id"]})
+                message_crud.create(
+                    db,
+                    obj_in={"room_id": room["id"], "user_id": alice["id"], "role": MessageRole.USER, "text": "hi"},
+                )
+
+        mine = [s for s in client.get("/api/v1/sessions/mine").json()["sessions"] if s["room"]["id"] == room["id"]]
+
+        assert len(mine) == 20
+        assert all(s["message_count"] >= 1 for s in mine)
+
+
 class TestSessionTracking:
     def test_join_opens_and_leave_closes_session(self, client: TestClient, alice: dict):
         room = make_room_with_message(client, f"sess-room-{alice['id']}")

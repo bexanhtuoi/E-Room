@@ -79,13 +79,23 @@ class SessionService(ServiceBase):
         return db_session
 
 
-    def list_my_sessions(self, db: Session, user) -> List[Dict[str, Any]]:
+    def list_my_sessions(self, db: Session, user, limit: int = 20) -> List[Dict[str, Any]]:
+        db_sessions = session_crud.get_mine(db, user_id=user.id, limit=limit)
+
+        room_ids = sorted({db_session.room_id for db_session in db_sessions})
+        rooms = {room.id: room for room in room_crud.get_by_ids(db, room_ids)} if room_ids else {}
+
         items = []
 
-        for db_session in session_crud.get_mine(db, user_id=user.id):
-            room = room_crud.get_one(db, id=db_session.room_id)
-            count = len(self.session_lines(db, db_session))
-            items.append({"session": db_session, "room": room, "message_count": count})
+        for db_session in db_sessions:
+            start = as_naive_utc(db_session.joined_at)
+            end = as_naive_utc(db_session.left_at) if db_session.left_at is not None else None
+            count = message_crud.count_in_window(db, db_session.room_id, start, end)
+            items.append({
+                "session": db_session,
+                "room": rooms.get(db_session.room_id),
+                "message_count": count,
+            })
 
         return items
 

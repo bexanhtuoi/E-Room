@@ -33,6 +33,29 @@ class MessageCrud(CRUDRepository):
     def __init__(self) -> None:
         super().__init__(model=Message)
 
+    def count_in_window(
+        self,
+        db: Session,
+        room_id: int,
+        start,
+        end=None,
+    ) -> int:
+        from sqlmodel import func
+
+        stmt = select(func.count()).select_from(Message).where(Message.room_id == room_id)
+
+        if start is not None:
+            stmt = stmt.where(Message.created_at >= start)
+
+        if end is not None:
+            stmt = stmt.where(Message.created_at <= end)
+
+        stmt = stmt.where(
+            (Message.meta_data.is_(None)) | (Message.meta_data.notlike("%session_chat%"))
+        )
+
+        return int(db.exec(stmt).one())
+
     def get_message_times(
         self,
         db: Session,
