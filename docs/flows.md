@@ -18,7 +18,7 @@ ai-worker (x4) ◀──BRPOP── ai │ ai-transcriber (threads x50) ◀─�
 ai-observer (x2) ◀── ai_observer
 ```
 
-Giám sát realtime: Flower `http://localhost:5555` (nội bộ, không public).
+Giám sát realtime: đang chọn tool (xem mục đánh giá monitor) — tạm thời dùng `docker logs` + Redis trực tiếp.
 
 ## 1. Vào / rời phòng
 
@@ -78,9 +78,8 @@ ai-beat (không nhặt việc, chỉ đẻ giấy):
        + chưa hỏi (room:{id}:heartbeat_pending) → RPUSH ai {stream_ai_response(..., "heartbeat")}
        + phòng trống quá ROOM_EMPTY_END_SECONDS → DB rooms→ended
        + phòng hẹn quá 24h → xóa hẳn
- 60s  ensure_room_workers → ai-worker: phòng active còn người mà mất khóa
+  60s  ensure_room_workers → ai-worker: phòng active còn người mà mất khóa
        transcriber/observer_running → phát lại giấy nghe/coi (tự hồi sau restart)
- 24h  cleanup_old_speech → ai-worker: xóa object speech/* quá SPEECH_RETENTION_DAYS (30)
 ```
 
 ## 5. Chấm điểm phát âm

@@ -146,7 +146,6 @@ class Settings:
     speech_raw_end_silence_seconds: float = float(os.getenv("SPEECH_RAW_END_SILENCE_SECONDS", 8.0))
     speech_raw_max_attempt_seconds: float = float(os.getenv("SPEECH_RAW_MAX_ATTEMPT_SECONDS", 300.0))
     speech_raw_flush_bytes: int = int(os.getenv("SPEECH_RAW_FLUSH_BYTES", 65536))
-    speech_retention_days: int = int(os.getenv("SPEECH_RETENTION_DAYS", 30))
 
     # ─── Qdrant ─────────────────────────────────────
     qdrant_host: str = os.getenv("QDRANT_HOST", "localhost")
