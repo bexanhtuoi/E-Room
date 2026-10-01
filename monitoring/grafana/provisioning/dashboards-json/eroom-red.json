@@ -3,7 +3,7 @@
   "uid": "eroom-red",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "time": { "from": "now-30m", "to": "now" },
   "refresh": "15s",
   "panels": [
@@ -151,22 +151,14 @@
     },
     {
       "id": 3,
-      "title": "Do tre p50 / p95 / p99 (theo route)",
+      "title": "Do tre p50 (trung vi, theo route)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "description": "p95 = 95% request xong trong X giay. p95 leo = he thong bat dau cham.",
+      "description": "p50 = mot nua request xong nhanh hon so nay. Day la toc do 'binh thuong' cua he thong.",
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p50 {{route}}"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p95 {{route}}"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p99 {{route}}"
+          "legendFormat": "{{route}}"
         }
       ],
       "fieldConfig": {
@@ -185,7 +177,68 @@
         "overrides": []
       },
       "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 13 }
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 }
+    },
+    {
+      "id": 4,
+      "title": "Do tre p95 (da so user chiu, theo route)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "p95 = 95% request xong trong X giay, 5% cham hon. Day la con so de cam ket toc do (SLA). p95 leo = he thong bat dau cham.",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "green" }, { "value": 2, "color": "red" }] },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "connectNulls": true
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 }
+    },
+    {
+      "id": 5,
+      "title": "Do tre p99 (truong hop xau nhat, theo route)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "description": "p99 = 99% request xong trong X giay, 1% te nhat nam ngoai. p99 vot dot ngot = co request ket (DB khoa, AI cham, GC).",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "connectNulls": true
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 }
     }
   ]
 }
