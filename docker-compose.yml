@@ -83,6 +83,8 @@ services:
       KEY: ${BESZEL_AGENT_KEY:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   uptime-kuma:
     image: louislam/uptime-kuma:2
