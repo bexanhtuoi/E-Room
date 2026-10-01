@@ -92,6 +92,11 @@ Mỗi user ảo: xem rooms → join → đọc chat → gửi 1-3 tin → leave,
 Mặc định không gọi `@ai` (tốn quota) và không chấm điểm (tốn CPU);
 `--with-ai` bật hỏi AI thưa, `--bad-rate` tạo lỗi 4xx cho panel Error.
 
+> ⚠️ Chỉ chạy simulator khi cần test/demo rồi tắt. Để chạy nền 24/7 sẽ
+> dồn hàng trăm giấy `score_room_utterances` (mỗi lần leave là 1 giấy quét),
+> worker tải model + RAM vọt trần + api/tidb quay cuồng theo (đã dính 1 lần:
+> hàng `ai` tồn 900 giấy, worker 100% RAM).
+
 ## 7. Troubleshooting (từ case thật)
 
 | Hiện tượng | Nguyên nhân / Fix |
