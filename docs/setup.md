@@ -80,6 +80,18 @@ npm run build && npx vitest run              # build + unit
 
 Guard kiến trúc: `tests/unit/test_architecture.py` quét AST — routers cấm `HTTPException`/DB trực tiếp/import `app.ai`, cấm import ngược tầng. Refactor làm vỡ tầng là test đỏ ngay.
 
+## 6b. Giả lập user (đổ số liệu cho Grafana)
+
+```bash
+cd backend
+uv run python scripts/load_simulator.py --users 3 --interval 4   # chạy mãi đến Ctrl+C
+uv run python scripts/load_simulator.py --users 5 --minutes 10 --with-ai --bad-rate 0.1
+```
+
+Mỗi user ảo: xem rooms → join → đọc chat → gửi 1-3 tin → leave, lặp lại.
+Mặc định không gọi `@ai` (tốn quota) và không chấm điểm (tốn CPU);
+`--with-ai` bật hỏi AI thưa, `--bad-rate` tạo lỗi 4xx cho panel Error.
+
 ## 7. Troubleshooting (từ case thật)
 
 | Hiện tượng | Nguyên nhân / Fix |
