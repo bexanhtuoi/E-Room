@@ -3,7 +3,7 @@
   "uid": "eroom-red",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "time": { "from": "now-30m", "to": "now" },
   "refresh": "15s",
   "panels": [
@@ -115,7 +115,7 @@
         "overrides": []
       },
       "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 }
+      "gridPos": { "h": 12, "w": 12, "x": 0, "y": 4 }
     },
     {
       "id": 2,
@@ -147,18 +147,18 @@
         "overrides": []
       },
       "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] } },
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 }
+      "gridPos": { "h": 12, "w": 12, "x": 12, "y": 4 }
     },
     {
       "id": 3,
-      "title": "Do tre p50 (trung vi, theo route)",
+      "title": "Do tre p50 (trung vi, toan bo API)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "description": "p50 = mot nua request xong nhanh hon so nay. Day la toc do 'binh thuong' cua he thong.",
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p50 toan bo API"
         }
       ],
       "fieldConfig": {
@@ -181,14 +181,14 @@
     },
     {
       "id": 4,
-      "title": "Do tre p95 (da so user chiu, theo route)",
+      "title": "Do tre p95 (da so user chiu, toan bo API)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "description": "p95 = 95% request xong trong X giay, 5% cham hon. Day la con so de cam ket toc do (SLA). p95 leo = he thong bat dau cham.",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95 toan bo API"
         }
       ],
       "fieldConfig": {
@@ -212,14 +212,14 @@
     },
     {
       "id": 5,
-      "title": "Do tre p99 (truong hop xau nhat, theo route)",
+      "title": "Do tre p99 (truong hop xau nhat, toan bo API)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "description": "p99 = 99% request xong trong X giay, 1% te nhat nam ngoai. p99 vot dot ngot = co request ket (DB khoa, AI cham, GC).",
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum by (route, le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(eroom_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p99 toan bo API"
         }
       ],
       "fieldConfig": {
