@@ -18,7 +18,7 @@ ai-worker (x4) ◀──BRPOP── ai │ ai-transcriber (threads x50) ◀─�
 ai-observer (x2) ◀── ai_observer
 ```
 
-Giám sát realtime: Grafana `http://localhost:3000` (dashboard E-Room API RED:
+Giám sát realtime: Grafana `http://localhost:8092` (dashboard E-Room API RED:
 RPS/latency p50-p99/error-rate theo route, Explore traces Tempo + logs Loki).
 Tạm thời vẫn dùng `docker logs` + Redis trực tiếp khi cần đào sâu.
 
