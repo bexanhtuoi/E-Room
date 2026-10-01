@@ -91,6 +91,7 @@ def user_loop(base: str, tag: int, interval: float, stop_at: float, with_ai: boo
 
             client.get(f"/api/v1/rooms/{room_id}")
             client.post(f"/api/v1/rooms/{room_id}/join")
+            client.get(f"/api/v1/rooms/{room_id}/participants")
             client.get("/api/v1/messages/", params={"room_id": room_id, "limit": 30})
 
             for _ in range(random.randint(1, 3)):
@@ -101,10 +102,25 @@ def user_loop(base: str, tag: int, interval: float, stop_at: float, with_ai: boo
                 client.post("/api/v1/messages/", json={"room_id": room_id, "text": text})
                 time.sleep(random.uniform(1.0, 3.0))
 
+            roll = random.random()
+            if roll < 0.25:
+                client.get("/api/v1/sessions/mine")
+            elif roll < 0.40:
+                client.get("/api/v1/users/me/stats")
+            elif roll < 0.50:
+                client.get("/api/v1/documents/")
+            elif roll < 0.60:
+                client.get("/api/v1/notifications/")
+            elif roll < 0.70:
+                client.get("/api/v1/tts/voices")
+            elif roll < 0.78:
+                client.post("/api/v1/rooms/match", json={})
+
             if random.random() < bad_rate:
                 client.get("/api/v1/rooms/999999999")
 
             client.get(f"/api/v1/rooms/{room_id}/speech-logs/summary")
+            client.get(f"/api/v1/rooms/{room_id}/speech-logs/me")
             client.post(f"/api/v1/rooms/{room_id}/leave")
         except Exception as error:
             print(f"[sim-{tag}] action failed (tiep tuc): {str(error)[:100]}")
