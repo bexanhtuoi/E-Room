@@ -76,7 +76,8 @@ services:
     cpus: 0.2
     mem_limit: 128m
     mem_reservation: 32m
-    network_mode: host
+    ports:
+      - "45876:45876"
     environment:
       # Lay KEY that (ssh-ed25519...) trong Beszel → Add System, roi dien vao .env
       # hoac export BESZEL_AGENT_KEY truoc khi up.
