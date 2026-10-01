@@ -57,6 +57,43 @@ services:
       redis:
         condition: service_healthy
 
+  beszel-hub:
+    image: henrygd/beszel:0.18
+    container_name: beszel-hub
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 256m
+    mem_reservation: 64m
+    ports:
+      - "8090:8090"
+    volumes:
+      - beszel_data:/beszel_data
+
+  beszel-agent:
+    image: henrygd/beszel-agent:0.18
+    container_name: beszel-agent
+    restart: unless-stopped
+    cpus: 0.2
+    mem_limit: 128m
+    mem_reservation: 32m
+    network_mode: host
+    environment:
+      KEY: ${BESZEL_AGENT_KEY:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    container_name: uptime-kuma
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    ports:
+      - "8091:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+
   ai-observer:
     build: ./backend
     container_name: ai-observer
@@ -248,3 +285,5 @@ volumes:
   qdrant_data:
   ollama_data:
   reranker_data:
+  beszel_data:
+  uptime_kuma_data:

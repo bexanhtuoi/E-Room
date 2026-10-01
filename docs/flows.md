@@ -18,7 +18,9 @@ ai-worker (x4) ◀──BRPOP── ai │ ai-transcriber (threads x50) ◀─�
 ai-observer (x2) ◀── ai_observer
 ```
 
-Giám sát realtime: đang chọn tool (xem mục đánh giá monitor) — tạm thời dùng `docker logs` + Redis trực tiếp.
+Giám sát realtime: Beszel `http://localhost:8090` (tài nguyên host/container/GPU) +
+Uptime Kuma `http://localhost:8091` (sống/chết endpoint, báo Telegram).
+Tạm thời vẫn dùng `docker logs` + Redis trực tiếp khi cần đào sâu.
 
 ## 1. Vào / rời phòng
 
