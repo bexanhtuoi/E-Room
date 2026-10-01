@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -48,7 +49,7 @@ def create_token(
 
 
 def body_digest(raw_body: bytes) -> str:
-    return hashlib.sha256(raw_body or b"").hexdigest()
+    return base64.b64encode(hashlib.sha256(raw_body or b"").digest()).decode()
 
 
 def create_webhook_token(raw_body: bytes) -> str:
@@ -76,7 +77,15 @@ def verify_webhook(token: str, raw_body: bytes) -> Optional[dict]:
 
     expected = claims.get("sha256") if isinstance(claims, dict) else None
 
-    if not expected or not hmac.compare_digest(str(expected), body_digest(raw_body)):
+    if not expected:
+        return None
+
+    candidates = {
+        body_digest(raw_body),
+        hashlib.sha256(raw_body or b"").hexdigest(),
+    }
+
+    if not any(hmac.compare_digest(str(expected), item) for item in candidates):
         return None
 
     return claims
