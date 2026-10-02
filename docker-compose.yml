@@ -26,13 +26,13 @@ services:
   ai-worker:
     build: ./backend
     container_name: ai-worker
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=4 -O fair --max-tasks-per-child=100 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
     environment:
       OTEL_SERVICE_NAME: eroom-worker
     cpus: 3.0
-    mem_limit: 4g
+    mem_limit: 6g
     mem_reservation: 1536m
     volumes:
       - ./backend/app:/app/app
@@ -184,8 +184,8 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: unless-stopped
-    cpus: 2.0
-    mem_limit: 2g
+    cpus: 1.0
+    mem_limit: 512m
     ports:
       - "11434:11434"
     volumes:
