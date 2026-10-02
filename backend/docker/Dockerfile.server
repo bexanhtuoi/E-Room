@@ -1,0 +1,33 @@
+# EC2 scorer server: FastAPI cham diem phat am (wav2vec2 + xlsr GOP).
+# Build tu backend/: docker build -f docker/Dockerfile.server -t eroom-scorer-server .
+FROM python:3.13-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends libsndfile1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /tmp/log /opt/nltk_data /opt/hf_cache /app/log
+
+ENV HF_HOME=/opt/hf_cache \
+    NLTK_DATA=/opt/nltk_data \
+    OMP_NUM_THREADS=4 \
+    APP_ENV=development \
+    SECRET_KEY=scorer-dummy \
+    SCORER_BACKEND=local
+
+COPY docker/scorer-requirements.txt /tmp/scorer-requirements.txt
+RUN pip install --no-cache-dir fastapi uvicorn -r /tmp/scorer-requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cpu
+
+# Bake NLTK data + HF weights vao image (runtime khong tai gi them).
+RUN python -c "import nltk; nltk.download('cmudict', download_dir='/opt/nltk_data')" && \
+    python -c "from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, AutoFeatureExtractor; \
+        [Wav2Vec2ForCTC.from_pretrained(m) for m in ['facebook/wav2vec2-base-960h', 'facebook/wav2vec2-xlsr-53-espeak-cv-ft']]; \
+        Wav2Vec2Processor.from_pretrained('facebook/wav2vec2-base-960h'); \
+        AutoFeatureExtractor.from_pretrained('facebook/wav2vec2-xlsr-53-espeak-cv-ft')"
+
+COPY app/ /app/app/
+COPY docker/scorer_server.py /app/scorer_server.py
+WORKDIR /app
+
+EXPOSE 8005
+
+CMD ["uvicorn", "scorer_server:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "1"]

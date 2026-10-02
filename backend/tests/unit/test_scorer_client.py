@@ -40,9 +40,10 @@ def test_remote_posts_audio_base64(monkeypatch):
         def __exit__(self, *args):
             return False
 
-        def post(self, url, json):
+        def post(self, url, json, headers=None):
             seen["url"] = url
             seen["json"] = json
+            seen["headers"] = headers
 
             return FakeResponse()
 

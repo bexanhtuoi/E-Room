@@ -28,11 +28,13 @@ def score_remote(
         raise ScorerUnavailableError()
 
     payload = base64.b64encode(audio_bytes).decode("ascii")
+    headers = {"Authorization": f"Bearer {settings.scorer_api_key}"} if settings.scorer_api_key else {}
 
     try:
         with httpx.Client(timeout=settings.scorer_timeout) as client:
             response = client.post(
                 f"{url}/score",
+                headers=headers,
                 json={
                     "audio_base64": payload,
                     "reference_text": reference_text,

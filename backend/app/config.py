@@ -139,6 +139,7 @@ class Settings:
     # lambda-strict = chi dung Lambda, loi thi bo qua cau do.
     scorer_backend: str = os.getenv("SCORER_BACKEND", "local")
     scorer_lambda_url: str = os.getenv("SCORER_LAMBDA_URL", "")
+    scorer_api_key: str = os.getenv("SCORER_API_KEY", "")
     scorer_timeout: float = float(os.getenv("SCORER_TIMEOUT", 300.0))
 
     # ─── LLM feedback (LLM local qua get_llm, chi doc ScoringReport) ───────
