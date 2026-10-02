@@ -11,8 +11,27 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 API_KEY = os.getenv("SCORER_API_KEY", "")
+EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "Qwen/Qwen3-Embedding-0.6B")
 
 app = FastAPI(title="eroom-scorer")
+
+_embed_model = None
+
+
+def get_embed_model():
+    global _embed_model
+
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+
+        _embed_model = SentenceTransformer(EMBED_MODEL_ID)
+
+    return _embed_model
+
+
+class EmbedRequest(BaseModel):
+    input: Any = ""
+    model: str = ""
 
 
 class ScoreRequest(BaseModel):
@@ -59,6 +78,20 @@ def warm(authorization: Optional[str] = Header(default=None)):
     get_phone_model()
 
     return {"warmed": True}
+
+
+@app.post("/v1/embeddings")
+def embeddings(payload: EmbedRequest, authorization: Optional[str] = Header(default=None)):
+    check_auth(authorization)
+
+    texts = payload.input if isinstance(payload.input, list) else [payload.input]
+    vectors = get_embed_model().encode(texts, normalize_embeddings=True).tolist()
+
+    return {
+        "object": "list",
+        "data": [{"object": "embedding", "index": i, "embedding": vec} for i, vec in enumerate(vectors)],
+        "model": payload.model or EMBED_MODEL_ID,
+    }
 
 
 @app.post("/score")
