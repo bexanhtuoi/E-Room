@@ -1,11 +1,25 @@
 from typing import Dict, Optional
 
+import langchain_openai.chat_models.base as lc_base
 from langchain.agents import create_agent as create_langchain_agent
 from langchain_openai import ChatOpenAI
 
 from app.ai.llm.prompt import get_main_prompt
 from app.ai.llm.tools import retrieval_documents, web_search
 from app.config import settings
+
+orig_convert = lc_base._convert_delta_to_message_chunk
+
+
+def keep_reasoning_content(_dict, default_class):
+    msg = orig_convert(_dict, default_class)
+    reasoning = _dict.get("reasoning_content") or _dict.get("reasoning")
+    if reasoning is not None and hasattr(msg, "additional_kwargs"):
+        msg.additional_kwargs = {**(msg.additional_kwargs or {}), "reasoning_content": reasoning}
+    return msg
+
+
+lc_base._convert_delta_to_message_chunk = keep_reasoning_content
 
 
 def is_openrouter(base_url: str) -> bool:

@@ -134,7 +134,7 @@ class SessionService(ServiceBase):
 
 
     def build_session_agent(self, db_session, total_lines: int):
-        from app.ai import get_agent
+        from app.ai.llm.client import get_agent
         from app.ai.llm.prompt import session_prompt
         from app.ai.llm.tools import TRANSCRIPT_TOOLS
 

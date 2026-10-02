@@ -124,7 +124,7 @@ def extract_json(content: str) -> Dict[str, Any] | None:
 async def generate_feedback(scoring_report: dict, model: str = "",
                             temperature: float = 0.6, max_tokens: int = 2000,
                             system_prompt: str = "", user_label: str = "scoring_report") -> dict:
-    from app.ai import get_llm
+    from app.ai.llm.client import get_llm
 
     user_msg = f"{user_label}:\n" + json.dumps(scoring_report, ensure_ascii=False)[:12000]
 

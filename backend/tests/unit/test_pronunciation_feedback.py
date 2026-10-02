@@ -53,7 +53,7 @@ class TestPromptSections:
         assert "feedback_raw" not in out
 
     def test_feedback_disables_reasoning_at_api_level(self):
-        from app.ai import reasoning_body
+        from app.ai.llm.client import reasoning_body
 
         assert reasoning_body("https://openrouter.ai/api/v1", "exclude") == {
             "reasoning": {"exclude": True}}
