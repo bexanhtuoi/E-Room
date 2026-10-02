@@ -83,11 +83,27 @@ def load_feedback_prompts() -> Dict[str, str]:
     return out
 
 
-PROMPTS = load_feedback_prompts()
+_prompts: Dict[str, str] = {}
 
-SYSTEM_PROMPT = PROMPTS["utterance"]
 
-SESSION_FEEDBACK_PROMPT = PROMPTS["session"]
+def prompts() -> Dict[str, str]:
+    if not _prompts:
+        _prompts.update(load_feedback_prompts())
+
+    return _prompts
+
+
+def __getattr__(name: str):
+    if name == "PROMPTS":
+        return prompts()
+
+    if name == "SYSTEM_PROMPT":
+        return prompts()["utterance"]
+
+    if name == "SESSION_FEEDBACK_PROMPT":
+        return prompts()["session"]
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
@@ -132,7 +148,7 @@ async def generate_feedback(scoring_report: dict, model: str = "",
         llm = get_llm(model=model, temperature=temperature, max_tokens=max_tokens,
                         reasoning="exclude")
         msg = await llm.ainvoke([
-            {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or prompts()["utterance"]},
             {"role": "user", "content": user_msg},
         ])
     except Exception as error:

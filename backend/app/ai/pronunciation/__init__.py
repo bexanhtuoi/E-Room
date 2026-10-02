@@ -9,16 +9,6 @@ from app.ai.pronunciation.audio import (
     load_wav_16k,
     vad_segments,
 )
-from app.ai.pronunciation.feedback import (
-    SESSION_FEEDBACK_PROMPT,
-    SYSTEM_PROMPT,
-    build_fallback_feedback,
-    extract_json,
-    generate_feedback,
-    load_feedback_prompts,
-    request_pronun_feedback,
-    strip_reasoning,
-)
 from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation, split_syllables
 from app.ai.pronunciation.helpers import tok_words
 from app.ai.pronunciation.metrics import (
@@ -46,6 +36,27 @@ from app.ai.pronunciation.scorer import (
     score_via_pronun_service,
     score_with_wav2vec2,
 )
+
+_FEEDBACK_NAMES = frozenset({
+    "SESSION_FEEDBACK_PROMPT",
+    "SYSTEM_PROMPT",
+    "build_fallback_feedback",
+    "extract_json",
+    "generate_feedback",
+    "load_feedback_prompts",
+    "request_pronun_feedback",
+    "strip_reasoning",
+})
+
+
+def __getattr__(name: str):
+    if name in _FEEDBACK_NAMES:
+        from app.ai.pronunciation import feedback
+
+        return getattr(feedback, name)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "BLANK_RATIO_MISALIGNED",
