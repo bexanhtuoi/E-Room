@@ -24,9 +24,9 @@ def score_with_backend(
 ):
     from app.ai.pronunciation import score_pronunciation
 
-    backend = (settings.scorer_backend or "local").lower()
+    backend = (settings.scorer_backend or "local").lower().replace("lambda", "remote")
 
-    if backend in ("lambda", "lambda-strict") and audio_path:
+    if backend in ("remote", "remote-strict") and audio_path:
         try:
             with open(audio_path, "rb") as handle:
                 audio_bytes = handle.read()
@@ -41,10 +41,10 @@ def score_with_backend(
                 words=words,
             )
         except ScorerUnavailableError as error:
-            if backend == "lambda-strict":
+            if backend == "remote-strict":
                 raise
 
-            log.warning("Scorer Lambda loi, rot ve local | err=%s", error)
+            log.warning("Scorer remote loi, rot ve local | err=%s", error)
 
     return score_pronunciation(
         audio_path=audio_path,

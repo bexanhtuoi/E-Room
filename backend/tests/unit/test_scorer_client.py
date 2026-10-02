@@ -15,7 +15,7 @@ def _local_marker(*args, **kwargs):
 
 
 def test_remote_raises_without_url(monkeypatch):
-    monkeypatch.setattr(settings, "scorer_lambda_url", "")
+    monkeypatch.setattr(settings, "scorer_url", "")
 
     with pytest.raises(ScorerUnavailableError):
         scorer_client.score_remote(b"wav", "hello")
@@ -47,14 +47,14 @@ def test_remote_posts_audio_base64(monkeypatch):
 
             return FakeResponse()
 
-    monkeypatch.setattr(settings, "scorer_lambda_url", "https://lambda.example")
+    monkeypatch.setattr(settings, "scorer_url", "https://scorer.example")
     monkeypatch.setattr(settings, "scorer_timeout", 5.0)
     monkeypatch.setattr(scorer_client.httpx, "Client", FakeClient)
 
     result = scorer_client.score_remote(b"wav-bytes", "hello world")
 
     assert result == {"overall": 8.5}
-    assert seen["url"] == "https://lambda.example/score"
+    assert seen["url"] == "https://scorer.example/score"
     assert seen["json"]["reference_text"] == "hello world"
 
     import base64
@@ -73,7 +73,7 @@ def test_router_defaults_to_local(monkeypatch, tmp_path):
 
 
 def test_router_falls_back_to_local_on_remote_error(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "scorer_backend", "lambda")
+    monkeypatch.setattr(settings, "scorer_backend", "remote")
 
     audio = tmp_path / "a.wav"
     audio.write_bytes(b"wav")
@@ -84,7 +84,7 @@ def test_router_falls_back_to_local_on_remote_error(monkeypatch, tmp_path):
 
 
 def test_router_strict_raises(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "scorer_backend", "lambda-strict")
+    monkeypatch.setattr(settings, "scorer_backend", "remote-strict")
 
     audio = tmp_path / "a.wav"
     audio.write_bytes(b"wav")
@@ -92,3 +92,19 @@ def test_router_strict_raises(monkeypatch, tmp_path):
     with patch.object(scoring, "score_remote", side_effect=ScorerUnavailableError()):
         with pytest.raises(ScorerUnavailableError):
             scoring.score_with_backend(audio_path=str(audio), reference_text="hi")
+
+
+def test_router_maps_legacy_lambda_names(monkeypatch, tmp_path):
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"wav")
+
+    with patch.object(scoring, "score_remote", side_effect=ScorerUnavailableError()):
+        with patch("app.ai.pronunciation.score_pronunciation", side_effect=_local_marker):
+            monkeypatch.setattr(settings, "scorer_backend", "lambda")
+
+            assert scoring.score_with_backend(audio_path=str(audio), reference_text="hi") == {"backend": "local"}
+
+            monkeypatch.setattr(settings, "scorer_backend", "lambda-strict")
+
+            with pytest.raises(ScorerUnavailableError):
+                scoring.score_with_backend(audio_path=str(audio), reference_text="hi")

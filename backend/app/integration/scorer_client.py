@@ -22,7 +22,7 @@ def score_remote(
     words: Optional[List[Dict[str, Any]]] = None,
     base_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    url = (base_url or settings.scorer_lambda_url).rstrip("/")
+    url = (base_url or settings.scorer_url).rstrip("/")
 
     if not url:
         raise ScorerUnavailableError()

@@ -133,12 +133,13 @@ class Settings:
     # May chay backend gánh compute. Model tai 1 lan vao HF cache.
     wav2vec_model_id: str = os.getenv("WAV2VEC_MODEL_ID", "facebook/wav2vec2-base-960h")
     phoneme_model_id: str = os.getenv("PHONEME_MODEL_ID", "facebook/wav2vec2-xlsr-53-espeak-cv-ft")
-    # Chon backend cham diem: local | lambda | lambda-strict.
+    # Chon backend cham diem: local | remote | remote-strict.
     # local = worker tu cham (mac dinh, khong doi hanh vi).
-    # lambda = POST sang AWS Lambda, loi tu rot ve local.
-    # lambda-strict = chi dung Lambda, loi thi bo qua cau do.
+    # remote = POST sang server scorer (EC2), loi tu rot ve local.
+    # remote-strict = chi dung server ngoai, loi thi bo qua cau do.
+    # (gia tri cu lambda/lambda-strict van chay, tu map sang remote.)
     scorer_backend: str = os.getenv("SCORER_BACKEND", "local")
-    scorer_lambda_url: str = os.getenv("SCORER_LAMBDA_URL", "")
+    scorer_url: str = os.getenv("SCORER_URL", "") or os.getenv("SCORER_LAMBDA_URL", "")
     scorer_api_key: str = os.getenv("SCORER_API_KEY", "")
     scorer_timeout: float = float(os.getenv("SCORER_TIMEOUT", 300.0))
 
