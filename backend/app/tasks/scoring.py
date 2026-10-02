@@ -2,12 +2,59 @@ from typing import Any, Dict, Optional
 
 from sqlmodel import Session
 
+from app.config import settings
 from app.database import engine
 from app.integration.celery import celery_app
+from app.integration.scorer_client import score_remote
 from app.log import get_logger
 from app.repositories import pronunciation_score_crud, room_crud, session_crud
+from app.shared.exceptions import ScorerUnavailableError
 
 log = get_logger("app.tasks", level="INFO")
+
+
+def score_with_backend(
+    audio_path=None,
+    reference_text: str = "",
+    language: str = "en",
+    confidence: float = 1.0,
+    avg_logprob: float = 0.0,
+    duration: float = 0.0,
+    words=None,
+):
+    from app.ai.pronunciation import score_pronunciation
+
+    backend = (settings.scorer_backend or "local").lower()
+
+    if backend in ("lambda", "lambda-strict") and audio_path:
+        try:
+            with open(audio_path, "rb") as handle:
+                audio_bytes = handle.read()
+
+            return score_remote(
+                audio_bytes,
+                reference_text,
+                language=language,
+                confidence=confidence,
+                avg_logprob=avg_logprob,
+                duration=duration,
+                words=words,
+            )
+        except ScorerUnavailableError as error:
+            if backend == "lambda-strict":
+                raise
+
+            log.warning("Scorer Lambda loi, rot ve local | err=%s", error)
+
+    return score_pronunciation(
+        audio_path=audio_path,
+        reference_text=reference_text,
+        language=language,
+        confidence=confidence,
+        avg_logprob=avg_logprob,
+        duration=duration,
+        words=words,
+    )
 
 
 def score_room_utterance(
@@ -17,7 +64,6 @@ def score_room_utterance(
     message_id: Any,
     session_id: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
-    from app.ai.pronunciation import score_pronunciation
     from app.ai.stt.audio_store import fetch_audio_bytes, is_s3_ref, materialize_temp_wav
     from app.ai.stt.recorder import find_attempt_by_message
     from app.ai.stt.speech_log import attach_pronunciation, read_user_log, resolve_audio_path
@@ -72,7 +118,7 @@ def score_room_utterance(
                 temp_paths.append(audio_path)
 
     try:
-        score = score_pronunciation(
+        score = score_with_backend(
             audio_path=audio_path,
             reference_text=reference,
             language=entry.get("language", "en"),

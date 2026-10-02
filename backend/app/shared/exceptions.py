@@ -94,6 +94,12 @@ class GoogleNotConfiguredError(BadRequestError):
     detail = "Đăng nhập Google chưa được cấu hình (thiếu GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)."
 
 
+class ScorerUnavailableError(AppException):
+    status_code = 502
+    code = "SCORER_UNAVAILABLE"
+    detail = "Máy chấm điểm phát âm không khả dụng."
+
+
 class TTSUnavailableError(AppException):
     status_code = 502
     code = "TTS_UNAVAILABLE"
