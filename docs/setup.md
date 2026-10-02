@@ -29,6 +29,20 @@ Bắt buộc đổi trước khi public: `SECRET_KEY`, `LIVEKIT_API_KEY/SECRET` 
 
 AI ngoài (LLM/STT/TTS) trỏ qua `LLM_BASE_URL`, `STT_PROVIDER` + `STT_SERVER_BASE_URL`, `TTS_BASE_URL` — xem bảng biến ở `README.md`.
 
+### 2b. Scorer phát âm: local hay EC2
+
+Chấm điểm phát âm (wav2vec2 + xlsr, ~1.6GB model) chọn backend bằng `SCORER_BACKEND`:
+
+| Mode | `.env` | Ghi chú |
+|---|---|---|
+| `local` (mặc định) | — | Worker tự chấm, tốn ~3-4GB RAM worker |
+| `lambda` | `SCORER_LAMBDA_URL=http://<EC2-IP>:8005` + `SCORER_API_KEY` | POST wav sang server scorer, lỗi tự rớt về local |
+| `lambda-strict` | như trên | Chỉ dùng server ngoài, lỗi thì bỏ qua câu đó |
+
+Server scorer chạy trên EC2 `m7i-flex.large` Sydney: `backend/docker/Dockerfile.server` + `scorer_server.py` (`POST /score`, `GET /warm`, auth `Bearer SCORER_API_KEY`).
+Key nằm ở `~/.aws/scorer_api_key.txt` (ngoài repo). SSH: `ssh -i ~/.aws/eroom-ec2.pem ec2-user@<IP>` (file `.pem` gốc là UTF-16 do PowerShell — convert sang ASCII trước khi dùng).
+Triển khai lại image: build + push ECR `eroom-scorer-server` → SSH vào máy `docker pull` + `docker rm -f scorer` + `docker run` lại (xem user-data lúc tạo máy).
+
 ## 3. Chạy dev local
 
 ```bash
