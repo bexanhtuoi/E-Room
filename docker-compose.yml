@@ -20,8 +20,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-      ollama:
-        condition: service_started
 
   ai-worker:
     build: ./backend
@@ -198,17 +196,17 @@ services:
   #     retries: 20
   #     start_period: 300s
 
-  reranker:
-    image: ghcr.io/ggml-org/llama.cpp:server
-    container_name: reranker
-    profiles: ["llm-local"]
-    entrypoint: ["/app/llama-server"]
-    command: ["-hf", "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", "--host", "0.0.0.0", "--port", "8014", "-c", "4096", "-b", "2048", "-ub", "2048", "--pooling", "rank", "--rerank"]
-    restart: unless-stopped
-    ports:
-      - "8014:8014"
-    volumes:
-      - reranker_data:/root/.cache/huggingface
+  # reranker:
+  #   image: ghcr.io/ggml-org/llama.cpp:server
+  #   container_name: reranker
+  #   profiles: ["llm-local"]
+  #   entrypoint: ["/app/llama-server"]
+  #   command: ["-hf", "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", "--host", "0.0.0.0", "--port", "8014", "-c", "4096", "-b", "2048", "-ub", "2048", "--pooling", "rank", "--rerank"]
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8014:8014"
+  #   volumes:
+  #     - reranker_data:/root/.cache/huggingface
 
   qdrant:
     image: qdrant/qdrant:latest
