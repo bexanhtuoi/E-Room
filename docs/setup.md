@@ -39,9 +39,17 @@ Chấm điểm phát âm (wav2vec2 + xlsr, ~1.6GB model) chọn backend bằng `
 | `remote` | `SCORER_URL=http://<EC2-IP>:8005` + `SCORER_API_KEY` | POST wav sang server scorer, lỗi tự rớt về local |
 | `remote-strict` | như trên | Chỉ dùng server ngoài, lỗi thì bỏ qua câu đó |
 
-Server scorer chạy trên EC2 `m7i-flex.large` Sydney: `backend/docker/Dockerfile.server` + `scorer_server.py` (`POST /score`, `GET /warm`, `POST /v1/embeddings`, auth `Bearer SCORER_API_KEY`).
-Key nằm ở `~/.aws/scorer_api_key.txt` (ngoài repo). SSH: `ssh -i ~/.aws/eroom-ec2.pem ec2-user@<IP>` (file `.pem` gốc là UTF-16 do PowerShell — convert sang ASCII trước khi dùng).
-Triển khai lại image: build + push ECR `eroom-scorer-server` → SSH vào máy `docker pull` + `docker rm -f scorer` + `docker run` lại (xem user-data lúc tạo máy).
+Server scorer chạy trên EC2 `m7i-flex.large` Sydney, code ở `backend/ec2/` như backend mini:
+`config.py` (env) + `schemas.py` (request) + `models.py` (nạp model, gọi `app.ai.pronunciation`) +
+`helpers.py` (auth, sanitize, wav tạm) + `api.py` (`GET /warm`, `POST /score`, `POST /v1/embeddings`,
+auth `Bearer SCORER_API_KEY`) + `main.py` (lifespan nạp model lúc boot) + `server.py` (uvicorn) +
+`Dockerfile` (build bằng `uv`, bake sẵn weights) + `.env` (không commit).
+Key nằm ở `~/.aws/scorer_api_key.txt` (ngoài repo). SSH: `ssh -i ~/.aws/eroom-ec2.pem ec2-user@<IP>`
+(file `.pem` gốc là UTF-16 do PowerShell — convert sang ASCII trước khi dùng).
+Triển khai lại image: `docker build -f backend/ec2/Dockerfile -t ... backend/` + push ECR
+`eroom-scorer-server` → SSH vào máy `docker pull` + `docker rm -f scorer` + `docker run` lại
+(xem user-data lúc tạo máy). EC2 stop/start đổi IP public → nhớ cập nhật `SCORER_URL` +
+`EMBEDDING_BASE_URL` trong `backend/.env.docker` rồi recreate api/worker/observer.
 
 ## 3. Chạy dev local
 
