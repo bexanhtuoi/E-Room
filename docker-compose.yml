@@ -180,23 +180,23 @@ services:
   #   volumes:
   #     - llama_data:/root/.cache/huggingface
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    restart: unless-stopped
-    cpus: 1.0
-    mem_limit: 512m
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    entrypoint: ["/bin/sh", "-c", "ollama serve > /tmp/ollama.log 2>&1 & sleep 10; ollama pull qwen3-embedding:0.6b; wait"]
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q qwen3-embedding"]
-      interval: 30s
-      timeout: 10s
-      retries: 20
-      start_period: 300s
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   cpus: 1.0
+  #   mem_limit: 512m
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   entrypoint: ["/bin/sh", "-c", "ollama serve > /tmp/ollama.log 2>&1 & sleep 10; ollama pull qwen3-embedding:0.6b; wait"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "ollama list | grep -q qwen3-embedding"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 20
+  #     start_period: 300s
 
   reranker:
     image: ghcr.io/ggml-org/llama.cpp:server
