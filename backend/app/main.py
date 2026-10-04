@@ -35,7 +35,12 @@ async def lifespan(app: FastAPI):
         log.warning("Database health FAILED")
 
     with Session(engine) as session:
-        counts = seed_all(session)
+        try:
+            counts = seed_all(session)
+        except Exception as error:
+            log.warning("Seed bỏ qua (worker khác seed trước) | err=%s", str(error)[:150])
+            counts = {}
+
         log.info(
             "Seed dữ liệu mẫu | admins=%s users=%s rooms=%s messages=%s notifications=%s documents=%s",
             counts.get("admins", 0),

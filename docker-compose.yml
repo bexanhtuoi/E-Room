@@ -7,9 +7,11 @@ services:
       - "8000:8000"
     restart: unless-stopped
     env_file: ./backend/.env.docker
-    cpus: 2.0
-    mem_limit: 2g
-    mem_reservation: 768m
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prom-metrics
+    cpus: 4.0
+    mem_limit: 3g
+    mem_reservation: 1g
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech

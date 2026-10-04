@@ -1,3 +1,4 @@
+import os
 import time
 
 from fastapi import Request
@@ -55,12 +56,30 @@ async def metrics_middleware(request: Request, call_next):
     return response
 
 
+def metrics_registry():
+    multiproc_dir = os.getenv("PROMETHEUS_MULTIPROC_DIR", "")
+
+    if not multiproc_dir:
+        return None
+
+    from prometheus_client import CollectorRegistry
+    from prometheus_client.multiprocess import MultiProcessCollector
+
+    registry = CollectorRegistry()
+    MultiProcessCollector(registry)
+
+    return registry
+
+
 def setup_metrics(app) -> None:
     app.middleware("http")(metrics_middleware)
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics():
-        return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+        registry = metrics_registry()
+        data = generate_latest(registry) if registry is not None else generate_latest()
+
+        return PlainTextResponse(data, media_type=CONTENT_TYPE_LATEST)
 
 
 def setup_tracing(service_name: str = "") -> bool:

@@ -58,6 +58,24 @@ def create_db_and_tables() -> None:
     ensure_schema_columns()
 
 
+def exec_ddl(conn, stmt: str) -> None:
+    try:
+        conn.execute(text(stmt))
+        conn.commit()
+    except Exception as error:
+        conn.rollback()
+        code = getattr(getattr(error, "orig", None), "args", [None])[0]
+        message = str(error).lower()
+
+        if code in (1060, 1091):
+            return
+
+        if "duplicate column" in message or "doesn't exist" in message or "no such column" in message:
+            return
+
+        raise
+
+
 def ensure_schema_columns() -> None:
 
     wanted: dict[str, dict[str, str]] = {
@@ -116,20 +134,17 @@ def ensure_schema_columns() -> None:
             for name, ddl in columns.items():
                 if name in existing:
                     continue
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
-                conn.commit()
+                exec_ddl(conn, f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
             for stmt in backfill.get(table, []):
-                conn.execute(text(stmt))
-                conn.commit()
+                exec_ddl(conn, stmt)
 
             if table in dropped:
                 existing = {col["name"] for col in inspector.get_columns(table)}
                 for name in dropped[table]:
                     if name not in existing:
                         continue
-                    conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {name}"))
-                    conn.commit()
+                    exec_ddl(conn, f"ALTER TABLE {table} DROP COLUMN {name}")
 
         if engine.dialect.name != "sqlite":
             for table, columns in modified.items():
