@@ -11,6 +11,7 @@ backend/.pytest_cache/
 backend/.mypy_cache/
 backend/log/*.log
 backend/.env
+backend/ec2/.env
 backend/*.db
 
 # frontend

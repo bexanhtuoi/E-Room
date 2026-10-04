@@ -1,0 +1,28 @@
+[project]
+name = "eroom-scorer"
+version = "1.0.0"
+description = "EC2 scorer: cham diem phat am + embedding cho E-Room"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.46.0",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.1",
+    "numpy>=2.0.0",
+    "soundfile>=0.13.1",
+    "colorlog>=6.12.0",
+    "torch>=2.2",
+    "transformers>=4.44",
+    "librosa>=0.10",
+    "g2p-en>=2.1.0",
+    "nltk>=3.8",
+    "sentence-transformers>=3.0.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
