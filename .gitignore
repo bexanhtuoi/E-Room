@@ -28,6 +28,8 @@ frontend/build/
 log/
 tempt/
 backend/log/speech/
+scripts/loadtest/.tokens.json
+scripts/loadtest/bin/
 
 .codegraph/
 
