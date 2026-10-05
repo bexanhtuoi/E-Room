@@ -11,7 +11,7 @@ REPO = "C:/Users/PC/Downloads/E-Room"
 
 
 def sh(cmd):
-    out = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=REPO, stderr=subprocess.STDOUT)
+    out = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=REPO)
     return out.stdout.strip()
 
 

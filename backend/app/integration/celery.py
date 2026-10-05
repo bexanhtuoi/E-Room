@@ -43,6 +43,7 @@ celery_app.conf.update(
     task_soft_time_limit=settings.ai_soft_timeout_seconds,
     task_time_limit=settings.ai_timeout_seconds,
     broker_connection_retry_on_startup=True,
+    broker_connection_retry=True,
 )
 
 
