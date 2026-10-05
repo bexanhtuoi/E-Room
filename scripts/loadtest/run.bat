@@ -55,7 +55,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-start /b "" backend\.venv\Scripts\python.exe scripts\loadtest\voice_run.py %ROOM% %SPEAKERS% %DURATION% %LK_SECRET%
+start /b "" backend\.venv\Scripts\python.exe scripts\loadtest\voice_run.py "%ROOM%" "%SPEAKERS%" %DURATION% %LK_SECRET%
 where k6 >nul 2>&1
 if errorlevel 1 set PATH=%PATH%;C:\Program Files\k6
 
