@@ -23,10 +23,12 @@ celery_app.conf.update(
         "check-room-heartbeats": {
             "task": "app.tasks.maintenance.check_room_heartbeats",
             "schedule": 15.0,
+            "options": {"expires": 10.0},
         },
         "ensure-room-workers": {
             "task": "app.tasks.maintenance.ensure_room_workers",
             "schedule": 60.0,
+            "options": {"expires": 50.0},
         },
     },
     task_serializer="json",

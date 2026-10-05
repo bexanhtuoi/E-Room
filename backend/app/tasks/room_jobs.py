@@ -43,6 +43,7 @@ def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: O
             task = stream_ai_response.apply_async(
                 args=[room_id, job_type, query, source_message_id],
                 queue=settings.ai_queue_name,
+                expires=600,
             )
         except Exception:
             decr(pending_key)
