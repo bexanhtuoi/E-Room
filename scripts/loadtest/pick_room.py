@@ -11,10 +11,14 @@ client.post("/api/v1/auth/login", data={"username": "picker@gmail.com", "passwor
 
 rooms = client.get("/api/v1/rooms/", params={"public_only": "true"}).json()
 
-if not rooms:
-    print("")
+voice = next((r for r in rooms if r.get("name") == "Load Voice"), None)
 
-else:
-    room_id = rooms[0]["id"]
-    client.post(f"/api/v1/rooms/{room_id}/join")
-    print(room_id)
+if voice is None:
+    voice = client.post(
+        "/api/v1/rooms/",
+        json={"name": "Load Voice", "max_participants": 6},
+    ).json()
+
+room_id = voice["id"]
+client.post(f"/api/v1/rooms/{room_id}/join")
+print(room_id)

@@ -77,9 +77,9 @@ function auth(data) {
 const VOICE_ROOM = __ENV.VOICE_ROOM ? parseInt(__ENV.VOICE_ROOM, 10) : 0;
 
 function roomOf(data) {
-  if (VOICE_ROOM && Math.random() < 0.5) return VOICE_ROOM;
-  if (!data.roomIds.length) return VOICE_ROOM || null;
-  return data.roomIds[Math.floor(Math.random() * data.roomIds.length)];
+  const pool = data.roomIds.filter((id) => id !== VOICE_ROOM);
+  if (!pool.length) return VOICE_ROOM || null;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function lurker(data) {
