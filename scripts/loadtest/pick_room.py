@@ -1,3 +1,5 @@
+import sys
+
 import httpx
 
 BASE = "http://localhost:8000"
@@ -8,6 +10,12 @@ client.post(
     json={"full_name": "Room Picker", "email": "picker@gmail.com", "password": "Pickpass123!"},
 )
 client.post("/api/v1/auth/login", data={"username": "picker@gmail.com", "password": "Pickpass123!"})
+
+if len(sys.argv) > 2 and sys.argv[1] == "leave":
+    client.post(f"/api/v1/rooms/{sys.argv[2]}/leave")
+    print("left")
+
+    raise SystemExit
 
 rooms = client.get("/api/v1/rooms/", params={"public_only": "true"}).json()
 

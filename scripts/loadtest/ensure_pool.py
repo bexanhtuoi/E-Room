@@ -38,7 +38,7 @@ for i in range(1, want + 1):
     token = resp.cookies.get("access_token")
     saved[email] = token
     tokens.append(token)
-    time.sleep(0.3)
+    time.sleep(2.0)
 
 json.dump(saved, open(POOL_FILE, "w", encoding="utf-8"))
 print(f"pool ok: {len(tokens)}/{want}")

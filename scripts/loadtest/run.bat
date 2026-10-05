@@ -53,4 +53,5 @@ if errorlevel 1 set PATH=%PATH%;C:\Program Files\k6
 set /a DURATION_S=%MINUTES%*60
 k6 run -e USERS=%USERS% -e DURATION=%DURATION% -e DURATION_S=%DURATION_S% -e VOICE_ROOM=%ROOM% -e POOL=%USERS% scripts\loadtest\k6-api.js
 
+backend\.venv\Scripts\python.exe scripts\loadtest\pick_room.py leave %ROOM% >nul 2>&1
 echo Xong. Xem Grafana http://localhost:8092 (dashboard eroom-red): RPS, p50/p95, worker CPU/RAM.
