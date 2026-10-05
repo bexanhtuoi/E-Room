@@ -29,8 +29,25 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+const roomFull = new Counter("room_full");
+const badStatus = new Counter("bad_status");
+
 function ok(res) {
-  return check(res, { status_ok: (r) => [200, 201, 204].includes(r.status) });
+  const pass = check(res, { status_ok: (r) => [200, 201, 204].includes(r.status) });
+  if (!pass) badStatus.add(1);
+  return pass;
+}
+
+function okJoin(res) {
+  if (res.status === 403) {
+    try {
+      if (res.json().code === "ROOM_FULL") {
+        roomFull.add(1);
+        return true;
+      }
+    } catch (e) {}
+  }
+  return ok(res);
 }
 
 const SAVED = JSON.parse(open("./.tokens.json"));
@@ -79,7 +96,7 @@ function lurker(data) {
 function chatter(data) {
   const id = roomOf(data);
   if (!id) return;
-  ok(http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data)));
+  okJoin(http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data)));
   sleep(rnd(1, 2));
   const n = 1 + Math.floor(Math.random() * 2);
   for (let i = 0; i < n; i++) {
@@ -103,7 +120,7 @@ function hopper(data) {
   for (let i = 0; i < 2; i++) {
     const id = roomOf(data);
     if (!id) return;
-    ok(http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data)));
+    okJoin(http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data)));
     sleep(rnd(1, 2));
     ok(http.post(`${BASE}/api/v1/rooms/${id}/leave`, null, auth(data)));
     sleep(rnd(1, 3));
@@ -134,7 +151,8 @@ export default function (data) {
 
 export const options = {
   thresholds: {
-    http_req_failed: ["rate<0.02"],
+    checks: ["rate>0.98"],
+    bad_status: ["count<5"],
     http_req_duration: ["p(95)<500"],
   },
 };

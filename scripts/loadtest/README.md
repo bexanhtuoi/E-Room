@@ -22,7 +22,8 @@ scripts\loadtest\run.bat --users 50 --minutes 5 [--speakers 3] [--room ID]
 
 ## Đọc kết quả
 
-- k6 in `checks` + `http_req_duration` (p95 < 500ms) + `http_req_failed` (< 2%).
+- k6 in `checks` (> 98%) + `bad_status` (< 5) + `http_req_duration` (p95 < 500ms).
+  `403 ROOM_FULL` khi join (phòng 4 ghế) là hành vi đúng, đếm riêng ở `room_full`.
   Fail threshold = exit code != 0.
 - Grafana `http://localhost:8092` (dashboard eroom-red): RPS, p50/p95,
   CPU/RAM api/worker/transcriber/tidb.
