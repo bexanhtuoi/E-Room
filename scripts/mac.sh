@@ -26,7 +26,7 @@ docker compose up -d
 # ── Step 3: migrate ───────────────────────────────
 echo "[3/5] Running DB migrations..."
 sleep 15
-(cd backend && uv run alembic upgrade head) || echo "      [WARN] migrate failed — TiDB may not be ready yet."
+(cd backend && uv run alembic upgrade head) || echo "      [WARN] migrate failed — DB may not be ready yet."
 
 # ── Step 4: URLs ──────────────────────────────────
 echo "[4/5] Done."

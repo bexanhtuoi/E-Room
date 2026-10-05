@@ -14,7 +14,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 - **RAG + web search**: agent tự tra tài liệu upload (Qdrant + reranker) và Tavily web search khi câu hỏi cần.
 - **Heartbeat**: phòng live mà im lặng quá lâu → AI gợi chuyện.
 - **Schedule + Private Room**: đặt lịch hẹn, phòng riêng ẩn khỏi list public.
-- AI chạy **hybrid** (LLM/STT/TTS trỏ server ngoài qua env, fallback local khi chết), dữ liệu on-premise (TiDB/Qdrant/MinIO chạy Docker).
+- AI chạy **hybrid** (LLM/STT/TTS trỏ server ngoài qua env, fallback local khi chết), dữ liệu on-premise (PostgreSQL/Qdrant/MinIO chạy Docker).
 
 ## 2. Ai dùng? Vào bằng gì?
 
@@ -36,7 +36,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 | Chấm phát âm | Package `app/ai/pronunciation/` (wav2vec2 + phoneme GOP local trên máy host, chấm tuần tự) + nhận xét AI qua LLM (prompt ở `app/ai/prompts/feedback_utterance.md` + `assessment.md`) |
 | Realtime | LiveKit (video/audio/**data channel**) — data channel chở transcript + AI stream + emoji/hand-raise |
 | Jobs | Celery (queues: `ai`, `ai_observer`, `ai_transcriber`) + beat, Redis |
-| Data | TiDB (MySQL-compatible), Qdrant (vectors), MinIO (S3 files), speech logs JSONL (`backend/log/speech/`, runtime) |
+| Data | PostgreSQL 16, Qdrant (vectors), MinIO (S3 files), speech logs JSONL (`backend/log/speech/`, runtime) |
 | Auth | JWT cookie HttpOnly + Google OAuth |
 | Public | Tailscale Funnel (TLS) + Nginx reverse proxy nội bộ |
 
@@ -53,7 +53,7 @@ flowchart LR
         FE[frontend :3000<br/>prod build]
         API[api :8000<br/>FastAPI]
         W[ai-worker<br/>ai-transcriber<br/>ai-observer<br/>ai-beat]
-        DB[(TiDB :4000)]
+        DB[(PostgreSQL :5432)]
         RD[(Redis :6379)]
         QD[(Qdrant :6333)]
         LK[livekit :7880<br/>self-host<br/>(dự phòng)]
@@ -89,7 +89,7 @@ flowchart LR
 | ollama | 11434 | ❌ | LLM local (khi không trỏ server ngoài) |
 | reranker | 8014 | ❌ | Qwen3-Reranker (llama.cpp server) |
 | qdrant | 6333 | ❌ | Vectors |
-| tidb | 4000 | ❌ | SQL |
+| db | 5432 | ❌ | SQL |
 | redis | 6379 | ❌ | Queue + presence + heartbeat locks |
 | minio | 9000/9001 | ❌ | Files |
 | STT/TTS (máy AI) | 8001/8002 | ❌ (LAN/Tailscale) | Giữ local ở máy AI, không nằm trong compose này |

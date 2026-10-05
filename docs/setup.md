@@ -25,7 +25,7 @@ Mở `backend/.env.example` — đầy đủ từng biến, chia 2 profile LiveK
 
 Cả 2 cụm local/cloud nằm sẵn trong `backend/.env.docker`, chọn bằng 1 biến `LIVEKIT_MODE=local|cloud` — script tự đổi + recreate api + tạo token thử để verify. Không sửa tay từng dòng nữa.
 
-Bắt buộc đổi trước khi public: `SECRET_KEY`, `LIVEKIT_API_KEY/SECRET` (random 32+ ký tự). MinIO/TiDB/Redis không password nhưng **chỉ listen nội bộ, không forward ra ngoài**.
+Bắt buộc đổi trước khi public: `SECRET_KEY`, `LIVEKIT_API_KEY/SECRET` (random 32+ ký tự). MinIO/PostgreSQL/Redis không password nhưng **chỉ listen nội bộ, không forward ra ngoài**.
 
 AI ngoài (LLM/STT/TTS) trỏ qua `LLM_BASE_URL`, `STT_PROVIDER` + `STT_SERVER_BASE_URL`, `TTS_BASE_URL` — xem bảng biến ở `README.md`.
 
@@ -88,7 +88,7 @@ Kiến trúc public: Funnel (TLS) → Nginx `:8080` (`/` static, `/api` api time
 
 ## 5. Ports tham khảo
 
-`3001` web prod (container) · `8080` web prod (nginx) · `3000` web dev (https, cert tự ký) · `8000` api · `7880` livekit signal + `UDP 50000–50100` media (chỉ cần nếu self-host media) · `11434` ollama · `8014` reranker · `6333` qdrant · `4000` tidb · `6379` redis · `9000/9001` minio · `8001/8002` STT/TTS (máy AI riêng, không trong compose này).
+`3001` web prod (container) · `8080` web prod (nginx) · `3000` web dev (https, cert tự ký) · `8000` api · `7880` livekit signal + `UDP 50000–50100` media (chỉ cần nếu self-host media) · `8014` reranker · `6333` qdrant · `5432` postgres · `6379` redis · `9000/9001` minio · `8001/8002` STT/TTS (máy AI riêng, không trong compose này).
 
 ## 6. Tests
 
@@ -116,7 +116,7 @@ Mặc định không gọi `@ai` (tốn quota) và không chấm điểm (tốn 
 
 > ⚠️ Chỉ chạy simulator khi cần test/demo rồi tắt. Để chạy nền 24/7 sẽ
 > dồn hàng trăm giấy `score_room_utterances` (mỗi lần leave là 1 giấy quét),
-> worker tải model + RAM vọt trần + api/tidb quay cuồng theo (đã dính 1 lần:
+> worker tải model + RAM vọt trần + api/db quay cuồng theo (đã dính 1 lần:
 > hàng `ai` tồn 900 giấy, worker 100% RAM).
 
 ## 7. Troubleshooting (từ case thật)

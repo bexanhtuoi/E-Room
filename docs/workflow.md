@@ -110,7 +110,7 @@ sequenceDiagram
     participant U as Browser
     participant A as api:8000
     participant Q as queue ai
-    participant DB as TiDB + JSONL
+    participant DB as PostgreSQL + JSONL
     U->>A: PATCH .../speech-logs/{mid} {corrected_text}
     A->>DB: reset pronunciation + feedback (bắt chấm lại)
     U->>A: POST .../speech-logs/{mid}/score

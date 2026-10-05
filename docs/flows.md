@@ -2,13 +2,13 @@
 
 > Cập nhật: 09/2026 · Tài liệu này mô tả chính xác process nào làm gì, qua queue/key/DB nào.
 > Ký hiệu: `api`, `ai-worker`, `ai-transcriber`, `ai-observer`, `ai-beat` là 5 container riêng,
-> chỉ gặp nhau ở Redis (hàng đợi + trạng thái) và TiDB (kết quả). Không có HTTP nội bộ giữa chúng.
+> chỉ gặp nhau ở Redis (hàng đợi + trạng thái) và PostgreSQL (kết quả). Không có HTTP nội bộ giữa chúng.
 
 ## 0. Bản đồ nhanh
 
 ```
 Browser ──HTTP──▶ nginx:8080 ──┬── / ──▶ frontend:3000
-                               ├── /api ──▶ api:8000 (routers → services → repositories → TiDB)
+                               ├── /api ──▶ api:8000 (routers → services → repositories → PostgreSQL)
                                └── /rtc ──▶ livekit:7880
 Browser ◀──WebRTC──▶ LiveKit (Cloud hoặc self-host) ◀── ai-transcriber / ai-observer
 
@@ -49,7 +49,7 @@ Mic → LiveKit room (WebRTC, không qua api)
  → stt_executor (16 threads) POST whisper server :8001 (timeout STT_SERVER_TIMEOUT=30s)
     ├─ chết/rỗng → local nếu STT_LOCAL_ENABLED (docker: false → bỏ câu)
     └─ tắc ≥16 câu chờ → tràn cloud (tiếng Anh + có key)
- → TiDB messages (source=speech_to_text) + JSONL + broadcast LiveKit data
+ → PostgreSQL messages (source=speech_to_text) + JSONL + broadcast LiveKit data
 ```
 
 - Nói chỉ ra chữ, **không gọi AI** (trigger giọng nói đã gỡ — chỉ chat `@ai` mới gọi).
@@ -140,7 +140,7 @@ Test dùng bucket riêng `eroom-test` (conftest tự flush), không lẫn produc
 
 | Hiện tượng | Nguyên nhân / xử lý |
 |---|---|
-| Test đỏ `Connection closed by server` hàng loạt | Đường host→container gãy sau reboot WSL → `docker restart redis` (tương tự tidb/nginx) |
+| Test đỏ `Connection closed by server` hàng loạt | Đường host→container gãy sau reboot WSL → `docker restart redis` (tương tự db/nginx) |
 | api CPU cao lúc rảnh | Do uvicorn `--reload` nạp lại sau mỗi lần sửa file qua bind-mount (đo thật ~0.4% lúc yên). Prod public nên cân nhắc `APP_ENV=production` để tắt reload |
 | Score treo `queued` | Worker `ai` chết hoặc Redis chết → `docker ps`, restart đúng container đó |
 | Chữ ra chậm theo số phòng live | Hết thợ nghe → tăng `ai-transcriber` concurrency (threads, rẻ RAM) |

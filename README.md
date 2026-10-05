@@ -26,7 +26,7 @@
 | Chấm phát âm | Package `app/ai/pronunciation/` (phoneme GOP + 4 tiêu chí + `articulation.py` hướng dẫn khẩu hình/phiên âm Việt `how_to`/`vi`) + nhận xét AI qua LLM (JSON-only, chỉ giải thích, không tính lại điểm) |
 | Realtime | LiveKit (WebRTC video/audio/data channel) — data channel chở transcript + AI stream + emoji/hand-raise |
 | Jobs | Celery (queues `ai`, `ai_observer`, `ai_transcriber`) + beat (heartbeat 15s, ensure-workers 60s), Redis |
-| Data | TiDB (MySQL-compatible), Qdrant (vectors), MinIO (S3 files), speech logs JSONL (`backend/log/speech/`, runtime — không commit) |
+| Data | PostgreSQL 16, Qdrant (vectors), MinIO (S3 files), speech logs JSONL (`backend/log/speech/`, runtime — không commit) |
 | Auth | JWT cookie (HttpOnly) + Google OAuth |
 | Infra | Docker Compose (14 services), Nginx reverse proxy duy nhất (`/` static, `/api` api, `/rtc*` livekit), Tailscale Funnel public, `uv` (Python), npm (Node) |
 
@@ -130,7 +130,7 @@ E-Room/
 ```bash
 # 1. Env + infra
 cp backend/.env.example backend/.env   # sửa LLM_BASE_URL nếu cần
-docker compose up -d tidb redis minio livekit qdrant ollama
+docker compose up -d db redis minio livekit qdrant
 
 # 2. Migrate DB
 cd backend

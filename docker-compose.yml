@@ -16,7 +16,7 @@ services:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
     depends_on:
-      tidb:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -99,23 +99,23 @@ services:
       livekit:
         condition: service_started
 
-  tidb:
-    image: pingcap/tidb:v8.5.0
-    container_name: tidb
+  db:
+    image: postgres:16
+    container_name: db
     restart: unless-stopped
     cpus: 2.0
-    mem_limit: 3g
+    mem_limit: 2g
     mem_reservation: 512m
     ports:
-      - "4000:4000"
-      - "10080:10080"
-    command:
-      - --store=unistore
-      - --path=/data
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eroom
     volumes:
-      - tidb_data:/data
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:10080/status" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eroom"]
       interval: 5s
       timeout: 3s
       retries: 15
@@ -325,7 +325,7 @@ services:
 volumes:
   redis_data:
   minio_data:
-  tidb_data:
+  pg_data:
   llama_data:
   hf_cache:
   speech_logs:

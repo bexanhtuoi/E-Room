@@ -26,7 +26,7 @@ scripts\loadtest\run.bat --users 50 --minutes 5 [--speakers 3] [--room ID]
   `403 ROOM_FULL` khi join (phòng 4 ghế) là hành vi đúng, đếm riêng ở `room_full`.
   Fail threshold = exit code != 0.
 - Grafana `http://localhost:8092` (dashboard eroom-red): RPS, p50/p95,
-  CPU/RAM api/worker/transcriber/tidb.
+  CPU/RAM api/worker/transcriber/db.
 
 ## Giới hạn đã biết
 

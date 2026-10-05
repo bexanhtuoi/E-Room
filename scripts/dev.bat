@@ -51,7 +51,7 @@ timeout /t 15 /nobreak >nul
 cd backend
 uv run alembic upgrade head 2>nul
 if %errorlevel% neq 0 (
-    echo        [WARN] migrate failed - TiDB co the chua ready, thu lai sau.
+    echo        [WARN] migrate failed - DB co the chua ready, thu lai sau.
 )
 cd ..
 
