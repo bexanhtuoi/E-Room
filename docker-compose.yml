@@ -103,6 +103,7 @@ services:
     image: postgres:16
     container_name: db
     restart: unless-stopped
+    command: -c max_connections=200 -c shared_buffers=256MB
     cpus: 2.0
     mem_limit: 2g
     mem_reservation: 512m

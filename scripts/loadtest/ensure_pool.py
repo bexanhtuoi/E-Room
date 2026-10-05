@@ -32,13 +32,24 @@ for i in range(1, want + 1):
     resp = client.post("/api/v1/auth/login", data={"username": email, "password": "K6pass123!"})
 
     if resp.status_code != 200:
-        client.post(
-            "/api/v1/auth/register",
-            json={"full_name": f"K6 {i}", "email": email, "password": "K6pass123!"},
-        )
+        for attempt in range(6):
+            reg = client.post(
+                "/api/v1/auth/register",
+                json={"full_name": f"K6 {i}", "email": email, "password": "K6pass123!"},
+            )
+
+            if reg.status_code == 429:
+                time.sleep(60)
+                continue
+
+            break
+
         time.sleep(1.0)
         resp = client.post("/api/v1/auth/login", data={"username": email, "password": "K6pass123!"})
-        resp.raise_for_status()
+
+        if resp.status_code != 200:
+            print(f"skip {email}: login={resp.status_code}")
+            continue
 
     token = resp.cookies.get("access_token")
     saved[email] = token

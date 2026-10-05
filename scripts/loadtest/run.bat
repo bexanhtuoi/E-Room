@@ -55,9 +55,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-for /f "tokens=1,2" %%a in ('backend\.venv\Scripts\python.exe scripts\loadtest\voice_plan.py %ROOM% %SPEAKERS%') do (
-  start /b "" scripts\loadtest\bin\lk.exe load-test --url ws://localhost:7880 --api-key eroom-livekit --api-secret %LK_SECRET% --room %%a --audio-publishers %%b --simulate-speakers --duration %DURATION% --num-per-second 2 > lk-voice-%%a.log 2>&1
-)
+start /b "" backend\.venv\Scripts\python.exe scripts\loadtest\voice_run.py %ROOM% %SPEAKERS% %DURATION% %LK_SECRET%
 where k6 >nul 2>&1
 if errorlevel 1 set PATH=%PATH%;C:\Program Files\k6
 
