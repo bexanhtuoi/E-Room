@@ -32,7 +32,7 @@ if "%ROOM%"=="" (
   echo Khong tim thay phong public nao. Tao phong truoc roi chay lai.
   exit /b 1
 )
-for /f "tokens=1,2 delims=: " %%a in ('findstr /r "eroom-livekit" backend\livekit.yaml') do set LK_SECRET=%%b
+for /f "tokens=2 delims=: " %%a in ('findstr /r "eroom-livekit:" backend\livekit.yaml') do set LK_SECRET=%%a
 if "%LK_SECRET%"=="" (
   echo Khong doc duoc LiveKit secret tu backend\livekit.yaml.
   exit /b 1
