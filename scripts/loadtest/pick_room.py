@@ -1,8 +1,16 @@
+import re
 import sys
 
 import httpx
 
 BASE = "http://localhost:8000"
+
+
+def livekit_secret():
+    text = open("backend/livekit.yaml", encoding="utf-8").read()
+    match = re.search(r"eroom-livekit:\s*(\S+)", text)
+
+    return match.group(1) if match else ""
 
 client = httpx.Client(base_url=BASE, timeout=15)
 reg = client.post(
@@ -20,6 +28,11 @@ if login.status_code != 200:
 if len(sys.argv) > 2 and sys.argv[1] == "leave":
     client.post(f"/api/v1/rooms/{sys.argv[2]}/leave")
     print("left")
+
+    raise SystemExit
+
+if len(sys.argv) > 1 and sys.argv[1] == "secret":
+    print(livekit_secret())
 
     raise SystemExit
 
@@ -43,4 +56,4 @@ for i in range(1, want_rooms + 1):
     client.post(f"/api/v1/rooms/{room_id}/join")
     ids.append(str(room_id))
 
-print(",".join(ids))
+print(",".join(ids) + "|" + livekit_secret())

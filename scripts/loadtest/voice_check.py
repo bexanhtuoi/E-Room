@@ -11,7 +11,7 @@ REPO = "C:/Users/PC/Downloads/E-Room"
 
 
 def sh(cmd):
-    out = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=REPO)
+    out = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=REPO, stderr=subprocess.STDOUT)
     return out.stdout.strip()
 
 
@@ -38,7 +38,7 @@ def main():
         print("presence:", sh(f"docker exec redis redis-cli SCARD room:{room_id}:participants"))
         print("transcriber_lock_ttl:", sh(f"docker exec redis redis-cli TTL room:{room_id}:transcriber_running"))
 
-        logs = sh(f"docker logs ai-transcriber --since 30m 2>&1 | grep -c '{room_id}'")
+        logs = sh(f"docker logs ai-transcriber --since 30m | grep -c '{room_id}'")
         print("transcriber_log_lines:", logs)
 
         try:

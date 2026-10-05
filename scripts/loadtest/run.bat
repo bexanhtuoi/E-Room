@@ -31,13 +31,18 @@ set DURATION=%MINUTES%m
 set /a DURATION_S=%MINUTES%*60
 
 if "%ROOM%"=="" (
-  for /f %%i in ('backend\.venv\Scripts\python.exe scripts\loadtest\pick_room.py %VROOMS% %ROOMSIZE%') do set ROOM=%%i
+  for /f "tokens=1,2 delims=|" %%i in ('backend\.venv\Scripts\python.exe scripts\loadtest\pick_room.py %VROOMS% %ROOMSIZE%') do (
+    set ROOM=%%i
+    set LK_SECRET=%%j
+  )
 )
 if "%ROOM%"=="" (
   echo Khong tim thay/tao duoc phong voice nao.
   exit /b 1
 )
-for /f "tokens=2 delims=: " %%a in ('findstr /r "eroom-livekit:" backend\livekit.yaml') do set LK_SECRET=%%b
+if "%LK_SECRET%"=="" (
+  for /f %%j in ('backend\.venv\Scripts\python.exe scripts\loadtest\pick_room.py secret') do set LK_SECRET=%%j
+)
 if "%LK_SECRET%"=="" (
   echo Khong doc duoc LiveKit secret tu backend\livekit.yaml.
   exit /b 1
