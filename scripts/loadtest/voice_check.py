@@ -38,8 +38,14 @@ def main():
         print("presence:", sh(f"docker exec redis redis-cli SCARD room:{room_id}:participants"))
         print("transcriber_lock_ttl:", sh(f"docker exec redis redis-cli TTL room:{room_id}:transcriber_running"))
 
-        logs = sh(f"docker logs ai-transcriber --since 30m | grep -c '{room_id}'")
-        print("transcriber_log_lines:", logs)
+        logs = sh("docker logs ai-transcriber --since 30m")
+        print("transcriber_log_lines:", sum(1 for line in logs.splitlines() if str(room_id) in line))
+
+        try:
+            users = sh(f"docker exec ai-transcriber ls /app/log/speech/room_{room_id}/").split()
+            print("speech_files:", users)
+        except Exception as error:
+            print("speech_files: ?", str(error)[:80])
 
         try:
             sys.path.insert(0, "C:/Users/PC/Downloads/E-Room/backend")
