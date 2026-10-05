@@ -161,9 +161,6 @@ def ensure_schema_columns() -> None:
         },
     }
 
-    # Chuan hoa kind ve value chu thuong (PG enum phan biet hoa/thuong).
-    # PG bao loi ngay ca khi WHERE so sanh voi label khong ton tai (du 0 dong),
-    # nen chi giu cau lenh an toan. Loai SKILL cu khong con model -> bo qua.
     backfill: dict[str, list[str]] = {
         "documents": [
             "UPDATE documents SET kind = 'file' WHERE kind IS NULL",

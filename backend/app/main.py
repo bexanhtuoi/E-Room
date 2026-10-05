@@ -25,8 +25,8 @@ SKIP_AUTH_PREFIXES = ("/health", "/api/v1/auth", "/docs", "/openapi.json", "/red
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import app.tasks.room_jobs  # noqa: F401 (nap san, tranh deadlock import duoi burst)
-    import app.tasks.scoring  # noqa: F401 (nap san, nhu tren)
+    import app.tasks.room_jobs  # noqa: F401
+    import app.tasks.scoring  # noqa: F401
 
     create_db_and_tables()
     log.info("Database và bảng dữ liệu đã sẵn sàng")
@@ -126,8 +126,6 @@ async def log_requests(request: Request, call_next):
             detail,
         )
 
-        # GET khong co side-effect -> retry 1 lan sau 300ms.
-        # POST messages chi retry khi chac chan deadlock (PG rollback sach).
         retryable = request.method == "GET" or (
             request.method == "POST"
             and request.url.path == "/api/v1/messages/"
