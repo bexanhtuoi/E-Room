@@ -31,6 +31,9 @@ tempt/
 backend/log/speech/
 scripts/loadtest/.tokens.json
 scripts/loadtest/bin/
+lk-voice*.log
+lk-v.log
+run*.log
 
 .codegraph/
 
