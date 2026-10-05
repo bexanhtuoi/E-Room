@@ -120,6 +120,10 @@ async def log_requests(request: Request, call_next):
         )
 
         if request.method == "GET":
+            import asyncio
+
+            await asyncio.sleep(0.3)
+
             try:
                 response = await call_next(request)
                 api_log.info(
