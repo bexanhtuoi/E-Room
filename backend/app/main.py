@@ -101,12 +101,44 @@ async def auth_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    from sqlalchemy.exc import OperationalError
+
     start = time.perf_counter()
     try:
         response = await call_next(request)
         elapsed = time.perf_counter() - start
         api_log.info("%s %s -> %s (%.3fs)", request.method, request.url.path, response.status_code, elapsed)
         return response
+    except OperationalError as error:
+        elapsed = time.perf_counter() - start
+        api_log.error(
+            "%s %s -> DB ERROR (%.3fs): %s",
+            request.method,
+            request.url.path,
+            elapsed,
+            str(error)[:300],
+        )
+
+        if request.method == "GET":
+            try:
+                response = await call_next(request)
+                api_log.info(
+                    "%s %s -> RETRY %s (%.3fs)",
+                    request.method,
+                    request.url.path,
+                    response.status_code,
+                    time.perf_counter() - start,
+                )
+                return response
+            except Exception as retry_error:
+                api_log.error(
+                    "%s %s -> RETRY FAILED: %s",
+                    request.method,
+                    request.url.path,
+                    type(retry_error).__name__,
+                )
+
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     except Exception as e:
         elapsed = time.perf_counter() - start
         api_log.error("%s %s -> ERROR (%.3fs): %s", request.method, request.url.path, elapsed, type(e).__name__)
