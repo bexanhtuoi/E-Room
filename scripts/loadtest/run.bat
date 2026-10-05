@@ -45,7 +45,7 @@ if errorlevel 1 (
 )
 echo Phong voice: %ROOM% - VU: %USERS% - Phut: %MINUTES% - Speakers: %SPEAKERS% - Duration: %DURATION%
 
-start "lk-voice" scripts\loadtest\bin\lk.exe load-test --url ws://localhost:7880 --api-key eroom-livekit --api-secret %LK_SECRET% --room %ROOM% --audio-publishers %SPEAKERS% --simulate-speakers --duration %DURATION% --num-per-second 2
+start /b "" scripts\loadtest\bin\lk.exe load-test --url ws://localhost:7880 --api-key eroom-livekit --api-secret %LK_SECRET% --room %ROOM% --audio-publishers %SPEAKERS% --simulate-speakers --duration %DURATION% --num-per-second 2 > lk-voice.log 2>&1
 
 where k6 >nul 2>&1
 if errorlevel 1 set PATH=%PATH%;C:\Program Files\k6
