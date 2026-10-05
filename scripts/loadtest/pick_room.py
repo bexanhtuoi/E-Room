@@ -5,11 +5,17 @@ import httpx
 BASE = "http://localhost:8000"
 
 client = httpx.Client(base_url=BASE, timeout=15)
-client.post(
+reg = client.post(
     "/api/v1/auth/register",
     json={"full_name": "Room Picker", "email": "picker@gmail.com", "password": "Pickpass123!"},
 )
-client.post("/api/v1/auth/login", data={"username": "picker@gmail.com", "password": "Pickpass123!"})
+login = client.post("/api/v1/auth/login", data={"username": "picker@gmail.com", "password": "Pickpass123!"})
+
+if login.status_code != 200:
+    print(f"picker auth failed: register={reg.status_code} login={login.status_code}")
+    print("")
+
+    raise SystemExit(1)
 
 if len(sys.argv) > 2 and sys.argv[1] == "leave":
     client.post(f"/api/v1/rooms/{sys.argv[2]}/leave")

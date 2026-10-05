@@ -21,8 +21,13 @@ for i in range(1, want + 1):
     email = f"k6_{i}@gmail.com"
 
     if email in saved:
-        tokens.append(saved[email])
-        continue
+        probe = client.get("/api/v1/users/me", headers={"Cookie": f"access_token={saved[email]}"})
+
+        if probe.status_code == 200:
+            tokens.append(saved[email])
+            continue
+
+        del saved[email]
 
     resp = client.post("/api/v1/auth/login", data={"username": email, "password": "K6pass123!"})
 

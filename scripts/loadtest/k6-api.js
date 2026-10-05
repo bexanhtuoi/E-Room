@@ -118,10 +118,26 @@ function lurker(data) {
   sleep(rnd(3, 8));
 }
 
+function tryJoin(data, id) {
+  const res = http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data));
+  if (res.status === 403) {
+    try {
+      if (res.json().code === "ROOM_FULL") {
+        roomFull.add(1);
+        return false;
+      }
+    } catch (e) {}
+  }
+  return ok(res);
+}
+
 function chatter(data) {
   const id = roomOf(data);
   if (!id) return;
-  okJoin(http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data)));
+  if (!tryJoin(data, id)) {
+    sleep(rnd(3, 8));
+    return;
+  }
   sleep(rnd(1, 2));
   let lastId = 0;
   const n = 1 + Math.floor(Math.random() * 2);
@@ -148,7 +164,10 @@ function hopper(data) {
   for (let i = 0; i < 2; i++) {
     const id = roomOf(data);
     if (!id) return;
-    okJoin(http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data)));
+    if (!tryJoin(data, id)) {
+      sleep(rnd(2, 5));
+      continue;
+    }
     sleep(rnd(1, 2));
     ok(http.post(`${BASE}/api/v1/rooms/${id}/leave`, null, auth(data)));
     sleep(rnd(1, 3));
@@ -208,7 +227,7 @@ function creator(data) {
     ok(http.post(`${BASE}/api/v1/rooms/match`, JSON.stringify({}), {
       headers: { "Content-Type": "application/json", ...auth(data).headers },
     }));
-    ok(http.get(`${BASE}/api/v1/rooms/${id}/token`, auth(data)));
+    ok(http.post(`${BASE}/api/v1/rooms/${id}/token`, null, auth(data)));
     ok(http.get(`${BASE}/api/v1/rooms/${id}/documents`, auth(data)));
     J(data, "patch", `/api/v1/rooms/${id}`, { description: "k6 room" });
     sleep(rnd(1, 2));
@@ -248,7 +267,7 @@ function writer(data) {
   if (mid) {
     ok(http.get(`${BASE}/api/v1/messages/count?room_id=${id}`, auth(data)));
     if (Math.random() < 0.5) {
-      J(data, "post", `/api/v1/rooms/${id}/speech-logs/${mid}/score`, {});
+      ok404(J(data, "post", `/api/v1/rooms/${id}/speech-logs/${mid}/score`, {}));
     }
     ok(http.del(`${BASE}/api/v1/messages/${mid}`, null, auth(data)));
   }
