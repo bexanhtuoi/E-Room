@@ -4,6 +4,7 @@ from typing import Optional
 
 from sqlmodel import Column, Field, Relationship, SQLModel, String
 
+from app.models.types import enum_column
 from app.utils.datetime_utils import now_utc
 
 
@@ -18,7 +19,7 @@ class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     room_id: int = Field(foreign_key="rooms.id")
     user_id: Optional[int] = Field(default=None, foreign_key="users.id")
-    role: MessageRole = Field(default=MessageRole.USER)
+    role: MessageRole = Field(default=MessageRole.USER, sa_column=enum_column(MessageRole, default=MessageRole.USER, nullable=False))
     text: str = Field(sa_column=Column(String(4000)))
     meta_data: Optional[str] = Field(default=None, sa_column=Column(String(4000)))
     created_at: datetime = Field(default_factory=now_utc, nullable=False)

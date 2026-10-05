@@ -4,6 +4,7 @@ from typing import Optional
 
 from sqlmodel import Column, Field, Relationship, SQLModel, String
 
+from app.models.types import enum_column
 from app.utils.datetime_utils import now_utc
 
 
@@ -21,7 +22,7 @@ class Room(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     topics: str = Field(default="[]", sa_column=Column(String(2000), nullable=False))
     description: Optional[str] = Field(default=None, sa_column=Column(String(2000)))
-    status: Optional[RoomStatus] = Field(default=RoomStatus.IDLE)
+    status: Optional[RoomStatus] = Field(default=RoomStatus.IDLE, sa_column=enum_column(RoomStatus, default=RoomStatus.IDLE))
     host_id: Optional[int] = Field(default=None, foreign_key="users.id")
     max_participants: int = Field(default=4, ge=1)
     enable_heartbeat: bool = Field(default=True)

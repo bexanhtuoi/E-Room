@@ -25,6 +25,9 @@ SKIP_AUTH_PREFIXES = ("/health", "/api/v1/auth", "/docs", "/openapi.json", "/red
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import app.tasks.room_jobs  # noqa: F401 (nap san, tranh deadlock import duoi burst)
+    import app.tasks.scoring  # noqa: F401 (nap san, nhu tren)
+
     create_db_and_tables()
     log.info("Database và bảng dữ liệu đã sẵn sàng")
 
@@ -109,17 +112,29 @@ async def log_requests(request: Request, call_next):
         elapsed = time.perf_counter() - start
         api_log.info("%s %s -> %s (%.3fs)", request.method, request.url.path, response.status_code, elapsed)
         return response
-    except OperationalError as error:
+    except Exception as error:
         elapsed = time.perf_counter() - start
+        text = str(error)
+        is_db_error = isinstance(error, OperationalError) or "deadlock detected" in text.lower()
+        detail = text[:300] if is_db_error else type(error).__name__
         api_log.error(
-            "%s %s -> DB ERROR (%.3fs): %s",
+            "%s %s -> %s ERROR (%.3fs): %s",
             request.method,
             request.url.path,
+            "DB" if is_db_error else type(error).__name__,
             elapsed,
-            str(error)[:300],
+            detail,
         )
 
-        if request.method == "GET":
+        # GET khong co side-effect -> retry 1 lan sau 300ms.
+        # POST messages chi retry khi chac chan deadlock (PG rollback sach).
+        retryable = request.method == "GET" or (
+            request.method == "POST"
+            and request.url.path == "/api/v1/messages/"
+            and "deadlock detected" in text.lower()
+        )
+
+        if is_db_error and retryable:
             import asyncio
 
             await asyncio.sleep(0.3)
@@ -139,13 +154,9 @@ async def log_requests(request: Request, call_next):
                     "%s %s -> RETRY FAILED: %s",
                     request.method,
                     request.url.path,
-                    type(retry_error).__name__,
+                    str(retry_error)[:200],
                 )
 
-        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-    except Exception as e:
-        elapsed = time.perf_counter() - start
-        api_log.error("%s %s -> ERROR (%.3fs): %s", request.method, request.url.path, elapsed, type(e).__name__)
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 app.add_middleware(

@@ -5,6 +5,7 @@ from typing import Optional
 from pydantic import EmailStr
 from sqlmodel import Column, Field, Relationship, SQLModel, String, Text
 
+from app.models.types import enum_column
 from app.utils.datetime_utils import now_utc
 
 
@@ -30,8 +31,8 @@ class User(SQLModel, table=True):
     password_hash: Optional[str] = Field(default=None)
     full_name: str = Field(...)
     avatar_url: Optional[str] = Field(default=None)
-    english_level: Optional[EnglishLevel] = Field(default=None)
-    role: Optional[RoleEnum] = Field(default=RoleEnum.user)
+    english_level: Optional[EnglishLevel] = Field(default=None, sa_column=enum_column(EnglishLevel))
+    role: Optional[RoleEnum] = Field(default=RoleEnum.user, sa_column=enum_column(RoleEnum, default=RoleEnum.user))
     profile_completed: bool = Field(default=False)
     headline: Optional[str] = Field(default=None, sa_column=Column(String(120)))
     location: Optional[str] = Field(default=None, sa_column=Column(String(120)))

@@ -47,11 +47,11 @@ class Settings:
     rate_limit_register_window_seconds: int = int(os.getenv("RATE_LIMIT_REGISTER_WINDOW_SECONDS", 3600))
 
     # ─── Database ───────────────────────────────────
-    db_user: str = os.getenv("DB_USER", "root")
-    db_password: str = os.getenv("DB_PASSWORD", "")
+    db_user: str = os.getenv("DB_USER", "postgres")
+    db_password: str = os.getenv("DB_PASSWORD", "postgres")
     db_host: str = os.getenv("DB_HOST", "localhost")
-    db_port: int = int(os.getenv("DB_PORT", 4000))
-    db_name: str = os.getenv("DB_NAME", "ERoom")
+    db_port: int = int(os.getenv("DB_PORT", 5432))
+    db_name: str = os.getenv("DB_NAME", "eroom")
     database_url_override: str = os.getenv("DATABASE_URL", "")
 
     # ─── Redis ──────────────────────────────────────
@@ -201,7 +201,7 @@ class Settings:
         if self.database_url_override:
             return self.database_url_override
         pw = quote_plus(self.db_password) if self.db_password else ""
-        return f"mysql+pymysql://{self.db_user}:{pw}@{self.db_host}:{self.db_port}/{self.db_name}"
+        return f"postgresql+psycopg://{self.db_user}:{pw}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     @property
     def db_connect_args(self) -> dict:

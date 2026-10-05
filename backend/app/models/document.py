@@ -4,6 +4,7 @@ from typing import Optional
 
 from sqlmodel import Column, Field, Relationship, SQLModel, String, Text
 
+from app.models.types import enum_column
 from app.utils.datetime_utils import now_utc
 
 
@@ -17,7 +18,7 @@ class Document(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     room_id: Optional[int] = Field(default=None, foreign_key="rooms.id", index=True)
-    kind: DocumentKind = Field(default=DocumentKind.FILE)
+    kind: DocumentKind = Field(default=DocumentKind.FILE, sa_column=enum_column(DocumentKind, default=DocumentKind.FILE, nullable=False))
     file_name: str = Field(...)
     file_type: str = Field(...)
     file_path: str = Field(...)

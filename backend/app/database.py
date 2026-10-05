@@ -42,6 +42,22 @@ def ensure_database() -> None:
     if not parsed.database:
         return
 
+    if is_postgres():
+        server_url = f"{parsed.drivername}://{parsed.username}:{parsed.password or ''}@{parsed.host}:{parsed.port}/postgres"
+        server_engine = create_server_engine(server_url, isolation_level="AUTOCOMMIT")
+
+        with server_engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": parsed.database},
+            ).first()
+
+            if exists is None:
+                conn.execute(text(f'CREATE DATABASE "{parsed.database}"'))
+
+        server_engine.dispose()
+        return
+
     server_url = f"{parsed.drivername}://{parsed.username}:{parsed.password or ''}@{parsed.host}:{parsed.port}/"
     server_engine = create_server_engine(server_url, connect_args=settings.db_connect_args)
 
@@ -52,10 +68,35 @@ def ensure_database() -> None:
     server_engine.dispose()
 
 
+def is_postgres() -> bool:
+    return settings.database_url.startswith("postgresql")
+
+
 def create_db_and_tables() -> None:
     ensure_database()
-    SQLModel.metadata.create_all(engine)
+
+    try:
+        SQLModel.metadata.create_all(engine)
+    except Exception as error:
+        message = str(error).lower()
+
+        if "already exists" not in message and "duplicate" not in message:
+            raise
+
+        SQLModel.metadata.create_all(engine)
+
     ensure_schema_columns()
+
+
+def translate_ddl(ddl: str) -> str:
+    if not is_postgres():
+        return ddl
+
+    return (
+        ddl.replace("DATETIME", "TIMESTAMP")
+        .replace("DEFAULT 0", "DEFAULT FALSE")
+        .replace("DEFAULT 1", "DEFAULT TRUE")
+    )
 
 
 def exec_ddl(conn, stmt: str) -> None:
@@ -64,13 +105,19 @@ def exec_ddl(conn, stmt: str) -> None:
         conn.commit()
     except Exception as error:
         conn.rollback()
-        code = getattr(getattr(error, "orig", None), "args", [None])[0]
+        code = str(getattr(getattr(error, "orig", None), "args", [None])[0] or "")
         message = str(error).lower()
 
-        if code in (1060, 1091):
+        if code in ("1060", "1091", "42701", "42P07", "42710", "42P16"):
             return
 
-        if "duplicate column" in message or "doesn't exist" in message or "no such column" in message:
+        if (
+            "duplicate column" in message
+            or "already exists" in message
+            or "doesn't exist" in message
+            or "does not exist" in message
+            or "no such column" in message
+        ):
             return
 
         raise
@@ -114,12 +161,21 @@ def ensure_schema_columns() -> None:
         },
     }
 
+    # Chuan hoa kind ve value chu thuong (PG enum phan biet hoa/thuong).
+    # PG bao loi ngay ca khi WHERE so sanh voi label khong ton tai (du 0 dong),
+    # nen chi giu cau lenh an toan. Loai SKILL cu khong con model -> bo qua.
     backfill: dict[str, list[str]] = {
         "documents": [
-            "UPDATE documents SET kind = 'FILE' WHERE kind IS NULL",
-            "UPDATE documents SET kind = 'FILE' WHERE kind = 'file'",
-            "UPDATE documents SET kind = 'SKILL' WHERE kind = 'skill'",
-        ],
+            "UPDATE documents SET kind = 'file' WHERE kind IS NULL",
+        ]
+        + (
+            []
+            if is_postgres()
+            else [
+                "UPDATE documents SET kind = 'file' WHERE kind = 'FILE'",
+                "UPDATE documents SET kind = 'file' WHERE kind = 'SKILL'",
+            ]
+        ),
     }
 
     with engine.connect() as conn:
@@ -134,7 +190,7 @@ def ensure_schema_columns() -> None:
             for name, ddl in columns.items():
                 if name in existing:
                     continue
-                exec_ddl(conn, f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+                exec_ddl(conn, f"ALTER TABLE {table} ADD COLUMN {name} {translate_ddl(ddl)}")
 
             for stmt in backfill.get(table, []):
                 exec_ddl(conn, stmt)
@@ -146,7 +202,7 @@ def ensure_schema_columns() -> None:
                         continue
                     exec_ddl(conn, f"ALTER TABLE {table} DROP COLUMN {name}")
 
-        if engine.dialect.name != "sqlite":
+        if engine.dialect.name not in ("sqlite", "postgresql"):
             for table, columns in modified.items():
                 if table not in existing_tables:
                     continue
@@ -154,7 +210,7 @@ def ensure_schema_columns() -> None:
                     conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {name} {ddl}"))
                     conn.commit()
 
-            if table in modified and engine.dialect.name != "sqlite":
+            if table in modified and engine.dialect.name not in ("sqlite", "postgresql"):
                 for name, ddl in modified[table].items():
                     conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {name} {ddl}"))
                     conn.commit()
