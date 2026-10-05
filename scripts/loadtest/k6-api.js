@@ -141,7 +141,7 @@ function reader(data) {
   sleep(rnd(3, 8));
 }
 
-export default function (data) {
+export function apiTraffic(data) {
   const roll = Math.random();
   if (roll < 0.4) lurker(data);
   else if (roll < 0.7) chatter(data);
@@ -149,7 +149,37 @@ export default function (data) {
   else reader(data);
 }
 
+export function voiceAnchor(data) {
+  const id = VOICE_ROOM || data.roomIds[0];
+  if (!id) return;
+  const total = parseInt(__ENV.DURATION_S || "300", 10) || 300;
+  const deadline = Date.now() + (total - 15) * 1000;
+  let joined = false;
+  while (Date.now() < deadline && !joined) {
+    const res = http.post(`${BASE}/api/v1/rooms/${id}/join`, null, auth(data));
+    joined = [200, 201, 204].includes(res.status);
+    if (!joined) sleep(10);
+  }
+  if (!joined) return;
+  sleep(Math.max(10, total - 30));
+  http.post(`${BASE}/api/v1/rooms/${id}/leave`, null, auth(data));
+}
+
 export const options = {
+  scenarios: {
+    api: {
+      executor: "constant-vus",
+      vus: parseInt(__ENV.USERS || "50", 10),
+      exec: "apiTraffic",
+      duration: __ENV.DURATION || "5m",
+    },
+    anchor: {
+      executor: "constant-vus",
+      vus: 1,
+      exec: "voiceAnchor",
+      duration: __ENV.DURATION || "5m",
+    },
+  },
   thresholds: {
     checks: ["rate>0.98"],
     bad_status: ["count<5"],
