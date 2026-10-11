@@ -1,6 +1,6 @@
 import math
 import re
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -21,7 +21,7 @@ from app.log import get_logger
 log = get_logger("app.ai.pronunciation.phonemes")
 
 
-def observe_phones_fallback(greedy_text: str, canonical_arpa: list[str]) -> list[str]:
+def observe_phones_fallback(greedy_text: str, canonical_arpa: List[str]) -> List[str]:
     g = (greedy_text or "").upper()
 
     # map chữ cái đầu từ greedy sang ARPAbet tương ứng để so với canonical
@@ -38,7 +38,7 @@ def observe_phones_fallback(greedy_text: str, canonical_arpa: list[str]) -> list
     return [canonical_arpa[0] if canonical_arpa else "AH0"]
 
 
-def score_word_sounds(w: dict, greedy_text: str, accent: str, err_counter: dict) -> tuple:
+def score_word_sounds(w: Dict, greedy_text: str, accent: str, err_counter: Dict) -> Tuple:
     word = w.get("word", "")
 
     status_in = w.get("status", "scored")
@@ -72,8 +72,10 @@ def score_word_sounds(w: dict, greedy_text: str, accent: str, err_counter: dict)
     phonemes, v_scores, c_scores = [], [], []
 
     for exp, ob, typ in pairs:
-        # phoneme sai -> phạt 25đ so với word score (MVP heuristic, thay bằng GOP thật ở v1.1)
-        pscore = char_score if typ == "match" else max(0.0, char_score - 25.0)
+        # phoneme sai -> trừ theo tỉ trọng 1/N từ (từ dài sai vài âm không mất trắng)
+        penalty = 100.0 / max(1, len(arpa))
+
+        pscore = char_score if typ == "match" else max(0.0, char_score - penalty)
 
         gop = math.log(max(1e-6, pscore / 100.0))
 
@@ -103,12 +105,16 @@ def score_word_sounds(w: dict, greedy_text: str, accent: str, err_counter: dict)
     return detail, phonemes, v_scores, c_scores
 
 
-def score_sounds(words_forced: list[dict], greedy_text: str = "", accent: str = "en-US") -> dict[str, Any]:
-    phonemes: list[dict] = []
+def score_sounds(
+    words_forced: List[Dict],
+    greedy_text: str = "",
+    accent: str = "en-US",
+) -> Dict[str, Any]:
+    phonemes: List[Dict] = []
 
-    err_counter: dict[str, dict] = {}
+    err_counter: Dict[str, Dict] = {}
 
-    wdetails: list[dict] = []
+    wdetails: List[Dict] = []
 
     v_scores, c_scores = [], []
 
@@ -137,8 +143,13 @@ def score_sounds(words_forced: list[dict], greedy_text: str = "", accent: str = 
 
 
 
-def score_stress(words_forced: list[dict], wav: np.ndarray, sr: int = 16000, accent: str = "en-US") -> dict:
-    details: list[dict] = []
+def score_stress(
+    words_forced: List[Dict],
+    wav: np.ndarray,
+    sr: int = 16000,
+    accent: str = "en-US",
+) -> Dict:
+    details: List[Dict] = []
 
     correct = 0
 
@@ -260,28 +271,66 @@ def score_stress(words_forced: list[dict], wav: np.ndarray, sr: int = 16000, acc
     return {"stress": score, "correct": correct, "total": total, "details": details}
 
 
-def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, Any]:
+def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, Any]:
     torch = load_torch()
 
-    fe, model = get_phone_model()
+    try:
+        fe, model = get_phone_model()
+    except Exception as error:
+        return {"error": f"Model XLSR chưa sẵn sàng: {error}"}
 
-    vocab = load_vocab()
+    try:
+        vocab = load_vocab()
+    except Exception as error:
+        return {"error": f"Không tải được vocab XLSR: {error}"}
 
     device = next(model.parameters()).device
 
     blank_id = 0  # <pad>
+
+    # 1. Validate audio trước khi forward để fail-fast với lỗi tiếng Việt
+    warr = np.asarray(wav, dtype=np.float32).reshape(-1)
+
+    if warr.size == 0:
+        return {"error": "Audio rỗng — hãy thu lại rồi chấm."}
+
+    effective_sr = int(sr or 16000)
+
+    if effective_sr != 16000:
+        try:
+            import librosa
+
+            warr = librosa.resample(warr, orig_sr=effective_sr, target_sr=16000).astype(np.float32)
+        except Exception:
+            ratio = 16000 / float(effective_sr)
+
+            idx = (np.arange(int(len(warr) * ratio)) / ratio).astype(int)
+
+            idx = np.clip(idx, 0, len(warr) - 1)
+
+            warr = warr[idx]
+
+        effective_sr = 16000
+
+    duration_s = len(warr) / 16000.0
+
+    if duration_s < 0.2:
+        return {"error": "Audio quá ngắn (<0.2s) — hãy nói dài hơn rồi chấm."}
+
+    if duration_s > 600:
+        return {"error": "Audio dài quá 10 phút — hãy chia thành nhiều lần chấm."}
 
     words = [w for w in re.findall(r"[A-Za-z']+", text)]
 
     if not words:
         return {"error": "Text rỗng."}
 
-    # canonical phone sequence + word ranges
-    seq: list[str] = []
+    # 3. Canonical phone sequence + word ranges
+    seq: List[str] = []
 
-    wranges: list[tuple[int, int, str, list[str]]] = []  # (p_start, p_end, word, arpa)
+    wranges: List[Tuple[int, int, str, List[str]]] = []
 
-    skipped_words: list[str] = []
+    skipped_words: List[str] = []
 
     for w in words:
         pron = get_pronunciation(w, accent)
@@ -301,26 +350,38 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
         return {"error": "Không map được phoneme nào."}
     target_ids = [vocab[t] for t in seq]
 
-    warr = np.asarray(wav, dtype=np.float32).reshape(-1)
+    try:
+        inputs = fe(warr, sampling_rate=16000, return_tensors="pt", padding=True)
+    except Exception as error:
+        return {"error": f"Audio không hợp lệ cho XLSR: {error}"}
 
-    inputs = fe(warr, sampling_rate=16000, return_tensors="pt", padding=True)
+    try:
+        with torch.no_grad():
+            logits = model(inputs.input_values.to(device)).logits[0].cpu()
+    except Exception as error:
+        # 2. OOM giữa chừng: dọn cache để lần chấm sau không chết theo
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
 
-    with torch.no_grad():
-        logits = model(inputs.input_values.to(device)).logits[0].cpu()
+        return {"error": f"XLSR hết bộ nhớ khi chấm (audio {duration_s:.1f}s): {error}"}
+
     log_probs = torch.log_softmax(logits, dim=-1)
 
     T = log_probs.shape[0]
 
-    pred_ids: list[int] = torch.argmax(logits, dim=-1).tolist()
+    pred_ids: List[int] = torch.argmax(logits, dim=-1).tolist()
 
     align, _ = ctc_forced_align(log_probs, target_ids, blank_id)
 
-    # per-phone GOP
-    phone_lp: list[float] = []
+    # 4. GOP từng phone
+    phone_lp: List[float] = []
 
-    phone_span: list[tuple[int, int]] = []
+    phone_span: List[Tuple[int, int]] = []
 
-    phone_ok: list[bool] = []
+    phone_ok: List[bool] = []
 
     for i, tid in enumerate(target_ids):
         s = 2 * i + 1
@@ -342,7 +403,7 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
 
             phone_ok.append(False)
 
-    # observed phones: free recognition (greedy collapse, không LM)
+    # 5. Observed phones: free recognition (greedy collapse, không LM)
     id2tok = {i: t for t, i in vocab.items()}
 
     collapsed, prev = [], None
@@ -353,16 +414,15 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
                 collapsed.append(id2tok.get(pid, ""))
         prev = pid
 
-    phonemes: list[dict] = []
+    phonemes: List[Dict] = []
 
-    wdetails: list[dict] = []
+    wdetails: List[Dict] = []
 
-    err_counter: dict[str, dict] = {}
+    err_counter: Dict[str, Dict] = {}
 
     for (p0, p1, w, arpa) in wranges:
         canon = seq[p0:p1]
-        # observed evidence: align needleman toàn câu quá nặng -> so trong vùng từ:
-        # xấp xỉ bằng greedy phones gần span thời gian của từ (MVP trung thực)
+        # 6. Observed evidence: align needleman toàn câu quá nặng nên so trong vùng từ
         f0 = phone_span[p0][0] if phone_ok[p0] else -1
 
         f1 = phone_span[p1 - 1][1] if phone_ok[p1 - 1] else -1
@@ -403,15 +463,17 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
         else:
             status = "scored"
 
-        pscores: list[float] = []
+        pscores: List[float] = []
+
+        n_ph0 = len(phonemes)
 
         for (exp, ob, typ), pi in zip(pairs, range(p0, p1)):
-            # GOP: mean log-posterior; no_evidence -> -inf
+            # GOP: mean log-posterior; phone không có frame thì loại khỏi mẫu số
             g = phone_lp[pi] if phone_ok[pi] else float("-inf")
 
             s100 = round(max(0.0, min(100.0, math.exp(max(g, -10.0)) * 100.0)), 1) if math.isfinite(g) else 0.0
 
-            if status in ("scored", "misaligned"):
+            if status in ("scored", "misaligned") and math.isfinite(g):
                 pscores.append(s100)
             disp_ob = ob if ob != "-" else None
 
@@ -429,26 +491,41 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> dict[str, An
                     e["examples"].append(w)
         wscore = round(sum(pscores) / len(pscores), 1) if pscores else 0.0
 
+        n_phones = len(phonemes) - n_ph0
+
+        if status == "scored":
+            word_status = "ok" if pscores and wscore >= 70.0 else "pronunciation_error" if pscores else "no_evidence"
+        else:
+            word_status = status
+
         pron = get_pronunciation(w, accent)
 
         wdetails.append({"word": w, "score": wscore,
-                         "status": "ok" if status == "scored" else status,
+                         "status": word_status,
                          "start_s": round(f0 * FRAME_STRIDE_S, 2) if f0 >= 0 else 0.0,
                          "end_s": round((f1 + 1) * FRAME_STRIDE_S, 2) if f1 >= 0 else 0.0,
                          "acoustic_confidence": None, "expected_ipa": pron["ipa"],
-                         "blank_ratio": round(blank_ratio, 3)})
+                         "blank_ratio": round(blank_ratio, 3),
+                         "n_phones": n_phones})
     for w in skipped_words:
         wdetails.append({"word": w, "score": 0.0, "status": "no_evidence",
                          "start_s": 0.0, "end_s": 0.0, "acoustic_confidence": None,
-                         "expected_ipa": "", "blank_ratio": 1.0})
+                         "expected_ipa": "", "blank_ratio": 1.0, "n_phones": 0})
 
-    ok_w = [d for d in wdetails if d["status"] in ("ok", "misaligned")]
+    scored_w = [d for d in wdetails if d["status"] in ("ok", "pronunciation_error", "misaligned")]
 
-    sounds = round(sum(d["score"] for d in ok_w) / len(ok_w), 1) if ok_w else 0.0
+    total_phones = sum(d.get("n_phones", 0) for d in scored_w)
 
-    # vowel/consonant split theo ARPAbet gốc
+    if scored_w and total_phones > 0:
+        sounds = round(sum(d["score"] * d.get("n_phones", 0) for d in scored_w) / total_phones, 1)
+    elif scored_w:
+        sounds = round(sum(d["score"] for d in scored_w) / len(scored_w), 1)
+    else:
+        sounds = 0.0
+
+    # 7. Tổng hợp điểm sounds theo trọng số số phone
     return {"sounds": sounds, "word_details": wdetails, "phonemes": phonemes,
             "top_errors": sorted(err_counter.values(), key=lambda x: -x["count"])[:5],
-            "model": PHONE_MODEL_ID, "n_scored": len(ok_w),
-            "n_no_evidence": len(wdetails) - len(ok_w)}
+            "model": PHONE_MODEL_ID, "n_scored": len(scored_w),
+            "n_no_evidence": len(wdetails) - len(scored_w)}
 

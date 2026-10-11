@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import Dict, List, Optional, Tuple
 
 IPA_MAP = {
     "TH": "θ", "DH": "ð", "SH": "ʃ", "ZH": "ʒ", "CH": "tʃ", "JH": "dʒ",
@@ -40,9 +41,9 @@ def get_g2p():
     return G2p()
 
 
-def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
+def g2p_to_phones(word_upper: str) -> Tuple[List[str], bool]:
     try:
-        raw: list[str] = get_g2p()(word_upper.lower())
+        raw: List[str] = get_g2p()(word_upper.lower())
     except Exception:
         return ["AH1"], True
     # g2p-en có thể trả từ gốc xen kẽ phoneme khi không biết -> lọc token không phải phone
@@ -62,10 +63,10 @@ def g2p_to_phones(word_upper: str) -> tuple[list[str], bool]:
     return phones, True
 
 
-def split_syllables(arpa: list[str]) -> tuple[list[list[str]], int | None]:
-    syllables: list[list[str]] = []
+def split_syllables(arpa: List[str]) -> Tuple[List[List[str]], Optional[int]]:
+    syllables: List[List[str]] = []
 
-    cur: list[str] = []
+    cur: List[str] = []
 
     for ph in arpa:
         cur.append(ph)
@@ -88,7 +89,7 @@ def split_syllables(arpa: list[str]) -> tuple[list[list[str]], int | None]:
     return syllables, None
 
 
-def get_pronunciation(word: str, accent: str = "en-US") -> dict:
+def get_pronunciation(word: str, accent: str = "en-US") -> Dict:
     w = (word or "").strip()
 
     if not w:
@@ -98,7 +99,7 @@ def get_pronunciation(word: str, accent: str = "en-US") -> dict:
 
     oov = False
 
-    arpa: list[str] | None = None
+    arpa: Optional[List[str]] = None
 
     try:
         import pronouncing

@@ -1,7 +1,13 @@
+from typing import Dict, List, Optional
+
 from app.ai.pronunciation.helpers import tok_words
 
 
-def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: list[dict] | None = None) -> list[dict]:
+def align_transcripts(
+    whisper_raw: str,
+    user_corrected: str,
+    whisper_segments: Optional[List[Dict]] = None,
+) -> List[Dict]:
     a, b = tok_words(whisper_raw), tok_words(user_corrected)
 
     n, m = len(a), len(b)
@@ -20,9 +26,9 @@ def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: l
     # traceback
     i, j = n, m
 
-    ops: list[dict] = []
+    ops: List[Dict] = []
     # map whisper word index -> timestamp gợi ý
-    seg_words: list[dict] = []
+    seg_words: List[Dict] = []
 
     if whisper_segments:
         for seg in whisper_segments:
@@ -35,9 +41,7 @@ def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: l
             w = seg_words[idx]
 
             return {"start_s": w.get("start"), "end_s": w.get("end"), "confidence": w.get("confidence")}
-        # fallback: whisper_segments dạng {start,end,text} -> chia đều từ (chỉ gợi ý, scorer không tin)
-        flat = " ".join(s.get("text", "") for s in (whisper_segments or [])).lower()
-
+        # 1. Fallback khi thiếu span từng chữ: trả None để scorer không tin timestamp này
         return {"start_s": None, "end_s": None, "confidence": None}
     while i > 0 or j > 0:
         if i > 0 and j > 0 and a[i - 1] == b[j - 1]:
@@ -71,7 +75,7 @@ def align_transcripts(whisper_raw: str, user_corrected: str, whisper_segments: l
     return ops
 
 
-def apply_forced_spans(aligned: list[dict], forced_words: list[dict]) -> list[dict]:
+def apply_forced_spans(aligned: List[Dict], forced_words: List[Dict]) -> List[Dict]:
     fw = {w["word"].upper(): w for w in forced_words}
 
     out = []

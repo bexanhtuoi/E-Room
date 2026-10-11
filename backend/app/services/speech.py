@@ -104,16 +104,19 @@ class SpeechService(ServiceBase):
             from app.ai.stt.recorder import find_attempt_by_message
 
             attempt = find_attempt_by_message(room_id, user_id, message_id)
+
             if attempt and (attempt.get("raw_path") is not None or attempt.get("raw_object")):
                 return True
-        except Exception:
-            pass
+        except Exception as error:
+            log.warning("không đọc được attempt ghi âm | room=%s msg=%s err=%s", room_id, message_id, error)
 
         try:
             from app.ai.stt.audio_store import has_audio
 
             return has_audio(room_id, entry.get("audio_file"))
-        except Exception:
+        except Exception as error:
+            log.warning("không kiểm tra được audio_store | room=%s msg=%s err=%s", room_id, message_id, error)
+
             return False
 
 

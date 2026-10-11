@@ -3,6 +3,7 @@ import json
 import os
 import threading
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from app.config import settings
 from app.log import get_logger
@@ -10,7 +11,7 @@ from app.log import get_logger
 log = get_logger("app.ai.pronunciation.models")
 
 
-ARPA_TO_ESPEAK: dict[str, tuple[str, ...]] = {
+ARPA_TO_ESPEAK: Dict[str, Tuple[str, ...]] = {
     "AA": ("ɑ",), "AE": ("æ",), "AH": ("ʌ",), "AO": ("ɔ",),
     "AW": ("aʊ",), "AY": ("aɪ",),
     "EH": ("ɛ",), "ER": ("ɜ", "ɹ"), "EY": ("eɪ",),
@@ -26,12 +27,6 @@ ARPA_TO_ESPEAK: dict[str, tuple[str, ...]] = {
 }
 
 
-acoustic_lock = threading.Lock()
-
-ctc_processor = None
-
-acoustic_model = None
-
 torch_lib = None
 
 
@@ -43,42 +38,6 @@ def load_torch():
 
         torch_lib = torch
     return torch_lib
-
-
-def acoustic_model_id() -> str:
-    try:
-        return settings.wav2vec_model_id or "facebook/wav2vec2-base-960h"
-    except Exception:
-        return "facebook/wav2vec2-base-960h"
-
-
-def get_acoustic_model():
-    global ctc_processor, acoustic_model
-
-    if acoustic_model is not None:
-        return ctc_processor, acoustic_model
-
-    with acoustic_lock:
-
-        if acoustic_model is not None:
-            return ctc_processor, acoustic_model
-
-        torch = load_torch()
-
-        from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-
-        mid = acoustic_model_id()
-
-        ctc_processor = Wav2Vec2Processor.from_pretrained(mid)
-
-        acoustic_model = Wav2Vec2ForCTC.from_pretrained(mid)
-
-        acoustic_model.eval()
-
-        if torch.cuda.is_available():
-            acoustic_model.to("cuda")
-
-    return ctc_processor, acoustic_model
 
 
 def phone_model_id() -> str:
@@ -97,10 +56,10 @@ phone_fe = None
 
 phone_model = None
 
-phone_vocab: dict[str, int] | None = None
+phone_vocab: Optional[Dict[str, int]] = None
 
 
-def load_vocab() -> dict[str, int]:
+def load_vocab() -> Dict[str, int]:
     global phone_vocab
 
     if phone_vocab is not None:
@@ -139,26 +98,52 @@ def get_phone_model():
 
         from transformers import AutoFeatureExtractor, Wav2Vec2ForCTC
 
-        phone_fe = AutoFeatureExtractor.from_pretrained(PHONE_MODEL_ID)
+        try:
+            phone_fe = AutoFeatureExtractor.from_pretrained(PHONE_MODEL_ID)
 
-        phone_model = Wav2Vec2ForCTC.from_pretrained(PHONE_MODEL_ID)
+            phone_model = Wav2Vec2ForCTC.from_pretrained(PHONE_MODEL_ID)
+        except Exception as error:
+            raise RuntimeError(f"Không tải được model XLSR {PHONE_MODEL_ID}: {error}") from error
 
         phone_model.eval()
 
         if torch.cuda.is_available():
             phone_model.to("cuda")
 
-        load_vocab()
+        try:
+            load_vocab()
+        except Exception as error:
+            raise RuntimeError(f"Không tải được vocab XLSR {PHONE_MODEL_ID}: {error}") from error
 
     return phone_fe, phone_model
 
 
-def arpa_to_espeak(arpa: list[str]) -> tuple[list[str], list[int]]:
+def is_phone_ready() -> bool:
+    return phone_model is not None and phone_fe is not None and phone_vocab is not None
+
+
+def ensure_phone_ready() -> None:
+    # 1. Preload fail-fast: báo lỗi tiếng Việt rõ thay vì treo giữa request
+    if is_phone_ready():
+        return
+
+    try:
+        get_phone_model()
+    except RuntimeError:
+        raise
+    except Exception as error:
+        raise RuntimeError(f"Model XLSR chưa sẵn sàng: {error}") from error
+
+    if not is_phone_ready():
+        raise RuntimeError(f"Model XLSR {PHONE_MODEL_ID} chưa sẵn sàng — kiểm tra HF cache và RAM")
+
+
+def arpa_to_espeak(arpa: List[str]) -> Tuple[List[str], List[int]]:
     vocab = load_vocab()
 
-    toks: list[str] = []
+    toks: List[str] = []
 
-    back: list[int] = []
+    back: List[int] = []
 
     for i, ph in enumerate(arpa):
         base = ph.rstrip("012")
@@ -172,7 +157,7 @@ def arpa_to_espeak(arpa: list[str]) -> tuple[list[str], list[int]]:
     return toks, back
 
 
-def ctc_forced_align(log_probs, target_ids: list[int], blank_id: int):
+def ctc_forced_align(log_probs, target_ids: List[int], blank_id: int):
     torch = load_torch()
 
     num_frames = log_probs.shape[0]
@@ -256,7 +241,7 @@ def ctc_forced_align(log_probs, target_ids: list[int], blank_id: int):
     return align, float(trellis[num_frames - 1, last])
 
 
-FRAME_STRIDE_S = 0.02  # wav2vec2 downsample 320x @16kHz ~= 20ms/frame
+FRAME_STRIDE_S = 0.02  # 1. XLSR downsample 320x @16kHz ~= 20ms/frame
 
-BLANK_RATIO_MISALIGNED = 0.70  # blank >70% word span -> misalignment, không phải lỗi phát âm
+BLANK_RATIO_MISALIGNED = 0.70  # 2. Blank >70% word span -> misalignment, không phải lỗi phát âm
 

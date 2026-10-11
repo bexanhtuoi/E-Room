@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -10,7 +10,7 @@ from app.log import get_logger
 log = get_logger("app.ai.pronunciation.audio")
 
 
-def load_wav_16k(raw: bytes) -> tuple[np.ndarray, int]:
+def load_wav_16k(raw: bytes) -> Tuple[np.ndarray, int]:
     import soundfile as sf
 
     wav, sr = sf.read(io.BytesIO(raw), dtype="float32", always_2d=False)
@@ -78,8 +78,13 @@ def frame_rms(wav: np.ndarray, frame_len: int = 320) -> np.ndarray:
     return out
 
 
-def vad_segments(wav: np.ndarray, sr: int = 16000, energy_thr: float = 0.003,
-                 silence_s: float = 0.5, min_speech_s: float = 0.3) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+def vad_segments(
+    wav: np.ndarray,
+    sr: int = 16000,
+    energy_thr: float = 0.003,
+    silence_s: float = 0.5,
+    min_speech_s: float = 0.3,
+) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
     hop = 320  # 20ms
 
     rms = frame_rms(wav, hop)
@@ -131,7 +136,7 @@ def vad_segments(wav: np.ndarray, sr: int = 16000, energy_thr: float = 0.003,
     return segs, pauses
 
 
-def empty_f0_result(error: str = "") -> dict[str, Any]:
+def empty_f0_result(error: str = "") -> Dict[str, Any]:
     result = {
         "median_f0": 0.0,
         "std_f0": 0.0,
@@ -150,7 +155,7 @@ def empty_f0_result(error: str = "") -> dict[str, Any]:
     return result
 
 
-def extract_f0(wav: np.ndarray, sr: int = 16000) -> dict[str, Any]:
+def extract_f0(wav: np.ndarray, sr: int = 16000) -> Dict[str, Any]:
     try:
         import librosa
 

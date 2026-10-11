@@ -93,7 +93,7 @@ POST .../speech-logs/{mid}/score
  ├─ nhẹ (không audio) → chấm sync tại api (heuristic), trả report ngay
  └─ nặng (có wav) → RPUSH ai {score_single_utterance} → 202 {queued}
      → ai-worker (tuần tự): tải wav (local hoặc MinIO→temp, xóa sau)
-     → wav2vec2-base + xlsr forced-align + GOP → sounds/stress/fluency/completeness/overall
+      → XLSR forced-align + GOP (XLSR-only, đã bỏ wav2vec-base) → sounds/stress/fluency/completeness/overall
      → articulation.py gắn how_to/vi → upsert pronunciation_scores + attach JSONL
      → browser poll 3s
      → no_audio / scorer_failed: giữ điểm cũ, không ghi đè

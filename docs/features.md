@@ -69,7 +69,7 @@ Video grid lọc `ai_*`; trần 6 seats chỉ tính người thật (token endpo
 - Luồng `raw → sửa → chấm → nhận xét`: STT lưu raw (`pronunciation=None`) → user sửa `corrected_text` → `POST .../score` chấm trên bản đã sửa + audio ĐẦU–CUỐI lượt nói (audio nặng → `202 {queued}`, chấm nền) → `POST .../feedback` xin góp ý AI (chưa chấm thì `409` `NO_SCORE_REPORT`).
 - Kết quả: điểm tổng + 4 tiêu chí (Sounds / Stress / Fluency / Completeness). **Điểm từng chữ ẩn mặc định** — bấm **Thống kê điểm số** mới mở bảng riêng (Chữ · Điểm · Trạng thái · IPA + lỗi âm nổi bật); nút **Nhận xét AI** độc lập (gồm cả ngữ pháp/từ vựng, cấm bịa lỗi).
 - Mỗi từ yếu kèm hướng dẫn sửa: khẩu hình (`how_to`) + phiên âm Việt (`vi`) từ `articulation.py`.
-- Máy host tự tính (wav2vec2 + phoneme GOP local), chấm tuần tự (`SCORING_MAX_PARALLEL=1`) chống OOM khi nhiều người bấm dồn. Điểm lưu DB (`pronunciation_scores`), JSONL giữ làm log raw/audio.
+- Máy host tự tính (XLSR phoneme GOP local), chấm tuần tự (`SCORING_MAX_PARALLEL=1`) chống OOM khi nhiều người bấm dồn. Điểm lưu DB (`pronunciation_scores`), JSONL giữ làm log raw/audio.
 - Người cuối rời phòng → auto chấm nốt các câu chưa chấm. Chi tiết: `reading-score.md`.
 
 ## 9. TTS giọng đọc mẫu

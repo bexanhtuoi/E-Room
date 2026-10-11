@@ -2,18 +2,18 @@ from typing import Any, Dict, List
 
 from config import settings
 
-_embed_model = None
+embed_model_cache = None
 
 
 def get_embed_model():
-    global _embed_model
+    global embed_model_cache
 
-    if _embed_model is None:
+    if embed_model_cache is None:
         from sentence_transformers import SentenceTransformer
 
-        _embed_model = SentenceTransformer(settings.embed_model_id)
+        embed_model_cache = SentenceTransformer(settings.embed_model_id)
 
-    return _embed_model
+    return embed_model_cache
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
@@ -43,8 +43,7 @@ def score_audio(
 
 
 def warm_all() -> None:
-    from app.ai.pronunciation.models import get_acoustic_model, get_phone_model
+    from app.ai.pronunciation.models import get_phone_model
 
-    get_acoustic_model()
     get_phone_model()
     get_embed_model()

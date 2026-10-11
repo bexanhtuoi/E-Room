@@ -54,6 +54,15 @@ async def lifespan(app: FastAPI):
             counts.get("documents", 0),
         )
 
+    try:
+        from app.ai.pronunciation.models import ensure_phone_ready
+
+        ensure_phone_ready()
+
+        log.info("Model XLSR đã sẵn sàng")
+    except Exception as error:
+        log.warning("Model XLSR chưa sẵn sàng, lần chấm đầu sẽ tải | err=%s", str(error)[:200])
+
     log.info("%s đã khởi động", settings.app_name)
     yield
     log.info("%s đã tắt", settings.app_name)

@@ -121,7 +121,7 @@ class Settings:
     tts_timeout: float = float(os.getenv("TTS_TIMEOUT", 30.0))
 
     # ─── Pronun scorer (demo/pronun-app, :8005, chay tren MAY AI) ─────────
-    # De trong = dung heuristic noi bo. Co URL = goi scorer that (wav2vec2 + GOP).
+    # De trong = dung heuristic noi bo. Co URL = goi scorer that (XLSR GOP).
     # May AI chay `docker compose -f docker-compose.stt.yml up -d` (service `pronun`).
     pronun_base_url: str = os.getenv("PRONUN_BASE_URL", "")
     pronun_timeout: float = float(os.getenv("PRONUN_TIMEOUT", 300.0))
@@ -129,9 +129,8 @@ class Settings:
     # de khong spike RAM/VRAM. 1 = tuan tu hoan toan (khuyen nghi).
     scoring_max_parallel: int = max(1, int(os.getenv("SCORING_MAX_PARALLEL", "1") or 1))
 
-    # ─── Scorer local (ruot scorer port vao backend: wav2vec2 + phoneme GOP) ──
+    # ─── Scorer local (XLSR phoneme GOP only, wav2vec-base đã xóa) ──
     # May chay backend gánh compute. Model tai 1 lan vao HF cache.
-    wav2vec_model_id: str = os.getenv("WAV2VEC_MODEL_ID", "facebook/wav2vec2-base-960h")
     phoneme_model_id: str = os.getenv("PHONEME_MODEL_ID", "facebook/wav2vec2-xlsr-53-espeak-cv-ft")
     # Chon backend cham diem: local | remote | remote-strict.
     # local = worker tu cham (mac dinh, khong doi hanh vi).

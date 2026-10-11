@@ -31,7 +31,7 @@ AI ngoài (LLM/STT/TTS) trỏ qua `LLM_BASE_URL`, `STT_PROVIDER` + `STT_SERVER_B
 
 ### 2b. Scorer phát âm: local hay EC2
 
-Chấm điểm phát âm (wav2vec2 + xlsr, ~1.6GB model) chọn backend bằng `SCORER_BACKEND`:
+Chấm điểm phát âm (XLSR phoneme GOP only, đã bỏ wav2vec-base) chọn backend bằng `SCORER_BACKEND`:
 
 | Mode | `.env` | Ghi chú |
 |---|---|---|

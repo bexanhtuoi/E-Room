@@ -22,22 +22,22 @@ from app.ai.pronunciation.models import (
     FRAME_STRIDE_S,
     arpa_to_espeak,
     ctc_forced_align,
-    get_acoustic_model,
+    ensure_phone_ready,
     get_phone_model,
+    is_phone_ready,
 )
 from app.ai.pronunciation.phonemes import observe_phones_fallback, score_phones, score_sounds, score_stress
 from app.ai.pronunciation.scorer import (
+    apply_xlsr_spans,
     heuristic_score,
-    normalize_reference,
     score_attempt_v2,
     score_local,
     score_pronunciation,
-    score_utterance,
     score_via_pronun_service,
     score_with_wav2vec2,
 )
 
-_FEEDBACK_NAMES = frozenset({
+FEEDBACK_NAMES = frozenset({
     "SESSION_FEEDBACK_PROMPT",
     "SYSTEM_PROMPT",
     "build_fallback_feedback",
@@ -50,7 +50,7 @@ _FEEDBACK_NAMES = frozenset({
 
 
 def __getattr__(name: str):
-    if name in _FEEDBACK_NAMES:
+    if name in FEEDBACK_NAMES:
         from app.ai.pronunciation import feedback
 
         return getattr(feedback, name)
@@ -71,7 +71,7 @@ __all__ = [
     "tok_words",
     "align_transcripts",
     "apply_forced_spans",
-    "arpa_to_espeak",
+    "apply_xlsr_spans",
     "arpa_to_ipa",
     "build_fallback_feedback",
     "calculate_overall",
@@ -80,15 +80,15 @@ __all__ = [
     "extract_f0",
     "frame_rms",
     "generate_feedback",
-    "get_acoustic_model",
+    "ensure_phone_ready",
     "get_phone_model",
     "get_pronunciation",
+    "is_phone_ready",
     "guide_for_word",
     "heuristic_score",
     "load_wav_16k",
     "mouth_guide",
     "needleman",
-    "normalize_reference",
     "observe_phones_fallback",
     "parse_confusion",
     "request_pronun_feedback",
@@ -100,7 +100,6 @@ __all__ = [
     "score_pronunciation",
     "score_sounds",
     "score_stress",
-    "score_utterance",
     "score_via_pronun_service",
     "score_with_wav2vec2",
     "split_syllables",

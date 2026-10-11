@@ -33,7 +33,7 @@ E-Room là nền tảng **luyện nói tiếng Anh theo nhóm nhỏ** (tối đa
 | AI | LangChain 1.x + LangGraph (agent), LLM qua `LLM_BASE_URL` (OpenAI-compatible), Qwen3 reranker, Tavily search |
 | STT | faster-whisper-server `:8001` (máy AI, GPU) + dispatch `auto`: server sống thì dùng, chết thì fallback local; tràn sang cloud khi hàng đợi ≥4 job (tiếng Anh + có key) |
 | TTS | Kokoro-compatible server `:8002`, 4 giọng `af_heart`/`am_adam`/`bf_emma`/`bm_george` |
-| Chấm phát âm | Package `app/ai/pronunciation/` (wav2vec2 + phoneme GOP local trên máy host, chấm tuần tự) + nhận xét AI qua LLM (prompt ở `app/ai/prompts/feedback_utterance.md` + `assessment.md`) |
+| Chấm phát âm | Package `app/ai/pronunciation/` (XLSR phoneme GOP local trên máy host, chấm tuần tự) + nhận xét AI qua LLM (prompt ở `app/ai/prompts/feedback_utterance.md` + `assessment.md`) |
 | Realtime | LiveKit (video/audio/**data channel**) — data channel chở transcript + AI stream + emoji/hand-raise |
 | Jobs | Celery (queues: `ai`, `ai_observer`, `ai_transcriber`) + beat, Redis |
 | Data | PostgreSQL 16, Qdrant (vectors), MinIO (S3 files), speech logs JSONL (`backend/log/speech/`, runtime) |

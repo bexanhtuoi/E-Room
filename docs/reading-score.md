@@ -38,10 +38,10 @@ Prefix đầy đủ: `/api/v1/rooms/{room_id}/speech-logs/...`.
 `app/ai/pronunciation/scorer.py::score_pronunciation` trả `ScoringReport`:
 
 - `scores`: `sounds` (âm), `stress` (nhấn), `fluency` (trôi chảy), `completeness` (đủ chữ), `overall` (trung bình trọng số). `intonation` = `None` ở MVP (chỉ detect monotone).
-- `word_details[]`: `{word, score, status, expected_ipa}` — `status` ∈ `ok` (≥70) · `pronunciation_error` · `no_evidence` (loại khỏi mẫu số, UI hiện "Không nghe rõ").
+- `word_details[]`: `{word, score, status, expected_ipa}` — `status` ∈ `ok` (≥70) · `pronunciation_error` · `misaligned` (khớp lệch, vẫn chấm GOP) · `no_evidence` (loại khỏi mẫu số, UI hiện "Không nghe rõ").
 - `phonemes[]`: `{word, expected, observed, type, gop, score}` — vd `/θ/ → /s/` ở "think".
 - `top_errors[]`: `{pattern, count, examples}` — tối đa 5.
-- Thứ tự thử model: local wav2vec2 (forced-align + `score_sounds`/`score_stress`, fluency/completeness) → Pronun service (`PRONUN_BASE_URL`) → heuristic chữ (không có `word_details`).
+- Thứ tự thử model: local XLSR (forced-align + `score_phones`/`score_stress`, fluency/completeness) → Pronun service (`PRONUN_BASE_URL`) → heuristic chữ (không có `word_details`).
 - Mỗi từ yếu được gắn hướng dẫn sửa từ `articulation.py`: `how_to` (khẩu hình tiếng Việt) + `vi` (phiên âm Việt để đọc theo).
 
 ### Nhận xét AI (LLM — chỉ giải thích, không tính điểm)
@@ -101,7 +101,7 @@ await fetchJson(`/api/v1/rooms/${roomId}/speech-logs/${messageId}/feedback`, { m
 
 ## 5. Session wiring + DB + chấm tuần tự
 
-- **Máy host tự tính**: scorer local (wav2vec2 + XLSR phoneme) chạy trên backend máy host.
+- **Máy host tự tính**: scorer local (XLSR phoneme GOP only) chạy trên backend máy host.
   `PRONUN_BASE_URL` để trống. TTS (`:8002`) và STT (`:8001`) chạy ở máy AI riêng.
 - **Chấm tuần tự**: `SCORING_MAX_PARALLEL=1` — nhiều người bấm chấm cùng lúc thì xếp hàng (task Celery), không OOM.
   Frontend khóa các nút chấm khác khi đang có 1 lượt chạy (`scoreDisabled`).

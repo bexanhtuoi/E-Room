@@ -1,10 +1,15 @@
 import difflib
+from typing import Dict, List, Optional, Tuple
 
 from app.ai.pronunciation.helpers import tok_words
 
 
-def score_fluency(duration_s: float, words_count: int, pauses: list[tuple[float, float]],
-                  whisper_text: str = "") -> dict:
+def score_fluency(
+    duration_s: float,
+    words_count: int,
+    pauses: List[Tuple[float, float]],
+    whisper_text: str = "",
+) -> Dict:
     wpm = (words_count / max(0.1, duration_s)) * 60.0 if duration_s > 0 else 0.0
 
     pause_dur = sum(e - s for s, e in pauses)
@@ -47,11 +52,11 @@ def score_fluency(duration_s: float, words_count: int, pauses: list[tuple[float,
 
 
 def score_completeness(
-    original: str | None,
+    original: Optional[str],
     corrected: str,
     mode: str,
-    word_details: list[dict] | None = None,
-) -> dict:
+    word_details: Optional[List[Dict]] = None,
+) -> Dict:
     if mode == "read_aloud" and original:
         return score_completeness_read_aloud(original, corrected, mode)
     details = word_details or []
@@ -71,7 +76,7 @@ def score_completeness(
     return {"mode": mode, "missing_words": missing[:20], "extra_words": [], "wer_vs_original": None, "score": score}
 
 
-def score_completeness_read_aloud(original: str | None, corrected: str, mode: str) -> dict:
+def score_completeness_read_aloud(original: Optional[str], corrected: str, mode: str) -> Dict:
     if not original:
         return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 100.0}
     a, b = tok_words(original), tok_words(corrected)
@@ -96,7 +101,7 @@ def calculate_overall(sounds: float, stress: float, fluency: float, completeness
     return round(0.5*sounds + 0.25*stress + 0.15*fluency + 0.10*completeness, 1)
 
 
-def needleman(a: list[str], b: list[str]) -> list[tuple[str, str, str]]:
+def needleman(a: List[str], b: List[str]) -> List[Tuple[str, str, str]]:
     n, m = len(a), len(b)
 
     dp = [[0] * (m + 1) for _ in range(n + 1)]
