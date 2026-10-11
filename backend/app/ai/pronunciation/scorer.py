@@ -12,6 +12,7 @@ import numpy as np
 
 from app.ai.pronunciation.align import align_transcripts
 from app.ai.pronunciation.audio import check_audio_quality, extract_f0, load_wav_16k, vad_segments
+from app.ai.pronunciation.helpers import check_punct_pause_order, filter_speech_pauses, speech_span
 from app.ai.pronunciation.metrics import calculate_overall, score_completeness, score_fluency
 from app.ai.pronunciation.models import ensure_phone_ready
 from app.ai.pronunciation.phonemes import score_phones, score_stress
@@ -178,7 +179,39 @@ def score_attempt_v2(
 
     segs, pauses = vad_segments(wav, sr)
 
-    fl = score_fluency(len(wav) / sr, len([w for w in aligned if w["alignment"] != "deletion"]), pauses, whisper_raw)
+    full_dur = len(wav) / sr
+
+    start, end = speech_span(spans, segs, full_dur)
+
+    pause_info = filter_speech_pauses(pauses, full_dur, start, end)
+
+    pauses = pause_info["pauses"]
+
+    if int(pause_info.get("n_edge", 0)) > 0:
+        warnings.append(f"Bỏ {pause_info.get('n_edge', 0)} pause đầu/cuối câu khi chấm fluency.")
+
+    fl = score_fluency(
+        full_dur,
+        len([w for w in aligned if w["alignment"] != "deletion"]),
+        pauses,
+        whisper_raw,
+        1.0,
+    )
+
+    order = check_punct_pause_order(spans, user_corrected or whisper_raw)
+
+    fl["punct_order_ok"] = bool(order.get("ok", True))
+
+    offenders = order.get("offenders", [])
+
+    if offenders:
+        fl["score"] = round(max(0.0, float(fl["score"]) - min(8.0, 4.0 * len(offenders))), 1)
+
+        names = ", ".join([str(o.get("word", "")) for o in offenders[:4]])
+
+        warnings.append(
+            f"Nghỉ ở dấu phẩy ({names}) dài hơn nghỉ ở dấu chấm — sai nhịp câu."
+        )
 
     details = snd["word_details"]
 

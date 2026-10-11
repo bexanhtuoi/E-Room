@@ -9,6 +9,7 @@ def score_fluency(
     words_count: int,
     pauses: List[Tuple[float, float]],
     whisper_text: str = "",
+    long_pause_s: float = 0.4,
 ) -> Dict:
     wpm = (words_count / max(0.1, duration_s)) * 60.0 if duration_s > 0 else 0.0
 
@@ -16,7 +17,7 @@ def score_fluency(
 
     pause_ratio = pause_dur / max(0.1, duration_s)
 
-    long_pauses = sum(1 for s, e in pauses if e - s >= 0.4)
+    long_pauses = sum(1 for s, e in pauses if e - s >= long_pause_s)
 
     low = (whisper_text or "").lower()
 

@@ -10,7 +10,19 @@ from app.ai.pronunciation.audio import (
     vad_segments,
 )
 from app.ai.pronunciation.g2p import apply_gb_non_rhotic, arpa_to_ipa, get_pronunciation, split_syllables
-from app.ai.pronunciation.helpers import build_stt_span_map, gop_to_score, is_gb_accent, tok_words
+from app.ai.pronunciation.helpers import (
+    build_stt_span_map,
+    check_punct_pause_order,
+    filter_speech_pauses,
+    flat_stt_words,
+    gop_to_score,
+    is_gb_accent,
+    punct_gaps,
+    speech_span,
+    tok_words,
+    trim_edge_pauses,
+    word_time,
+)
 from app.ai.pronunciation.metrics import (
     calculate_overall,
     needleman,
@@ -72,9 +84,16 @@ __all__ = [
     "tok_words",
     "FUNCTION_WORDS",
     "build_stt_span_map",
+    "check_punct_pause_order",
+    "filter_speech_pauses",
+    "flat_stt_words",
+    "punct_gaps",
     "classify_phone_pair",
     "reduction_floor",
     "summarize_reductions",
+    "speech_span",
+    "trim_edge_pauses",
+    "word_time",
     "gop_to_score",
     "is_gb_accent",
     "apply_gb_non_rhotic",
