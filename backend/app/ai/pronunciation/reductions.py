@@ -39,11 +39,24 @@ def is_function_word(word: str) -> bool:
     return word.strip().lower() in FUNCTION_WORDS
 
 
+def next_starts_with_vowel(next_word: str, accent: str = "en-US") -> bool:
+    # 2. Âm đầu từ tiếp theo (theo ARPA để đúng cả hour/one/year)
+    from app.ai.pronunciation.g2p import get_pronunciation, is_vowel
+
+    arpa = get_pronunciation(next_word, accent).get("arpa", [])
+
+    if not arpa:
+        return False
+
+    return is_vowel(arpa[0])
+
+
 def classify_phone_pair(
     expected: str,
     observed: Optional[str],
     word: str = "",
     accent: str = "en-US",
+    next_word: str = "",
 ) -> Optional[Dict[str, str]]:
     # 1. Miễn trừ rút gọn tự nhiên, trả None khi vẫn tính lỗi thật
     exp = norm_token(expected)
@@ -61,6 +74,18 @@ def classify_phone_pair(
 
     if exp in SCHWA_FAMILY and ob in SCHWA_FAMILY:
         return {"kind": "weak-vowel", "label": "rút gọn tự nhiên"}
+
+    if func and exp in {"u", "uː"} and ob in SCHWA_FAMILY:
+        return {"kind": "weak-vowel", "label": "rút gọn tự nhiên"}
+
+    if low_word == "the" and exp in SCHWA_FAMILY and ob in {"i", "iː", "ɪ"}:
+        if next_starts_with_vowel(next_word, accent):
+            return {"kind": "article", "label": "the trước nguyên âm đọc /ðiː/"}
+
+        return None
+
+    if low_word == "a" and exp in SCHWA_FAMILY and ob in {"eɪ", "æ"}:
+        return {"kind": "article", "label": "a nhấn mạnh đọc /eɪ/"}
 
     if (exp, ob) in LENGTH_PAIRS or (ob, exp) in LENGTH_PAIRS:
         return {"kind": "length", "label": "dài-ngắn tự nhiên"}
@@ -86,7 +111,7 @@ def classify_phone_pair(
 
 def reduction_floor(kind: str) -> float:
     # 2. Sàn điểm cho rút gọn để không kéo từ tốt xuống 0 oan
-    if kind in ("weak-vowel", "non-rhotic", "length"):
+    if kind in ("weak-vowel", "non-rhotic", "length", "article"):
         return 70.0
 
     return 65.0

@@ -609,8 +609,10 @@ def score_phones(
 
     red_counter: List[Dict] = []
 
-    for (p0, p1, w, arpa) in wranges:
+    for idx, (p0, p1, w, arpa) in enumerate(wranges):
         canon = seq[p0:p1]
+
+        next_w = wranges[idx + 1][2] if idx + 1 < len(wranges) else ""
 
         anchored = False
 
@@ -723,7 +725,7 @@ def score_phones(
             out_typ = typ
 
             if typ == "substitution" and status in ("scored", "misaligned"):
-                rule = classify_phone_pair(exp, disp_ob, w, accent)
+                rule = classify_phone_pair(exp, disp_ob, w, accent, next_w)
 
                 if rule is not None:
                     out_typ = "reduction"

@@ -30,12 +30,12 @@ def score_fluency(
     phones = sum(len(w) for w in toks)
 
     art = phones / max(0.1, duration_s - pause_dur)
-    # rubric 0-100
+    # rubric 0-100, band rong: cham that (<50) hoac ban qua nhanh moi tru nang
     s = 100.0
 
-    if 130 <= wpm <= 170:
+    if 90 <= wpm <= 200:
         s -= 0
-    elif 90 <= wpm < 130 or 170 < wpm <= 210:
+    elif 50 <= wpm < 90 or 200 < wpm <= 250:
         s -= 10
     else:
         s -= 25

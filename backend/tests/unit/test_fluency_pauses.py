@@ -108,4 +108,16 @@ class TestLongPauseThreshold:
 
         assert long["long_pause_count"] == 0
 
-        assert long["score"] == 90.0
+        assert long["score"] == 100.0
+
+    def test_fast_but_clear_not_penalized(self):
+        assert score_fluency(20.0, 60, [], "text")["score"] == 100.0
+
+        assert score_fluency(20.0, 70, [], "text")["score"] == 90.0
+
+    def test_too_slow_or_rushed_still_penalized(self):
+        assert score_fluency(20.0, 10, [], "text")["score"] == 75.0
+
+        assert score_fluency(20.0, 83, [], "text")["score"] == 90.0
+
+        assert score_fluency(20.0, 84, [], "text")["score"] == 75.0
