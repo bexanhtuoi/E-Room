@@ -89,7 +89,42 @@ def split_syllables(arpa: List[str]) -> Tuple[List[List[str]], Optional[int]]:
     return syllables, None
 
 
+def apply_gb_non_rhotic(arpa: List[str]) -> List[str]:
+    # 1. Bỏ R hậu nguyên âm cho Anh-Anh (non-rhotic)
+    out: List[str] = []
+
+    for idx, ph in enumerate(arpa):
+        base = strip_stress(ph)
+
+        if base == "ER":
+            stress = ph[-1] if ph[-1] in "012" else ""
+
+            out.append("AH" + stress)
+
+            continue
+
+        if base == "R":
+            prev_base = strip_stress(out[-1]) if out else ""
+
+            nxt = arpa[idx + 1] if idx + 1 < len(arpa) else ""
+
+            nxt_base = strip_stress(nxt) if nxt else ""
+
+            prev_is_vowel = prev_base in VOWEL_BASE
+
+            nxt_is_end_or_cons = (not nxt_base) or (nxt_base not in VOWEL_BASE and nxt_base != "R")
+
+            if prev_is_vowel and nxt_is_end_or_cons:
+                continue
+
+        out.append(ph)
+
+    return out
+
+
 def get_pronunciation(word: str, accent: str = "en-US") -> Dict:
+    from app.ai.pronunciation.helpers import is_gb_accent
+
     w = (word or "").strip()
 
     if not w:
@@ -112,6 +147,10 @@ def get_pronunciation(word: str, accent: str = "en-US") -> Dict:
         arpa = None
     if arpa is None:
         arpa, oov = g2p_to_phones(wu)
+
+    if is_gb_accent(accent):
+        arpa = apply_gb_non_rhotic(arpa)
+
     syllables, stress_index = split_syllables(arpa)
 
     return {

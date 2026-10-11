@@ -9,8 +9,8 @@ from app.ai.pronunciation.audio import (
     load_wav_16k,
     vad_segments,
 )
-from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation, split_syllables
-from app.ai.pronunciation.helpers import tok_words
+from app.ai.pronunciation.g2p import apply_gb_non_rhotic, arpa_to_ipa, get_pronunciation, split_syllables
+from app.ai.pronunciation.helpers import build_stt_span_map, gop_to_score, is_gb_accent, tok_words
 from app.ai.pronunciation.metrics import (
     calculate_overall,
     needleman,
@@ -27,6 +27,7 @@ from app.ai.pronunciation.models import (
     is_phone_ready,
 )
 from app.ai.pronunciation.phonemes import observe_phones_fallback, score_phones, score_sounds, score_stress
+from app.ai.pronunciation.reductions import FUNCTION_WORDS, classify_phone_pair, reduction_floor, summarize_reductions
 from app.ai.pronunciation.scorer import (
     apply_xlsr_spans,
     heuristic_score,
@@ -69,6 +70,14 @@ __all__ = [
     "load_feedback_prompts",
     "strip_reasoning",
     "tok_words",
+    "FUNCTION_WORDS",
+    "build_stt_span_map",
+    "classify_phone_pair",
+    "reduction_floor",
+    "summarize_reductions",
+    "gop_to_score",
+    "is_gb_accent",
+    "apply_gb_non_rhotic",
     "align_transcripts",
     "apply_forced_spans",
     "apply_xlsr_spans",

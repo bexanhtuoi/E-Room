@@ -1,10 +1,11 @@
 import math
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from app.ai.pronunciation.g2p import arpa_to_ipa, get_pronunciation, is_vowel
+from app.ai.pronunciation.helpers import build_stt_span_map, gop_to_score
 from app.ai.pronunciation.metrics import needleman
 from app.ai.pronunciation.models import (
     BLANK_RATIO_MISALIGNED,
@@ -16,6 +17,7 @@ from app.ai.pronunciation.models import (
     load_torch,
     load_vocab,
 )
+from app.ai.pronunciation.reductions import classify_phone_pair, reduction_floor, summarize_reductions
 from app.log import get_logger
 
 log = get_logger("app.ai.pronunciation.phonemes")
@@ -271,7 +273,181 @@ def score_stress(
     return {"stress": score, "correct": correct, "total": total, "details": details}
 
 
-def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, Any]:
+def anchor_word_window(
+    log_probs,
+    target_ids_word: List[int],
+    blank_id: int,
+    stt_f0: int,
+    stt_f1: int,
+) -> Optional[tuple]:
+    # 1. Căn lại phone trong cửa sổ STT khi CTC toàn câu bóp quá ngắn
+    from app.ai.pronunciation.models import ctc_forced_align
+
+    if stt_f1 < stt_f0:
+        return None
+
+    if len(target_ids_word) == 0:
+        return None
+
+    if (stt_f1 - stt_f0 + 1) < 3:
+        return None
+
+    sl = log_probs[stt_f0:stt_f1 + 1]
+
+    align, _ = ctc_forced_align(sl, list(target_ids_word), blank_id)
+
+    lps: List[float] = []
+
+    spans: List[tuple] = []
+
+    oks: List[bool] = []
+
+    for i, tid in enumerate(target_ids_word):
+        s = 2 * i + 1
+
+        frames = [t for t in range(len(align)) if align[t] == s]
+
+        if frames:
+            vals = [float(sl[t, tid]) for t in frames]
+
+            lps.append(sum(vals) / len(vals))
+
+            spans.append((stt_f0 + frames[0], stt_f0 + frames[-1]))
+
+            oks.append(True)
+        else:
+            lps.append(float("-inf"))
+
+            spans.append((-1, -1))
+
+            oks.append(False)
+
+    if not any(oks):
+        return None
+
+    return lps, spans, oks
+
+
+def score_phones_by_vad(
+    warr,
+    text: str,
+    accent: str,
+    word_spans: List[Dict],
+    segs: List[tuple],
+) -> Dict[str, Any]:
+    # 1. Chẻ audio dài theo đoạn VAD rồi chấm từng chunk, gộp lại
+    import re as re_local
+
+    flat: List[Dict] = []
+
+    for item in word_spans or []:
+        if isinstance(item, dict) and isinstance(item.get("words"), list):
+            flat.extend([w for w in item["words"] if isinstance(w, dict)])
+        elif isinstance(item, dict) and item.get("word"):
+            flat.append(item)
+
+    chunks: List[Dict[str, Any]] = []
+
+    for s, e in segs:
+        s_i = max(0, int(s * 16000))
+
+        e_i = min(len(warr), int(e * 16000))
+
+        if e_i - s_i < 3200:
+            continue
+
+        part = [w for w in flat if span_mid(w) >= s and span_mid(w) < e]
+
+        if not part:
+            continue
+
+        ctext = " ".join([str(w.get("word", "")) for w in part])
+
+        if not re_local.findall(r"[A-Za-z']+", ctext):
+            continue
+
+        out = score_phones(warr[s_i:e_i], 16000, ctext, accent, part)
+
+        if "error" in out:
+            continue
+
+        chunks.append(out)
+
+    if not chunks:
+        return score_phones(warr, 16000, text, accent, None)
+
+    return merge_chunk_reports(chunks)
+
+
+def span_mid(w: Dict) -> float:
+    # 2. Điểm giữa span STT để gán từ vào đoạn VAD
+    try:
+        s = float(w.get("start", w.get("start_s", 0.0)))
+
+        e = float(w.get("end", w.get("end_s", 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+    return (s + e) / 2.0
+
+
+def merge_chunk_reports(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # 3. Gộp điểm các chunk theo trọng số số phone
+    wdetails: List[Dict] = []
+
+    phonemes: List[Dict] = []
+
+    err: Dict[str, Dict] = {}
+
+    total_phones = 0
+
+    weighted = 0.0
+
+    scored = 0
+
+    no_ev = 0
+
+    for ch in chunks:
+        for d in ch.get("word_details", []):
+            wdetails.append(d)
+
+        for p in ch.get("phonemes", []):
+            phonemes.append(p)
+
+        for t in ch.get("top_errors", []):
+            e = err.setdefault(t["pattern"], {"pattern": t["pattern"], "count": 0, "examples": []})
+
+            e["count"] += int(t.get("count", 0))
+
+            for ex in t.get("examples", []):
+                if ex not in e["examples"]:
+                    e["examples"].append(ex)
+
+        for d in ch.get("word_details", []):
+            if d.get("status") in ("ok", "pronunciation_error", "misaligned"):
+                weighted += float(d.get("score", 0.0)) * int(d.get("n_phones", 0))
+
+                total_phones += int(d.get("n_phones", 0))
+
+        scored += int(ch.get("n_scored", 0))
+
+        no_ev += int(ch.get("n_no_evidence", 0))
+
+    sounds = round(weighted / total_phones, 1) if total_phones > 0 else 0.0
+
+    return {"sounds": sounds, "word_details": wdetails, "phonemes": phonemes,
+            "top_errors": sorted(err.values(), key=lambda x: -x["count"])[:5],
+            "model": chunks[0].get("model", ""), "n_scored": scored,
+            "n_no_evidence": no_ev}
+
+
+def score_phones(
+    wav,
+    sr: int,
+    text: str,
+    accent: str = "en-US",
+    word_spans: Optional[List[Dict]] = None,
+) -> Dict[str, Any]:
     torch = load_torch()
 
     try:
@@ -319,6 +495,15 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, An
 
     if duration_s > 600:
         return {"error": "Audio dài quá 10 phút — hãy chia thành nhiều lần chấm."}
+
+    if duration_s > 60.0 and word_spans:
+        # 2. Audio dài thì chẻ theo VAD để trellis ổn định, chống OOM
+        from app.ai.pronunciation.audio import vad_segments
+
+        segs, _ = vad_segments(warr, 16000)
+
+        if len(segs) > 1:
+            return score_phones_by_vad(warr, text, accent, word_spans, segs)
 
     words = [w for w in re.findall(r"[A-Za-z']+", text)]
 
@@ -406,6 +591,8 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, An
     # 5. Observed phones: free recognition (greedy collapse, không LM)
     id2tok = {i: t for t, i in vocab.items()}
 
+    span_map = build_stt_span_map(word_spans)
+
     collapsed, prev = [], None
 
     for pid in pred_ids:
@@ -420,12 +607,60 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, An
 
     err_counter: Dict[str, Dict] = {}
 
+    red_counter: List[Dict] = []
+
     for (p0, p1, w, arpa) in wranges:
         canon = seq[p0:p1]
-        # 6. Observed evidence: align needleman toàn câu quá nặng nên so trong vùng từ
+
+        anchored = False
+
+        stt_start = 0.0
+
+        stt_end = 0.0
+
+        # 6. Neo STT: CTC toàn câu hay bóp từ chức năng còn 1 frame
+        ctc_f0 = phone_span[p0][0] if phone_ok[p0] else -1
+
+        ctc_f1 = phone_span[p1 - 1][1] if phone_ok[p1 - 1] else -1
+
+        ctc_dur = (ctc_f1 - ctc_f0 + 1) * FRAME_STRIDE_S if ctc_f0 >= 0 else 0.0
+
+        queue = span_map.get(str(w).upper())
+
+        if queue and ctc_dur < 0.08:
+            stt_start, stt_end = queue.pop(0)
+
+            stt_dur = stt_end - stt_start
+
+            if stt_dur >= 0.08:
+                margin = 0.05
+
+                a = max(0, int((stt_start - margin) / FRAME_STRIDE_S))
+
+                b = min(T - 1, int((stt_end + margin) / FRAME_STRIDE_S))
+
+                fixed = anchor_word_window(log_probs, target_ids[p0:p1], blank_id, a, b)
+
+                if fixed is not None:
+                    lps, spans, oks = fixed
+
+                    phone_lp[p0:p1] = lps
+
+                    phone_span[p0:p1] = spans
+
+                    phone_ok[p0:p1] = oks
+
+                    anchored = True
+
+        # 7. Observed evidence: align needleman toàn câu quá nặng nên so trong vùng từ
         f0 = phone_span[p0][0] if phone_ok[p0] else -1
 
         f1 = phone_span[p1 - 1][1] if phone_ok[p1 - 1] else -1
+
+        if anchored:
+            f0 = max(0, int(stt_start / FRAME_STRIDE_S))
+
+            f1 = min(T - 1, int(stt_end / FRAME_STRIDE_S))
 
         if f0 >= 0:
             span_pred = [id2tok.get(p, "") for p in pred_ids[f0:f1 + 1] if p != blank_id]
@@ -463,24 +698,47 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, An
         else:
             status = "scored"
 
+        span_dur = (f1 - f0 + 1) * FRAME_STRIDE_S if f0 >= 0 else 0.0
+
+        if status == "scored" and span_dur < 0.08:
+            # 3. Span quá ngắn (từ chức năng bị trellis bóp) -> không kết luận sai
+            status = "misaligned"
+
+        if anchored and status == "scored":
+            # 4. Từ đã neo bằng STT thì chỉ báo khớp lệch để nghe lại
+            status = "misaligned"
+
         pscores: List[float] = []
 
         n_ph0 = len(phonemes)
 
         for (exp, ob, typ), pi in zip(pairs, range(p0, p1)):
-            # GOP: mean log-posterior; phone không có frame thì loại khỏi mẫu số
+            # GOP: mean log-posterior chuẩn hoá; phone không frame loại khỏi mẫu số
             g = phone_lp[pi] if phone_ok[pi] else float("-inf")
 
-            s100 = round(max(0.0, min(100.0, math.exp(max(g, -10.0)) * 100.0)), 1) if math.isfinite(g) else 0.0
+            s100 = gop_to_score(g)
 
-            if status in ("scored", "misaligned") and math.isfinite(g):
-                pscores.append(s100)
             disp_ob = ob if ob != "-" else None
 
-            phonemes.append({"word": w, "expected": exp, "observed": disp_ob,
-                             "type": typ, "gop": round(g, 3) if math.isfinite(g) else None,
-                             "score": s100 if status in ("scored", "misaligned") else 0.0})
+            out_typ = typ
+
             if typ == "substitution" and status in ("scored", "misaligned"):
+                rule = classify_phone_pair(exp, disp_ob, w, accent)
+
+                if rule is not None:
+                    out_typ = "reduction"
+
+                    s100 = max(s100, reduction_floor(str(rule.get("kind", ""))))
+
+                    red_counter.append({"pattern": f"/{exp}/ -> /{disp_ob}/ ({rule.get('label', '')})", "examples": [w]})
+
+            if out_typ != "insertion" and status in ("scored", "misaligned") and math.isfinite(g):
+                pscores.append(s100)
+
+            phonemes.append({"word": w, "expected": exp, "observed": disp_ob,
+                             "type": out_typ, "gop": round(g, 3) if math.isfinite(g) else None,
+                             "score": s100 if status in ("scored", "misaligned") else 0.0})
+            if out_typ == "substitution" and status in ("scored", "misaligned"):
                 pat = f"/{exp}/ -> /{ob}/"
 
                 e = err_counter.setdefault(pat, {"pattern": pat, "count": 0, "examples": []})
@@ -490,6 +748,10 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, An
                 if w not in e["examples"]:
                     e["examples"].append(w)
         wscore = round(sum(pscores) / len(pscores), 1) if pscores else 0.0
+
+        if anchored and not pscores:
+            # 5. Neo STT mà không có phone chuẩn để chấm thì cho qua trung tính
+            wscore = 70.0
 
         n_phones = len(phonemes) - n_ph0
 
@@ -526,6 +788,7 @@ def score_phones(wav, sr: int, text: str, accent: str = "en-US") -> Dict[str, An
     # 7. Tổng hợp điểm sounds theo trọng số số phone
     return {"sounds": sounds, "word_details": wdetails, "phonemes": phonemes,
             "top_errors": sorted(err_counter.values(), key=lambda x: -x["count"])[:5],
+            "reductions": summarize_reductions(red_counter),
             "model": PHONE_MODEL_ID, "n_scored": len(scored_w),
             "n_no_evidence": len(wdetails) - len(scored_w)}
 

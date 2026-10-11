@@ -128,6 +128,7 @@ def score_attempt_v2(
     whisper_segments: Optional[List[Dict]] = None,
     char_words: Optional[List[Dict]] = None,
     greedy_text: str = "",
+    word_spans: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     t0 = time.time()
 
@@ -147,7 +148,9 @@ def score_attempt_v2(
     gop_model = None
 
     try:
-        ph = score_phones(wav, sr, user_corrected, accent)
+        spans = word_spans if word_spans is not None else whisper_segments
+
+        ph = score_phones(wav, sr, user_corrected, accent, spans)
     except Exception as error:
         return {"error": f"XLSR lỗi khi chấm: {error}", "warnings": warnings}
 
@@ -160,6 +163,7 @@ def score_attempt_v2(
         "word_details": ph["word_details"],
         "phonemes": ph["phonemes"],
         "top_errors": ph["top_errors"],
+        "reductions": ph.get("reductions", []),
     }
 
     gop_model = ph.get("model")
@@ -225,6 +229,7 @@ def score_attempt_v2(
         "fluency": {**fl},
         "completeness": cp,
         "top_errors": snd["top_errors"],
+        "reductions": snd.get("reductions", []),
         "alignment": aligned,
         "speech_segments": segs,
         "scorer_version": "scorer-v2-mvp-xlsr-only",
@@ -300,6 +305,8 @@ def score_local(
     audio_path: Union[Path, str],
     reference_text: str,
     language: str = "en",
+    accent: str = "en-US",
+    word_spans: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     raw = Path(audio_path).read_bytes()
 
@@ -338,10 +345,11 @@ def score_local(
                 reference_text,
                 "free_speaking",
                 None,
-                "en-US",
+                accent,
                 None,
                 None,
                 "",
+                word_spans,
             )
 
     if "error" in report and "scores" not in report:
@@ -391,10 +399,12 @@ def score_with_wav2vec2(
     audio_path: Union[Path, str],
     reference_text: str,
     language: str = "en",
+    accent: str = "en-US",
+    word_spans: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     # 5. Tên cũ giữ để tương thích test/mocks, ruột giờ là XLSR-only
     try:
-        return score_local(audio_path, reference_text, language)
+        return score_local(audio_path, reference_text, language, accent, word_spans)
     except Exception as error:
         log.warning("local scoring failed (%s), thử pronun service", error)
     return score_via_pronun_service(audio_path, reference_text, language)
@@ -409,6 +419,8 @@ def score_pronunciation(
     duration: float = 0.0,
     words: Optional[List[Dict[str, Any]]] = None,
     prefer_wav2vec: bool = True,
+    accent: str = "en-US",
+    word_spans: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     words = words or []
 
@@ -446,7 +458,9 @@ def score_pronunciation(
                     result["audio_quality"] = quality
 
                     return result
-                return score_with_wav2vec2(path, reference_text, language)
+                spans = word_spans if word_spans is not None else words
+
+                return score_with_wav2vec2(path, reference_text, language, accent, spans)
             log.warning("scoring thiếu audio (file không tồn tại: %s) — fallback heuristic", audio_path)
 
             return heuristic("no_audio")
