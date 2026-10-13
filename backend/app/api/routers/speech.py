@@ -111,7 +111,7 @@ def feedback_utterance(
         target_uid=user_id,
         model=opts.model or "",
         temperature=opts.temperature if opts.temperature is not None else 0.6,
-        max_tokens=opts.max_tokens if opts.max_tokens is not None else 2000,
+        max_tokens=opts.max_tokens if opts.max_tokens is not None else 3000,
     )
 
     return SpeechUtterance(**result)

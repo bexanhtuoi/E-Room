@@ -16,7 +16,7 @@ def request_pronun_feedback(
     scoring_report: Dict[str, Any],
     model: str = "",
     temperature: float = 0.6,
-    max_tokens: int = 1200,
+    max_tokens: int = 2000,
     system_prompt: str = "",
     user_label: str = "scoring_report",
 ) -> Dict[str, Any]:
