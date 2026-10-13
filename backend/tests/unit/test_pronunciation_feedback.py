@@ -19,7 +19,7 @@ class FakeMsg:
 class TestPromptSections:
     def test_two_sections_loaded(self):
         assert "scoring_report" in SYSTEM_PROMPT
-        assert "how_to" in SYSTEM_PROMPT  # du luat muc utterance
+        assert "advice" in SYSTEM_PROMPT  # schema/UI moi doc advice (map tu how_to cu)
         assert "session_scores" in SESSION_FEEDBACK_PROMPT
         assert "200 words" in SESSION_FEEDBACK_PROMPT
         # Nhan xet phai bang tieng Viet
@@ -135,6 +135,46 @@ class TestFallbackFeedback:
         assert out["fallback"] is True
         assert out["summary"]
         assert len(out["practice_plan"]) == 3
+
+
+class TestNormalizeFeedback:
+    # LLM theo prompt cũ trả how_to (không advice), thiếu practice_plan
+    # -> normalize phải bù để UI đủ section (bug bản "Do you understand?").
+    OLD_KEYS = (
+        '{"summary": "Ban phat am cau Do you understand voi nhieu loi.",'
+        ' "pronunciation_feedback": "Loi /j/ -> /d/ trong you.",'
+        ' "stress_feedback": "Nhan sai.",'
+        ' "intonation_feedback": "Chua co dau hoi ro.",'
+        ' "fluency_feedback": "Noi cham.",'
+        ' "priority_errors": ['
+        '   {"word": "you", "issue": "/j/ -> /d/", "how_to": "Dat luoi nhon sat rang", "vi": "ye"},'
+        '   {"word": "understand", "issue": "/ʌ/ -> /o/", "how_to": "Mo mieng vua du", "vi": "an-do-xten"}'
+        ' ]}'
+    )
+
+    def test_old_how_to_becomes_advice(self):
+        out, _, _ = TestGenerateFeedback()._run(self.OLD_KEYS)
+        assert "feedback_raw" not in out
+        errs = out.get("priority_errors") or []
+        assert len(errs) == 2
+        for e in errs:
+            assert e.get("advice"), f"Thieu advice cho '{e.get('word')}'"
+
+    def test_missing_practice_plan_gets_filled(self):
+        out, _, _ = TestGenerateFeedback()._run(self.OLD_KEYS)
+        assert len(out.get("practice_plan") or []) == 3
+
+    def test_normalize_is_idempotent(self):
+        from app.ai.pronunciation import normalize_feedback
+
+        parsed = {"priority_errors": [
+            {"word": "you", "issue": "x", "advice": "cach sua", "vi": "ye"}],
+            "practice_plan": ["a", "b", "c"], "summary": "s",
+            "pronunciation_feedback": "p", "stress_feedback": "s",
+            "intonation_feedback": "i", "fluency_feedback": "f"}
+        out = normalize_feedback(parsed, {})
+        assert out["priority_errors"][0]["advice"] == "cach sua"
+        assert out["practice_plan"] == ["a", "b", "c"]
 
 
 class TestAudioQualityGate:

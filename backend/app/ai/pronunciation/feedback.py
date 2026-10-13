@@ -162,8 +162,73 @@ async def generate_feedback(scoring_report: dict, model: str = "",
     if parsed:
         parsed.setdefault("model", (model or "").strip() or settings.llm_model)
 
-        return parsed
+        return normalize_feedback(parsed, scoring_report)
     return {"feedback_raw": content, "model": (model or "").strip() or settings.llm_model, "usage": {}}
+
+
+def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -> Dict[str, Any]:
+    """Chuẩn hóa JSON LLM về schema UI mới.
+
+    Prompt cũ bắt ``how_to`` nhưng schema ``PriorityError``/UI đọc ``advice``
+    nên bản LLM cũ làm mất dòng Cách sửa. Hàm này map ``how_to``/``tip`` về
+    ``advice`` (và ngược lại cho ``error_words`` của session), bù ``vi`` từ
+    ``guide_for_word`` khi thiếu, và bù mục chữ + ``practice_plan`` còn trống
+    từ fallback rule-based để UI không mất section.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    errs = parsed.get("priority_errors")
+    if isinstance(errs, list):
+        norm = []
+        for entry in errs:
+            if not isinstance(entry, dict):
+                continue
+            word = str(entry.get("word") or "?")
+            advice = entry.get("advice") or entry.get("how_to") or entry.get("tip") or ""
+            vi = entry.get("vi") or ""
+            if (not advice or not vi) and word != "?":
+                try:
+                    guide = word_guide(word, str(entry.get("issue") or ""))
+                    advice = advice or guide.get("how_to", "")
+                    vi = vi or guide.get("vi", "")
+                except Exception:
+                    pass
+            norm.append({
+                "word": word,
+                "issue": entry.get("issue") or "cần luyện thêm",
+                "advice": advice,
+                "vi": vi,
+            })
+        parsed["priority_errors"] = norm
+    session_errs = parsed.get("error_words")
+    if isinstance(session_errs, list):
+        for entry in session_errs:
+            if not isinstance(entry, dict):
+                continue
+            if not entry.get("how_to") and entry.get("advice"):
+                entry["how_to"] = entry["advice"]
+            if not entry.get("tip") and (entry.get("how_to") or entry.get("advice")):
+                entry["tip"] = entry.get("how_to") or entry.get("advice")
+    needs_fill = (
+        not parsed.get("practice_plan")
+        or not parsed.get("summary")
+        or not parsed.get("pronunciation_feedback")
+        or not parsed.get("priority_errors")
+    )
+    if needs_fill:
+        try:
+            fallback = build_fallback_feedback(scoring_report or {}, "scoring_report")
+        except Exception:
+            fallback = {}
+        for key in ("summary", "pronunciation_feedback", "stress_feedback",
+                    "intonation_feedback", "fluency_feedback"):
+            if not parsed.get(key) and fallback.get(key):
+                parsed[key] = fallback[key]
+        if not parsed.get("priority_errors") and fallback.get("priority_errors"):
+            parsed["priority_errors"] = fallback["priority_errors"]
+        if not parsed.get("practice_plan") and fallback.get("practice_plan"):
+            parsed["practice_plan"] = fallback["practice_plan"]
+    return parsed
 
 
 def word_guide(word: str, issue: str) -> Dict[str, str]:

@@ -57,6 +57,7 @@ FEEDBACK_NAMES = frozenset({
     "extract_json",
     "generate_feedback",
     "load_feedback_prompts",
+    "normalize_feedback",
     "request_pronun_feedback",
     "strip_reasoning",
 })

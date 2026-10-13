@@ -302,7 +302,7 @@ function AIFeedbackBody({ feedback }) {
             {feedback.priority_errors.map((e, i) => (
               <li key={i}>
                 <b>{e.word}</b>{e.vi ? ` (“${e.vi}”)` : ''} — {e.issue}
-                {e.advice ? <div style={{ color: '#555' }}>Cách sửa: {e.advice}</div> : null}
+                {(e.advice || e.how_to || e.tip) ? <div style={{ color: '#555' }}>Cách sửa: {e.advice || e.how_to || e.tip}</div> : null}
               </li>
             ))}
           </ul>
