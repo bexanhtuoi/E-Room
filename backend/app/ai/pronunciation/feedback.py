@@ -133,8 +133,79 @@ def extract_json(content: str) -> Dict[str, Any] | None:
 
             return parsed if isinstance(parsed, dict) else None
         except (TypeError, ValueError):
+            pass
+    return _repair_json(text)
+
+
+def _repair_json(text: str) -> Dict[str, Any] | None:
+    """Cứu JSON bị cắt cụt do max_tokens (vd dừng ở `"practice_plan": [`).
+
+    Cắt lùi tới dấu phẩy an toàn gần nhất (ngoài string) rồi đóng ngoặc
+    còn dở. Phần mất (thường là practice_plan) sẽ được bù từ fallback ở
+    normalize_feedback. Thử tối đa vài lát cắt.
+    """
+    start = text.find("{")
+
+    if start < 0:
+        return None
+    s = text[start:].strip()
+    if s.startswith("```"):
+        lines = s.split("\n")
+        s = "\n".join(lines[1:])
+        if s.rstrip().endswith("```"):
+            s = s.rstrip()[:-3].rstrip()
+    for _ in range(8):
+        depth_curly = depth_sq = 0
+        in_str = False
+        esc = False
+        last_comma = -1
+        for i, ch in enumerate(s):
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth_curly += 1
+            elif ch == "}":
+                depth_curly -= 1
+            elif ch == "[":
+                depth_sq += 1
+            elif ch == "]":
+                depth_sq -= 1
+            elif ch == ",":
+                last_comma = i
+        trial = s + "]" * max(0, depth_sq) + "}" * max(0, depth_curly)
+        try:
+            parsed = json.loads(trial)
+            if isinstance(parsed, dict):
+                return parsed
+        except (TypeError, ValueError):
+            pass
+        if last_comma < 0:
             return None
+        s = s[:last_comma]
     return None
+
+
+# Các script ngoài tiếng Việt + IPA Latin: lẫn vào là model lạc ngôn ngữ
+# (từng thấy Nga/Trung/Thái/Ý) -> bỏ cả bản, dùng fallback rule-based.
+FOREIGN_SCRIPT_RE = re.compile(
+    "[\u0400-\u04ff\u4e00-\u9fff\u3040-\u30ff\U00020000-\U0002a6df"
+    "\uac00-\ud7af\u0e00-\u0e7f\u0600-\u06ff\u0900-\u097f]"
+)
+
+
+def has_foreign_script(parsed: Dict[str, Any]) -> bool:
+    try:
+        return bool(FOREIGN_SCRIPT_RE.search(json.dumps(parsed, ensure_ascii=False)))
+    except (TypeError, ValueError):
+        return False
 
 
 async def generate_feedback(scoring_report: dict, model: str = "",
@@ -160,10 +231,80 @@ async def generate_feedback(scoring_report: dict, model: str = "",
     parsed = extract_json(content if isinstance(content, str) else str(content))
 
     if parsed:
+        if has_foreign_script(parsed):
+            log.warning("feedback LLM lẫn ngoại ngữ — dùng gợi ý theo quy tắc")
+
+            return build_fallback_feedback(scoring_report, user_label)
         parsed.setdefault("model", (model or "").strip() or settings.llm_model)
 
-        return parsed
+        return normalize_feedback(parsed, scoring_report)
     return {"feedback_raw": content, "model": (model or "").strip() or settings.llm_model, "usage": {}}
+
+
+def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -> Dict[str, Any]:
+    """Chuẩn hóa JSON LLM về schema UI mới.
+
+    Prompt cũ bắt ``how_to`` nhưng schema ``PriorityError``/UI đọc ``advice``
+    nên bản LLM cũ làm mất dòng Cách sửa. Hàm này map ``how_to``/``tip`` về
+    ``advice`` (và ngược lại cho ``error_words`` của session), bù ``vi`` từ
+    ``guide_for_word`` khi thiếu, và bù mục chữ + ``practice_plan`` còn trống
+    (kể cả sau khi _repair_json cứu JSON cụt) từ fallback rule-based để UI
+    không mất section.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    errs = parsed.get("priority_errors")
+    if isinstance(errs, list):
+        norm = []
+        for entry in errs:
+            if not isinstance(entry, dict):
+                continue
+            word = str(entry.get("word") or "?")
+            advice = entry.get("advice") or entry.get("how_to") or entry.get("tip") or ""
+            vi = entry.get("vi") or ""
+            if (not advice or not vi) and word != "?":
+                try:
+                    guide = word_guide(word, str(entry.get("issue") or ""))
+                    advice = advice or guide.get("how_to", "")
+                    vi = vi or guide.get("vi", "")
+                except Exception:
+                    pass
+            norm.append({
+                "word": word,
+                "issue": entry.get("issue") or "cần luyện thêm",
+                "advice": advice,
+                "vi": vi,
+            })
+        parsed["priority_errors"] = norm
+    session_errs = parsed.get("error_words")
+    if isinstance(session_errs, list):
+        for entry in session_errs:
+            if not isinstance(entry, dict):
+                continue
+            if not entry.get("how_to") and entry.get("advice"):
+                entry["how_to"] = entry["advice"]
+            if not entry.get("tip") and (entry.get("how_to") or entry.get("advice")):
+                entry["tip"] = entry.get("how_to") or entry.get("advice")
+    needs_fill = (
+        not parsed.get("practice_plan")
+        or not parsed.get("summary")
+        or not parsed.get("pronunciation_feedback")
+        or not parsed.get("priority_errors")
+    )
+    if needs_fill:
+        try:
+            fallback = build_fallback_feedback(scoring_report or {}, "scoring_report")
+        except Exception:
+            fallback = {}
+        for key in ("summary", "pronunciation_feedback", "stress_feedback",
+                    "intonation_feedback", "fluency_feedback"):
+            if not parsed.get(key) and fallback.get(key):
+                parsed[key] = fallback[key]
+        if not parsed.get("priority_errors") and fallback.get("priority_errors"):
+            parsed["priority_errors"] = fallback["priority_errors"]
+        if not parsed.get("practice_plan") and fallback.get("practice_plan"):
+            parsed["practice_plan"] = fallback["practice_plan"]
+    return parsed
 
 
 def word_guide(word: str, issue: str) -> Dict[str, str]:
