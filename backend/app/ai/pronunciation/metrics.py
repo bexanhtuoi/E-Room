@@ -102,6 +102,75 @@ def calculate_overall(sounds: float, stress: float, fluency: float, completeness
     return round(0.5*sounds + 0.25*stress + 0.15*fluency + 0.10*completeness, 1)
 
 
+# Nguong cham ngu dieu rule-based (don vi Hz, tru diem theo thang 0-100).
+INTON_MIN_VOICED = 0.1
+INTON_MONOTONE_STD = 15.0
+INTON_FLAT_STD = 25.0
+INTON_NARROW_RANGE = 20.0
+INTON_MED_RANGE = 40.0
+INTON_RISE_SLOPE = 5.0
+INTON_STMT_MAX_SLOPE = 15.0
+INTON_PEN_MONOTONE = 30.0
+INTON_PEN_NARROW = 20.0
+INTON_PEN_MED = 10.0
+INTON_PEN_SLOPE = 15.0
+
+
+def score_intonation(f0: Dict, text: str = "") -> Dict:
+    """Chấm ngữ điệu rule-based, KHÔNG so giọng mẫu (giọng AI không chuẩn
+    bằng giọng thật) nên chỉ dùng số liệu F0 có sẵn + dấu câu.
+
+    Rubric 0-100: trừ khi đều-đều (monotone), dải cao độ hẹp, hoặc
+    hướng cuối câu sai loại câu (hỏi phải lên, kể không vọt).
+    Điểm này chỉ đưa vào report cho LLM đọc, KHÔNG hiện UI,
+    KHÔNG cộng vào overall (giữ nguyên trọng số cũ).
+    """
+    voiced = float(f0.get("voiced_ratio") or 0.0)
+    median = float(f0.get("median_f0") or 0.0)
+
+    if voiced < INTON_MIN_VOICED or median <= 0.0:
+        return {"score": None, "monotone": False, "pitch_range": 0.0,
+                "final_slope": 0.0, "sentence_type": "unknown",
+                "slope_ok": None,
+                "note": "không đủ tín hiệu giọng để chấm ngữ điệu"}
+
+    std = float(f0.get("std_f0") or 0.0)
+    prange = float(f0.get("range_f0") or 0.0)
+    slope = float(f0.get("final_slope") or 0.0)
+    monotone = std < INTON_MONOTONE_STD and voiced > INTON_MIN_VOICED
+
+    tail = (text or "").strip()
+    if tail.endswith("?"):
+        sentence_type = "question"
+        slope_ok = slope > INTON_RISE_SLOPE
+    elif tail.endswith("!"):
+        sentence_type = "exclaim"
+        slope_ok = abs(slope) > INTON_RISE_SLOPE
+    else:
+        sentence_type = "statement"
+        slope_ok = slope < INTON_STMT_MAX_SLOPE
+
+    s = 100.0
+    if monotone:
+        s -= INTON_PEN_MONOTONE
+    elif std < INTON_FLAT_STD:
+        s -= INTON_PEN_MED
+    if prange < INTON_NARROW_RANGE:
+        s -= INTON_PEN_NARROW
+    elif prange < INTON_MED_RANGE:
+        s -= INTON_PEN_MED
+    if not slope_ok:
+        s -= INTON_PEN_SLOPE
+
+    return {"score": round(max(0.0, min(100.0, s)), 1),
+            "monotone": monotone,
+            "pitch_range": round(prange, 1),
+            "final_slope": round(slope, 1),
+            "sentence_type": sentence_type,
+            "slope_ok": bool(slope_ok),
+            "note": "rule-based-v1: dải cao độ + hướng cuối câu theo loại câu"}
+
+
 def needleman(a: List[str], b: List[str]) -> List[Tuple[str, str, str]]:
     n, m = len(a), len(b)
 

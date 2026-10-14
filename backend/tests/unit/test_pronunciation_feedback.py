@@ -101,7 +101,7 @@ class TestGenerateFeedback:
 
 class TestFallbackFeedback:
     def test_llm_down_returns_rule_based_not_error(self):
-        from app.ai.pronunciation import build_fallback_feedback, request_pronun_feedback
+        from app.ai.pronunciation import request_pronun_feedback
 
         report = {
             "scores": {"overall": 70.0},
@@ -214,6 +214,107 @@ class TestRobustFeedback:
         out, _, _ = TestGenerateFeedback()._run(self.LEAKED)
         assert out.get("fallback") is True
         assert out.get("model") == "rule-based-fallback"
+
+
+class TestLatinLeakAndSanitize:
+    # Rò rỉ Latin (model free hay lẫn TBN/Ý/Pháp/Ba Lan) -> fallback sạch,
+    # kể cả chữ dính "từuno" (thiếu khoảng trắng).
+    FIXABLE = (
+        '{"summary": "Ban noi cham, it pauses.",'
+        ' "pronunciation_feedback": "Loi am.",'
+        ' "stress_feedback": "Tot.",'
+        ' "intonation_feedback": "Khong co du lieu intonation (null).",'
+        ' "fluency_feedback": "Tot.",'
+        ' "priority_errors": ['
+        '   {"word": "is", "issue": "/z/ -> /f/", "advice": "Rung day thanh", "vi": "it-s"}'
+        ' ],'
+        ' "practice_plan": ["Luyen.", "Doc cham.", "Noi lai."]}'
+    )
+
+    def test_latin_leak_detected(self):
+        from app.ai.pronunciation import has_latin_leak
+
+        for bad in ["cac tu uno am tiet", "danh gia evidente",
+                    "do cao voix deu", "H doprowad luoi len",
+                    "cac từuno am tiet"]:
+            assert has_latin_leak({"summary": bad}), bad
+        assert not has_latin_leak({"summary": "Ban noi tot, can luyen them."})
+
+    def test_fixable_terms_sanitized_not_fallback(self):
+        out, _, _ = TestGenerateFeedback()._run(self.FIXABLE)
+        assert out.get("fallback") is None
+        assert "quãng nghỉ" in out["summary"]
+        assert "pauses" not in out["summary"]
+        assert "ngữ điệu" in out["intonation_feedback"]
+        assert "null" not in out["intonation_feedback"].lower()
+        # IPA trong issue giữ nguyên
+        assert "/z/ -> /f/" in out["priority_errors"][0]["issue"]
+
+    def test_unfixable_latin_falls_back(self):
+        for bad in ["tu uno am tiet", "danh gia evidente", "do cao voix",
+                    "H doprowad luoi", "cac từuno am tiet"]:
+            content = (
+                '{"summary": "%s.",'
+                ' "pronunciation_feedback": "Loi am.",'
+                ' "stress_feedback": "Tot.",'
+                ' "intonation_feedback": "Tot.",'
+                ' "fluency_feedback": "Tot.",'
+                ' "priority_errors": [],'
+                ' "practice_plan": ["a", "b", "c"]}' % bad
+            )
+            out, _, _ = TestGenerateFeedback()._run(content)
+            assert out.get("fallback") is True, bad
+            assert out.get("model") == "rule-based-fallback"
+
+    def test_default_temperature_lowered(self):
+        _, mock_cls, _ = TestGenerateFeedback()._run(
+            '{"summary": "s", "practice_plan": ["a", "b", "c"]}')
+        assert mock_cls.call_args[1].get("temperature") == 0.2
+
+    def test_null_inside_parens_removed(self):
+        from app.ai.pronunciation import sanitize_feedback_text
+
+        assert sanitize_feedback_text(
+            "Chua du du lieu ngu dieu (du lieu null).") == \
+            "Chua du du lieu ngu dieu."
+        assert sanitize_feedback_text("(null) Tiep tuc.") == "Tiep tuc."
+
+    def test_string_practice_plan_wrapped_to_list(self):
+        out, _, _ = TestGenerateFeedback()._run(
+            '{"summary": "s", "practice_plan": "Luyen moi ngay."}')
+        assert out["practice_plan"] == ["Luyen moi ngay."]
+
+    def test_empty_content_falls_back(self):
+        out, _, _ = TestGenerateFeedback()._run("")
+        assert out.get("fallback") is True
+        assert out.get("model") == "rule-based-fallback"
+        out, _, _ = TestGenerateFeedback()._run("   ")
+        assert out.get("fallback") is True
+
+    def test_numbered_plan_string_split(self):
+        out, _, _ = TestGenerateFeedback()._run(
+            '{"summary": "s", "practice_plan": '
+            '"(1) Luyen tu kho. (2) Doc cham lai. (3) Noi lai ca doan."}')
+        assert out["practice_plan"] == [
+            "Luyen tu kho", "Doc cham lai", "Noi lai ca doan"]
+
+    def test_paragraph_plan_split_into_sentences(self):
+        out, _, _ = TestGenerateFeedback()._run(
+            '{"summary": "s", "practice_plan": '
+            '"Luyen 3 tu theo huong dan. Ghi am va so sanh. '
+            'Noi lai ca doan tu nhien."}')
+        assert len(out["practice_plan"]) == 3
+
+    def test_short_single_plan_kept(self):
+        out, _, _ = TestGenerateFeedback()._run(
+            '{"summary": "s", "practice_plan": "Luyen moi ngay."}')
+        assert out["practice_plan"] == ["Luyen moi ngay."]
+
+    def test_fancy_hyphen_normalized(self):
+        from app.ai.pronunciation import sanitize_feedback_text
+
+        assert sanitize_feedback_text(
+            "5\u201110\u202fphut") == "5-10 phut"
 
 
 class TestAudioQualityGate:

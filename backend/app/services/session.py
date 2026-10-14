@@ -338,8 +338,8 @@ class SessionService(ServiceBase):
         user,
         session_id: int,
         model: str = "",
-        temperature: float = 0.6,
-        max_tokens: int = 3000,
+        temperature: float = 0.2,
+        max_tokens: int = 4000,
     ) -> Dict[str, Any]:
         from app.ai.pronunciation import SESSION_FEEDBACK_PROMPT, request_pronun_feedback
 

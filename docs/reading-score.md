@@ -37,7 +37,7 @@ Prefix đầy đủ: `/api/v1/rooms/{room_id}/speech-logs/...`.
 
 `app/ai/pronunciation/scorer.py::score_pronunciation` trả `ScoringReport`:
 
-- `scores`: `sounds` (âm), `stress` (nhấn), `fluency` (trôi chảy), `completeness` (đủ chữ), `overall` (trung bình trọng số). `intonation` = `None` ở MVP (chỉ detect monotone).
+- `scores`: `sounds` (âm), `stress` (nhấn), `fluency` (trôi chảy), `completeness` (đủ chữ), `overall` (trung bình trọng số 50/25/15/10). `intonation` có điểm rule-based riêng (dải cao độ + hướng cuối câu theo loại câu, không so giọng mẫu) nhưng **không hiện UI, không cộng overall** — chỉ đưa vào report cho LLM đọc để viết mục Ngữ điệu (cấm nêu con số).
 - `word_details[]`: `{word, score, status, expected_ipa}` — `status` ∈ `ok` (≥70) · `pronunciation_error` · `misaligned` (khớp lệch, vẫn chấm GOP) · `no_evidence` (loại khỏi mẫu số, UI hiện "Không nghe rõ").
 - `phonemes[]`: `{word, expected, observed, type, gop, score}` — vd `/θ/ → /s/` ở "think".
 - `top_errors[]`: `{pattern, count, examples}` — tối đa 5.
@@ -50,6 +50,8 @@ Prefix đầy đủ: `/api/v1/rooms/{room_id}/speech-logs/...`.
 Trả: `summary`, `pronunciation_feedback`, `stress_feedback`, `intonation_feedback`,
 `fluency_feedback`, `priority_errors[]`, `practice_plan[]` (hoặc `feedback_raw` khi model trả text thô).
 LLM chết → fallback rule-based `build_fallback_feedback` (vẫn có tip từ `how_to`/`vi`), không bao giờ làm rớt request.
+LLM lẫn ngoại ngữ (kể cả chữ Latin như uno/evidente/voix) → bỏ cả bản, fallback sạch;
+thuật ngữ Anh sửa được (`pauses` → quãng nghỉ, `intonation` → ngữ điệu) và `(null)` được chuẩn hóa ngay trong bản LLM.
 
 ## 2. Thiết kế UI (frontend)
 

@@ -164,8 +164,8 @@ class SpeechService(ServiceBase):
         message_id: int,
         target_uid: Optional[int] = None,
         model: str = "",
-        temperature: float = 0.6,
-        max_tokens: int = 3000,
+        temperature: float = 0.2,
+        max_tokens: int = 4000,
     ) -> Dict[str, Any]:
         from app.ai.pronunciation import request_pronun_feedback
         from app.ai.stt.speech_log import attach_feedback

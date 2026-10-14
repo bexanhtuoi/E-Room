@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from app.ai.pronunciation.articulation import guide_for_word
 from app.ai.pronunciation.g2p import get_pronunciation
@@ -15,7 +15,7 @@ log = get_logger("app.ai.pronunciation.feedback")
 def request_pronun_feedback(
     scoring_report: Dict[str, Any],
     model: str = "",
-    temperature: float = 0.6,
+    temperature: float = 0.2,
     max_tokens: int = 2000,
     system_prompt: str = "",
     user_label: str = "scoring_report",
@@ -208,8 +208,121 @@ def has_foreign_script(parsed: Dict[str, Any]) -> bool:
         return False
 
 
+# Rò rỉ chữ Latin ngoài tiếng Việt/Anh-mục-tiêu (model free hay lẫn
+# Tây Ban Nha/Ý/Pháp/Ba Lan: "uno", "evidente", "voix", "doprowad"...).
+# FOREIGN_SCRIPT_RE không bắt được vì vẫn là chữ Latin.
+LEAK_WORDS = (
+    r"uno|una|evidente|evidenti|voix|abbastanza|doprowad|ecco|molto|"
+    r"tr[eè]s|schon|sehr|cosa|hola|grazie|merci"
+)
+LATIN_LEAK_RE = re.compile(r"\b(%s)\b" % LEAK_WORDS, re.IGNORECASE)
+
+# Dính chữ: từ lạ dính liền sau ký tự tiếng Việt ("từuno" thiếu khoảng
+# trắng). Chỉ soi đúng các từ lạ đã biết để không chạm từ Việt
+# bình thường ("quãng", "những" cũng có dạng dấu+phụ âm).
+VI_CHAR = (
+    "àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡ"
+    "ùúụủũưừứựửữỳýỵỷỹđ"
+)
+GLUED_LEAK_RE = re.compile("[%s](%s)\\b" % (VI_CHAR, LEAK_WORDS), re.IGNORECASE)
+
+NULL_PAREN_RE = re.compile(r"\s*\([^()]*\bnull\b[^()]*\)", re.IGNORECASE)
+NULL_WORD_RE = re.compile(r"\bnull\b", re.IGNORECASE)
+SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
+MULTI_SPACE_RE = re.compile(r"\s{2,}")
+NUMBERED_STEP_RE = re.compile(r"\(?\b[123][).]\s*")
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+# Thuật ngữ Anh hay lọt vào câu tiếng Việt -> dịch cố định.
+VI_TERM_FIXES = (
+    (re.compile(r"\bpauses\b", re.IGNORECASE), "quãng nghỉ"),
+    (re.compile(r"\bpause\b", re.IGNORECASE), "quãng nghỉ"),
+    (re.compile(r"\bintonation\b", re.IGNORECASE), "ngữ điệu"),
+)
+
+
+def sanitize_feedback_text(text: str) -> str:
+    """Chuẩn hóa câu chữ LLM: dịch thuật ngữ Anh, xóa "(null)".
+
+    Giữ nguyên ký hiệu IPA trong /.../ và từ ví dụ tiếng Anh
+    (chúng không khớp whole-word với thuật ngữ cần dịch).
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    # Chuẩn hóa gạch nối/khoảng trắng lạ mà model hay nhả ra.
+    out = text.replace("\u2011", "-").replace("\u202f", " ")
+    for pattern, replacement in VI_TERM_FIXES:
+        out = pattern.sub(replacement, out)
+    out = NULL_PAREN_RE.sub("", out)
+    out = NULL_WORD_RE.sub("", out)
+    out = SPACE_BEFORE_PUNCT_RE.sub(r"\1", out)
+    out = MULTI_SPACE_RE.sub(" ", out)
+    return out.strip()
+
+
+def feedback_prose_text(parsed: Dict[str, Any]) -> str:
+    """Gom các trường câu chữ (bỏ word/vi/model) để soi rò rỉ ngôn ngữ."""
+    if not isinstance(parsed, dict):
+        return ""
+    parts: List[str] = []
+    for key in ("summary", "pronunciation_feedback", "stress_feedback",
+                "intonation_feedback", "fluency_feedback", "feedback_raw"):
+        value = parsed.get(key)
+        if isinstance(value, str) and value:
+            parts.append(value)
+    for key in ("priority_errors", "error_words"):
+        entries = parsed.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for field in ("issue", "advice", "tip", "how_to"):
+                value = entry.get(field)
+                if isinstance(value, str) and value:
+                    parts.append(value)
+    plans = parsed.get("practice_plan")
+    if isinstance(plans, list):
+        parts.extend([p for p in plans if isinstance(p, str)])
+    return "\n".join(parts)
+
+
+def has_latin_leak(parsed: Dict[str, Any]) -> bool:
+    try:
+        prose = feedback_prose_text(parsed)
+    except (TypeError, ValueError):
+        return False
+    return bool(LATIN_LEAK_RE.search(prose) or GLUED_LEAK_RE.search(prose))
+
+
+def sanitize_feedback_json(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """Dịch thuật ngữ + xóa null trên mọi trường chữ (trừ word/model/usage)."""
+    if not isinstance(parsed, dict):
+        return parsed
+    for key in ("summary", "pronunciation_feedback", "stress_feedback",
+                "intonation_feedback", "fluency_feedback", "feedback_raw"):
+        if isinstance(parsed.get(key), str):
+            parsed[key] = sanitize_feedback_text(parsed[key])
+    for key in ("priority_errors", "error_words"):
+        entries = parsed.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for field in ("issue", "advice", "tip", "how_to", "vi"):
+                if isinstance(entry.get(field), str):
+                    entry[field] = sanitize_feedback_text(entry[field])
+    plans = parsed.get("practice_plan")
+    if isinstance(plans, list):
+        parsed["practice_plan"] = [
+            sanitize_feedback_text(p) if isinstance(p, str) else p for p in plans
+        ]
+    return parsed
+
+
 async def generate_feedback(scoring_report: dict, model: str = "",
-                            temperature: float = 0.6, max_tokens: int = 2000,
+                            temperature: float = 0.2, max_tokens: int = 2000,
                             system_prompt: str = "", user_label: str = "scoring_report") -> dict:
     from app.ai.llm.client import get_llm
 
@@ -227,18 +340,49 @@ async def generate_feedback(scoring_report: dict, model: str = "",
 
         return build_fallback_feedback(scoring_report, user_label)
     content = getattr(msg, "content", "") or ""
+    text = content if isinstance(content, str) else str(content)
+    if not text.strip():
+        log.warning("feedback LLM trả về rỗng — dùng gợi ý theo quy tắc")
 
-    parsed = extract_json(content if isinstance(content, str) else str(content))
+        return build_fallback_feedback(scoring_report, user_label)
+
+    parsed = extract_json(text)
 
     if parsed:
-        if has_foreign_script(parsed):
+        parsed = sanitize_feedback_json(parsed)
+        if has_foreign_script(parsed) or has_latin_leak(parsed):
             log.warning("feedback LLM lẫn ngoại ngữ — dùng gợi ý theo quy tắc")
 
             return build_fallback_feedback(scoring_report, user_label)
         parsed.setdefault("model", (model or "").strip() or settings.llm_model)
 
         return normalize_feedback(parsed, scoring_report)
-    return {"feedback_raw": content, "model": (model or "").strip() or settings.llm_model, "usage": {}}
+    return {"feedback_raw": sanitize_feedback_text(text),
+            "model": (model or "").strip() or settings.llm_model, "usage": {}}
+
+
+def split_plan_steps(plans: Any) -> Any:
+    """Tách 1 bước gộp thành nhiều bước theo đánh số hoặc theo câu.
+
+    Model hay dồn cả kế hoạch vào 1 chuỗi ("(1) ... (2) ... (3) ..."
+    hoặc 1 đoạn văn). UI và quy ước cần mảng bước tách rời nên thử
+    tách: ưu tiên mốc đánh số, rồi đến ranh giới câu. Chỉ nhận khi
+    được 2-4 bước đủ dài, còn không giữ nguyên.
+    """
+    if not isinstance(plans, list) or len(plans) != 1:
+        return plans
+    sole = plans[0]
+    if not isinstance(sole, str) or not sole.strip():
+        return plans
+    numbered = [p.strip(" .;") for p in NUMBERED_STEP_RE.split(sole)]
+    numbered = [p for p in numbered if len(p) >= 10]
+    if 2 <= len(numbered) <= 4:
+        return numbered
+    sents = [p.strip() for p in SENTENCE_SPLIT_RE.split(sole.strip())]
+    sents = [p for p in sents if len(p) >= 10]
+    if 2 <= len(sents) <= 4:
+        return sents
+    return plans
 
 
 def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -> Dict[str, Any]:
@@ -253,6 +397,12 @@ def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -
     """
     if not isinstance(parsed, dict):
         return parsed
+    # Model đôi khi trả practice_plan là chuỗi thay vì mảng (UI đọc .map)
+    # -> bọc lại để không vỡ render.
+    if isinstance(parsed.get("practice_plan"), str):
+        text = parsed["practice_plan"].strip()
+        parsed["practice_plan"] = [text] if text else []
+    parsed["practice_plan"] = split_plan_steps(parsed.get("practice_plan"))
     errs = parsed.get("priority_errors")
     if isinstance(errs, list):
         norm = []

@@ -13,7 +13,12 @@ import numpy as np
 from app.ai.pronunciation.align import align_transcripts
 from app.ai.pronunciation.audio import check_audio_quality, extract_f0, load_wav_16k, vad_segments
 from app.ai.pronunciation.helpers import check_punct_pause_order, filter_speech_pauses, speech_span
-from app.ai.pronunciation.metrics import calculate_overall, score_completeness, score_fluency
+from app.ai.pronunciation.metrics import (
+    calculate_overall,
+    score_completeness,
+    score_fluency,
+    score_intonation,
+)
 from app.ai.pronunciation.models import ensure_phone_ready
 from app.ai.pronunciation.phonemes import score_phones, score_stress
 from app.config import settings
@@ -226,7 +231,9 @@ def score_attempt_v2(
 
     f0 = extract_f0(wav, sr)
 
-    monotone = f0["std_f0"] < 15 and f0["voiced_ratio"] > 0.1
+    # Điểm ngữ điệu rule-based (không so giọng mẫu): chỉ đưa vào report
+    # cho LLM đọc, KHÔNG hiện UI, KHÔNG cộng vào overall.
+    into = score_intonation(f0, user_corrected or whisper_raw)
 
     overall = calculate_overall(snd["sounds"], st["stress"], fl["score"], cp["score"])
 
@@ -236,7 +243,7 @@ def score_attempt_v2(
             "stress": st["stress"],
             "fluency": fl["score"],
             "completeness": cp["score"],
-            "intonation": None,
+            "intonation": into["score"],
             "overall": overall,
         },
         "texts": {
@@ -256,8 +263,13 @@ def score_attempt_v2(
             "std_f0": f0["std_f0"],
             "range_f0": f0["range_f0"],
             "final_slope": f0["final_slope"],
-            "monotone": monotone,
-            "note": "MVP: monotone detection only, DTW vs Kokoro deferred to v1.1",
+            "monotone": into["monotone"],
+            "score": into["score"],
+            "pitch_range": into["pitch_range"],
+            "sentence_type": into["sentence_type"],
+            "slope_ok": into["slope_ok"],
+            "note": "rule-based-v1: dải cao độ + hướng cuối câu theo loại câu, "
+                    "không so giọng mẫu; chỉ dùng cho prompt, không hiện UI",
         },
         "fluency": {**fl},
         "completeness": cp,
@@ -324,6 +336,7 @@ def report_to_hook(report: Dict[str, Any], method: str) -> Dict[str, Any]:
             "stress": scores.get("stress"),
             "fluency": scores.get("fluency"),
             "completeness": scores.get("completeness"),
+            "intonation": scores.get("intonation"),
             "n_scored": report.get("n_scored"),
             "n_no_evidence": report.get("n_no_evidence"),
             "duration_s": report.get("duration_s"),

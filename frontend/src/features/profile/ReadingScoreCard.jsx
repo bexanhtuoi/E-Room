@@ -283,7 +283,7 @@ function AIFeedbackBody({ feedback }) {
   const blocks = [
     ['Tổng quan', feedback.summary],
     ['Phát âm', feedback.pronunciation_feedback],
-    ['Nhấn âm', feedback.stress_feedback],
+    ['Trọng âm', feedback.stress_feedback],
     ['Ngữ điệu', feedback.intonation_feedback],
     ['Trôi chảy', feedback.fluency_feedback],
   ].filter(([, v]) => v);

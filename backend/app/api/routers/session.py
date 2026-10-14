@@ -111,6 +111,6 @@ def session_feedback(
         request.state.current_user,
         session_id,
         model=opts.model or "",
-        temperature=opts.temperature if opts.temperature is not None else 0.6,
-        max_tokens=opts.max_tokens if opts.max_tokens is not None else 3000,
+        temperature=opts.temperature if opts.temperature is not None else 0.2,
+        max_tokens=opts.max_tokens if opts.max_tokens is not None else 4000,
     )

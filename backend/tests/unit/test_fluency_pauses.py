@@ -5,7 +5,7 @@ from app.ai.pronunciation.helpers import (
     speech_span,
     trim_edge_pauses,
 )
-from app.ai.pronunciation.metrics import score_fluency
+from app.ai.pronunciation.metrics import score_fluency, score_intonation
 
 
 def make_words():
@@ -121,3 +121,43 @@ class TestLongPauseThreshold:
         assert score_fluency(20.0, 83, [], "text")["score"] == 90.0
 
         assert score_fluency(20.0, 84, [], "text")["score"] == 75.0
+
+
+def make_f0(**kw):
+    base = {"median_f0": 120.0, "std_f0": 40.0, "range_f0": 60.0,
+            "final_slope": -10.0, "voiced_ratio": 0.8}
+    base.update(kw)
+    return base
+
+
+class TestIntonationScoring:
+    def test_varied_statement_scores_full(self):
+        out = score_intonation(make_f0(), "It is a long day.")
+        assert out["score"] == 100.0
+        assert out["monotone"] is False
+        assert out["sentence_type"] == "statement"
+        assert out["slope_ok"] is True
+
+    def test_flat_voice_penalized(self):
+        out = score_intonation(
+            make_f0(std_f0=10.0, range_f0=15.0, final_slope=0.0),
+            "It is a long day.")
+        assert out["monotone"] is True
+        # -30 monotone, -20 dải hẹp
+        assert out["score"] == 50.0
+
+    def test_question_must_rise(self):
+        falling = score_intonation(make_f0(final_slope=-20.0), "Is it true?")
+        assert falling["sentence_type"] == "question"
+        assert falling["slope_ok"] is False
+        assert falling["score"] == 85.0
+
+        rising = score_intonation(make_f0(final_slope=20.0), "Is it true?")
+        assert rising["slope_ok"] is True
+        assert rising["score"] == 100.0
+
+    def test_no_voice_returns_none(self):
+        out = score_intonation(
+            make_f0(median_f0=0.0, voiced_ratio=0.05), "Hello.")
+        assert out["score"] is None
+        assert out["sentence_type"] == "unknown"
