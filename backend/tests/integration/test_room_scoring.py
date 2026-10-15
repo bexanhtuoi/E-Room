@@ -171,6 +171,24 @@ class TestScoreRoomUtterances:
             assert found is not None
             assert found.overall == 80.0
 
+    def test_score_stamp_scored_at(self, monkeypatch, tmp_path):
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.tasks.scoring import score_room_utterances
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+
+        with Session(engine) as db:
+            room_id = make_speech_room(db, "stamped")
+            user_id = 424208
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 51, "hello world")
+
+            with patch("app.ai.pronunciation.score_pronunciation", return_value=dict(MOCK_SCORE)):
+                assert score_room_utterances(room_id) == 1
+
+        entries = speech_log_module.read_user_log(room_id, user_id)
+        assert entries[0]["pronunciation"]["scored_at"]
+
     def test_delete_room_cascades_scores(self, monkeypatch, tmp_path):
         from app import config as config_module
         from app.ai.stt import speech_log as speech_log_module

@@ -138,6 +138,10 @@ def score_room_utterance(
     if attempt_id is not None:
         score["attempt_id"] = attempt_id
 
+    from app.ai.stt.paths import utcnow_iso
+
+    score["scored_at"] = utcnow_iso()
+
     updated = attach_pronunciation(room_id, user_id, message_id, score)
 
     try:

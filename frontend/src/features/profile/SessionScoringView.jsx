@@ -112,6 +112,14 @@ function SpeakButton({ text, voice }) {
   );
 }
 
+export function isFreshScore(pron, prev) {
+  if (!pron) return false;
+  if (prev == null) return true;
+  const prevAt = prev?.scored_at ?? null;
+  if (pron.scored_at || prevAt) return (pron.scored_at ?? null) !== prevAt;
+  return JSON.stringify(pron) !== JSON.stringify(prev);
+}
+
 export function SessionScoringView({ sessionId: propSessionId }) {
   const params = useParams();
   const sessionId = propSessionId || params.sessionId;
@@ -236,13 +244,14 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     }
   }
 
-  async function waitForScore(messageId, timeoutMs = 10 * 60 * 1000) {
+  async function waitForScore(messageId, prev, timeoutMs = 10 * 60 * 1000) {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       await new Promise((resolve) => { setTimeout(resolve, 3000); });
       const { data } = await speechQuery.refetch();
       const list = Array.isArray(data) ? data : [];
-      if (list.some((u) => u?.message_id === messageId && u?.pronunciation)) return;
+      const current = list.find((u) => u?.message_id === messageId);
+      if (isFreshScore(current?.pronunciation, prev)) return;
       if (Date.now() > deadline) throw new Error('The AI worker did not return a score after 10 minutes — check that the ai-worker container and Redis are running on the host machine, then try again.');
     }
   }
@@ -256,11 +265,12 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     setBusyScoreKey(key);
     setScoreError('');
     setScoreStatus('sending');
+    const prev = entry?.pronunciation || null;
     try {
       const res = await fetchJson(`/rooms/${room.id}/speech-logs/${entry.message_id}/score`, { method: 'POST' });
       if (!res?.pronunciation) {
         setScoreStatus('queued');
-        await waitForScore(entry.message_id);
+        await waitForScore(entry.message_id, prev);
       }
       await speechQuery.refetch();
     } catch (error) {
