@@ -161,7 +161,7 @@ export function ReadingScoreCard({
       )}
 
       {/* 2 nút toggle + 1 nút chấm lại. */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+      <div className="pf-scoreactions" style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <button
           type="button"
           className="er-btn"
@@ -208,7 +208,7 @@ export function ReadingScoreCard({
           {words.length === 0 ? (
             <div className="portal-empty">No per-word details (the heuristic result has no word_details).</div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="pf-tablewrap">
               <table className="portal-table" style={{ width: '100%', fontSize: 13 }}>
                 <thead>
                   <tr>

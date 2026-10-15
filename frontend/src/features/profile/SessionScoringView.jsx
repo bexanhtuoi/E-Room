@@ -142,6 +142,9 @@ export function SessionScoringView({ sessionId: propSessionId }) {
   // Chấm tuần tự: chỉ 1 lượt chấm chạy tại 1 thời điểm (máy host).
   const [busyScoreKey, setBusyScoreKey] = useState(null);
   const [scoreError, setScoreError] = useState('');
+  // Trạng thái hiển thị dưới dropdown khi đang chấm: 'sending' (đang gửi
+  // request) hoặc 'queued' (đã xếp hàng, chờ ai-worker trả điểm).
+  const [scoreStatus, setScoreStatus] = useState(null);
   const [busyFbKey, setBusyFbKey] = useState(null);
   // Tự sửa câu đã nói trong What was said.
   const [editingId, setEditingId] = useState(null);
@@ -262,7 +265,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       const { data } = await speechQuery.refetch();
       const list = Array.isArray(data) ? data : [];
       if (list.some((u) => u?.message_id === messageId && u?.pronunciation)) return;
-      if (Date.now() > deadline) throw new Error('Scoring took too long — please try again.');
+      if (Date.now() > deadline) throw new Error('The AI worker did not return a score after 10 minutes — check that the ai-worker container and Redis are running on the host machine, then try again.');
     }
   }
 
@@ -274,9 +277,15 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     }
     setBusyScoreKey(key);
     setScoreError('');
+    setScoreStatus('sending');
     try {
       const res = await fetchJson(`/rooms/${room.id}/speech-logs/${entry.message_id}/score`, { method: 'POST' });
-      if (res?.status === 'queued') {
+      // Giữ nút xám cho đến khi điểm thật sự về: backend có 2 nhánh — sync
+      // (trả utterance kèm pronunciation) và queued (ai-worker chấm sau).
+      // Chỉ mở khóa khi câu đã có pronunciation; nếu response chưa có điểm
+      // (kể cả khi backend không báo queued) thì vẫn poll chờ worker.
+      if (!res?.pronunciation) {
+        setScoreStatus('queued');
         await waitForScore(entry.message_id);
       }
       await speechQuery.refetch();
@@ -284,6 +293,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       setScoreError(error?.message || 'Scoring failed');
     } finally {
       setBusyScoreKey(null);
+      setScoreStatus(null);
     }
   }
 
@@ -460,16 +470,16 @@ export function SessionScoringView({ sessionId: propSessionId }) {
               <div className="portal-empty">You did not say anything in this session (or nothing reached the log).</div>
             ) : selectedUtterance ? (
               <div style={{ display: 'grid', gap: 12, marginTop: 12, marginBottom: 16 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <label htmlFor="pron-sentence-picker" style={{ fontSize: 13, fontWeight: 700 }}>
+                <div className="pron-picker">
+                  <label htmlFor="pron-sentence-picker" className="pron-picker__label">
                     Choose sentence ({(selectedIndex >= 0 ? selectedIndex : 0) + 1}/{myUtterances.length}):
                   </label>
                   <select
                     id="pron-sentence-picker"
+                    className="pron-picker__select"
                     aria-label="Choose a sentence to score"
                     value={selectedCardKey}
                     onChange={(e) => setSelectedKey(e.target.value)}
-                    style={{ flex: '1 1 220px', minWidth: 0, border: '1px solid #111', padding: '8px', fontSize: 13, background: '#fff', cursor: 'pointer' }}
                   >
                     {myUtterances.map((u, i) => {
                       const key = utteranceKey(u, i);
@@ -482,26 +492,24 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                       );
                     })}
                   </select>
-                  <span style={{ display: 'inline-flex', gap: 6 }}>
+                  <span className="pron-picker__nav">
                     <button
                       type="button"
-                      className="portal-topic pf-chipbtn"
+                      className="portal-topic pf-chipbtn pron-picker__btn"
                       onClick={() => stepSentence(-1)}
                       disabled={myUtterances.length < 2}
                       title="Previous sentence"
                       aria-label="Previous sentence"
-                      style={{ padding: '6px 10px', cursor: myUtterances.length < 2 ? 'default' : 'pointer' }}
                     >
                       ‹ Prev
                     </button>
                     <button
                       type="button"
-                      className="portal-topic pf-chipbtn"
+                      className="portal-topic pf-chipbtn pron-picker__btn"
                       onClick={() => stepSentence(1)}
                       disabled={myUtterances.length < 2}
                       title="Next sentence"
                       aria-label="Next sentence"
-                      style={{ padding: '6px 10px', cursor: myUtterances.length < 2 ? 'default' : 'pointer' }}
                     >
                       Next ›
                     </button>
@@ -524,6 +532,13 @@ export function SessionScoringView({ sessionId: propSessionId }) {
               </div>
             ) : null}
             {scoreError && <div className="er-alert er-alert--err" style={{ marginTop: 8 }}>{scoreError}</div>}
+            {scoreStatus !== null && (
+              <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
+                {scoreStatus === 'queued'
+                  ? 'Queued — waiting for the AI worker to finish scoring. The button stays disabled until the score arrives.'
+                  : 'Sending the scoring request… The button stays disabled until the score arrives.'}
+              </p>
+            )}
             {busyScoreKey !== null && (
               <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
                 The host is scoring one sentence — other score buttons are temporarily locked (sequential scoring).

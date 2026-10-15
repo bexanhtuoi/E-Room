@@ -69,6 +69,41 @@ class TestScoreRoomUtterances:
         with patch("app.tasks.scoring.score_room_utterance", side_effect=RuntimeError("boom")):
             assert score_single_utterance(3, 7, 9, 11) is None
 
+    def test_single_task_writes_failure_marker_on_error(self, monkeypatch, tmp_path):
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.tasks.scoring import score_single_utterance
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+        room_id, user_id, message_id = 9101, 424203, 5
+        speech_log_module.append_utterance(room_id, user_id, "Tester", message_id, "hello world")
+
+        with patch("app.tasks.scoring.score_room_utterance", side_effect=RuntimeError("boom")):
+            result = score_single_utterance(room_id, user_id, message_id, None)
+
+        assert result is not None
+        assert result["pronunciation"]["method"] == "heuristic-v1"
+        assert result["pronunciation"]["reason"] == "scorer_failed"
+        entries = speech_log_module.read_user_log(room_id, user_id)
+        assert entries[0]["pronunciation"]["reason"] == "scorer_failed"
+
+    def test_single_task_keeps_existing_score_on_error(self, monkeypatch, tmp_path):
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.tasks.scoring import score_single_utterance
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+        room_id, user_id, message_id = 9102, 424204, 6
+        speech_log_module.append_utterance(room_id, user_id, "Tester", message_id, "hello world")
+        good = {"score": 88.0, "method": "local-v2"}
+        speech_log_module.attach_pronunciation(room_id, user_id, message_id, dict(good))
+
+        with patch("app.tasks.scoring.score_room_utterance", side_effect=RuntimeError("boom")):
+            assert score_single_utterance(room_id, user_id, message_id, None) is None
+
+        entries = speech_log_module.read_user_log(room_id, user_id)
+        assert entries[0]["pronunciation"] == good
+
     def test_delete_room_cascades_scores(self, monkeypatch, tmp_path):
         from app import config as config_module
         from app.ai.stt import speech_log as speech_log_module

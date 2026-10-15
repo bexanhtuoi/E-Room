@@ -3466,3 +3466,169 @@ a.portal-row:hover .portal-row__go {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================= SESSION + ASSESSMENT (mobile extras) ================= */
+/* Sentence picker + session picker share the same base look as desktop inline styles. */
+.pron-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pron-picker__label {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pron-picker__select {
+  flex: 1 1 220px;
+  min-width: 0;
+  border: 1px solid #111;
+  padding: 8px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.pron-picker__nav {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pron-picker__btn {
+  padding: 6px 10px;
+}
+
+.pf-sessionpick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pf-sessionpick__select {
+  border: 1px solid #111;
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fff;
+  max-width: 100%;
+}
+
+.pf-tablewrap {
+  overflow-x: auto;
+}
+
+.pf-tablewrap table {
+  min-width: 440px;
+}
+
+/* Facts 4 cot deu tren desktop, 2x2 tu tablet tro xuong. */
+.portal-grid2.pf-sesscard__facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pf-sesscard__title {
+  min-width: 0;
+  flex: 1;
+}
+
+.pf-sesscard__title h1 {
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 991.98px) {
+  .portal-grid2.pf-sesscard__facts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .pf-sesscard__top {
+    align-items: flex-start;
+  }
+
+  .portal-room__tile.pf-room__tile--lg {
+    width: 44px;
+    height: 44px;
+    font-size: 19px;
+  }
+
+  .pf-sesscard__title h1 {
+    font-size: 18px;
+  }
+
+  .pf-crumb {
+    overflow-wrap: break-word;
+  }
+
+  /* Sentence picker: label + full-width select + 2 big nav buttons. */
+  .pron-picker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pron-picker__label {
+    white-space: normal;
+  }
+
+  .pron-picker__select {
+    flex: none;
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .pron-picker__nav {
+    display: flex;
+  }
+
+  .pron-picker__nav .pron-picker__btn {
+    flex: 1;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  /* Score card actions: stacked full-width tap targets. */
+  .pf-scoreactions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pf-scoreactions .er-btn {
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  /* Session picker: full-width select. */
+  .pf-sessionpick {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pf-sessionpick__select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  /* Session AI chat: shorter log, wider bubbles, no iOS zoom on focus. */
+  .pf-chatlog--tall {
+    min-height: 300px;
+  }
+
+  .pf-chatlog__turn .pf-chattext {
+    max-width: 86%;
+  }
+
+  .pf-askrow .er-input {
+    font-size: 16px;
+  }
+
+  .portal-row .er-input {
+    font-size: 16px;
+  }
+}

@@ -166,7 +166,34 @@ def score_single_utterance(
             return score_room_utterance(db, room_id, user_id, message_id, session_id)
         except Exception:
             log.exception("Single scoring failed | room=%s msg=%s", room_id, message_id)
+            return _write_scorer_failed_marker(room_id, user_id, message_id)
+
+
+def _write_scorer_failed_marker(room_id: int, user_id: Any, message_id: Any) -> Optional[Dict[str, Any]]:
+    # Worker lỗi mà im lặng thì UI poll 10 phút vô vọng — ghi marker heuristic
+    # reason=scorer_failed để UI mở khóa ngay với nút Rescore. Không đè điểm
+    # thật đã có (trường hợp chấm lại lỗi giữa chừng).
+    try:
+        from app.ai.pronunciation import heuristic_score
+        from app.ai.stt.speech_log import attach_pronunciation, read_user_log
+
+        entries = read_user_log(room_id, user_id)
+        entry = next((e for e in entries if e.get("message_id") == message_id), None)
+        if entry is None or entry.get("pronunciation") is not None:
             return None
+        words = entry.get("words") or []
+        marker = heuristic_score(
+            confidence=entry.get("confidence", 1.0),
+            avg_logprob=entry.get("avg_logprob", 0.0),
+            duration=entry.get("duration", 0.0),
+            words_count=len(words),
+        )
+        marker["reason"] = "scorer_failed"
+        marker["scored_text"] = (entry.get("corrected_text") or entry.get("text") or "").strip()
+        return attach_pronunciation(room_id, user_id, message_id, marker)
+    except Exception:
+        log.exception("Failed to write scorer_failed marker | room=%s msg=%s", room_id, message_id)
+        return None
 
 
 @celery_app.task(name="app.tasks.scoring.score_room_utterances")

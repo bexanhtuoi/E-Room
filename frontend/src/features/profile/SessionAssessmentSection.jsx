@@ -52,13 +52,13 @@ export function SessionAssessmentSection() {
         <>
           {sessions.length > 1 && (
             <section className="portal-panel">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <label className="pf-sessionpick">
                 Session
                 <select
+                  className="pf-sessionpick__select"
                   aria-label="Choose session"
                   value={activeId || ''}
                   onChange={(e) => setPicked(Number(e.target.value) || null)}
-                  style={{ border: '1px solid #111', padding: '4px 6px', fontSize: 13, cursor: 'pointer', background: '#fff' }}
                 >
                   {sessions.map((s) => (
                     <option key={s.session.id} value={s.session.id}>
