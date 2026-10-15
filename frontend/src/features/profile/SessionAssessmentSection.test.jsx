@@ -79,7 +79,7 @@ describe('SessionAssessmentSection', () => {
     });
     try {
       renderAssessment();
-      expect(await screen.findByText(/Chưa có session nào/)).toBeTruthy();
+      expect(await screen.findByText(/No sessions yet/)).toBeTruthy();
     } finally {
       fetchJson.mockImplementation(fallback);
     }
@@ -124,9 +124,9 @@ describe('SessionAssessmentSection', () => {
     });
     try {
       renderAssessment();
-      fireEvent.click(await screen.findByLabelText('Sửa: it was great'));
-      fireEvent.change(screen.getByLabelText('Sửa câu đã nói'), { target: { value: 'it was really great' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+      fireEvent.click(await screen.findByLabelText('Edit: it was great'));
+      fireEvent.change(screen.getByLabelText('Edit spoken sentence'), { target: { value: 'it was really great' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
       await waitFor(() => {
         expect(calls.some(([p, o]) => p === '/rooms/3/speech-logs/12' && (o.method || 'GET') === 'PATCH')).toBe(true);
       });

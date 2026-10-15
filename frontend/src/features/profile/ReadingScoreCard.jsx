@@ -23,11 +23,11 @@ export function scoreColor(score) {
 }
 
 export function statusLabel(status) {
-  if (status === 'ok') return 'Ổn';
-  if (status === 'pronunciation_error') return 'Cần luyện';
-  if (status === 'no_evidence') return 'Không nghe rõ';
-  if (status === 'misaligned') return 'Khớp lệch';
-  if (status === 'missing_span') return 'Thiếu mốc giờ';
+  if (status === 'ok') return 'Good';
+  if (status === 'pronunciation_error') return 'Needs practice';
+  if (status === 'no_evidence') return 'Unclear audio';
+  if (status === 'misaligned') return 'Misaligned';
+  if (status === 'missing_span') return 'Missing timestamps';
   return status || '—';
 }
 
@@ -75,13 +75,13 @@ export function ReadingScoreCard({
   if (!pron) {
     return (
       <div className="portal-panel" data-testid="reading-unscored">
-        <div className="portal-panel__head"><h2>Kết quả AI</h2></div>
+        <div className="portal-panel__head"><h2>AI result</h2></div>
         <p className="portal-muted" style={{ fontSize: 13 }}>
-          Chưa chấm. Sửa câu đúng ý bạn rồi bấm <b>Chấm điểm AI</b> — điểm chấm trên toàn bộ
-          bản bạn đã sửa, dùng audio ĐẦU–CUỐI của lượt nói.
+          Not scored yet. Edit the sentence if needed, then press <b>Score with AI</b> — scoring
+          uses your full edited text and the audio from start to end of the turn.
         </p>
-        <button type="button" className="er-btn" disabled={scoring || scoreDisabled} onClick={onScore} title={scoreDisabled ? 'Đang có 1 lượt chấm chạy — đợi xong rồi chấm tiếp' : ''}>
-          {scoring ? 'Đang chấm…' : 'Chấm điểm AI'}
+        <button type="button" className="er-btn" disabled={scoring || scoreDisabled} onClick={onScore} title={scoreDisabled ? 'Another scoring run is in progress — please wait' : ''}>
+          {scoring ? 'Scoring…' : 'Score with AI'}
         </button>
       </div>
     );
@@ -111,9 +111,9 @@ export function ReadingScoreCard({
   return (
     <div className="portal-panel" data-testid="reading-scored">
       <div className="portal-panel__head">
-        <h2>Kết quả AI</h2>
+        <h2>AI result</h2>
         <span className="portal-badge" title={pron.method || ''}>
-          {(pron.score ?? 0).toFixed(1)} điểm
+          {(pron.score ?? 0).toFixed(1)} pts
         </span>
       </div>
 
@@ -127,26 +127,26 @@ export function ReadingScoreCard({
       {isHeuristic ? (
         <div className="er-alert er-alert--warn" style={{ marginTop: 12 }} data-testid="reading-heuristic">
           {heuristicReason === 'no_audio'
-            ? 'Chưa chấm được vì thiếu audio của lượt nói này (bản ghi âm chưa có hoặc đã mất). Hãy vào phòng nói lại câu này rồi chấm lại.'
+            ? 'Could not score because this turn has no audio (recording missing or lost). Go back to the room, say the sentence again, then rescore.'
             : heuristicReason === 'quiet_audio'
-              ? 'Âm thanh quá nhỏ nên AI không nghe rõ để chấm. Hãy nói to hơn, gần mic hơn rồi bấm Chấm lại.'
+              ? 'The audio was too quiet for the AI to hear. Speak louder, closer to the mic, then press Rescore.'
               : heuristicReason === 'scorer_failed'
-                ? 'Máy chấm AI gặp sự cố nên chỉ ước lượng tạm. Hãy bấm Chấm lại để thử lại với scorer thật.'
-                : 'Điểm này chỉ là ước lượng tạm (thiếu dữ liệu chấm). Hãy chấm lại khi có audio.'}
+                ? 'The AI scorer hit an error, so this is only a rough estimate. Press Rescore to try the real scorer again.'
+                : 'This score is only a rough estimate (missing scoring data). Rescore when audio is available.'}
           <div style={{ marginTop: 8 }}>
             <button type="button" className="er-btn" disabled={scoring || scoreDisabled} onClick={onScore}>
-              {scoring ? 'Đang chấm…' : 'Chấm lại'}
+              {scoring ? 'Scoring…' : 'Rescore'}
             </button>
           </div>
         </div>
       ) : (
       <div style={{ marginTop: 12 }} data-testid="reading-overall">
-        <ScoreBar label="Phát âm (Sounds)" value={scores.sounds} />
-        <ScoreBar label="Trọng âm (Stress)" value={scores.stress} />
-        <ScoreBar label="Độ lưu loát (Fluency)" value={scores.fluency} />
-        <ScoreBar label="Độ hoàn thiện (Completeness)" value={scores.completeness} />
+        <ScoreBar label="Sounds" value={scores.sounds} />
+        <ScoreBar label="Stress" value={scores.stress} />
+        <ScoreBar label="Fluency" value={scores.fluency} />
+        <ScoreBar label="Completeness" value={scores.completeness} />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, marginTop: 6 }}>
-          <span>Tổng</span>
+          <span>Total</span>
           <span style={{ color: scoreColor(scores.overall ?? pron.score) }}>
             {Number(scores.overall ?? pron.score ?? 0).toFixed(1)}
           </span>
@@ -156,7 +156,7 @@ export function ReadingScoreCard({
 
       {warnings.length > 0 && (
         <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Lưu ý: {warnings[0]}
+          Note: {warnings[0]}
         </p>
       )}
 
@@ -169,14 +169,14 @@ export function ReadingScoreCard({
           onClick={() => setShowStats((v) => !v)}
           data-testid="btn-word-stats"
         >
-          {showStats ? 'Ẩn thống kê điểm số' : 'Thống kê điểm số'}
+          {showStats ? 'Hide score breakdown' : 'Score breakdown'}
         </button>
         <button
           type="button"
           className="er-btn"
           aria-expanded={showFeedback}
           disabled={!canAskFeedback || feedbackLoading}
-          title={canAskFeedback ? '' : (isHeuristic ? 'Bản heuristic thiếu audio nên chưa xin nhận xét được — hãy chấm lại với scorer thật' : 'Chấm điểm trước rồi mới xin nhận xét')}
+          title={canAskFeedback ? '' : (isHeuristic ? 'This heuristic result has no audio, so feedback is unavailable — please rescore with the real scorer' : 'Score first, then request feedback')}
           onClick={() => {
             if (feedback) {
               setShowFeedback((v) => !v);
@@ -187,34 +187,34 @@ export function ReadingScoreCard({
           }}
           data-testid="btn-ai-feedback"
         >
-          {feedbackLoading ? 'AI đang nhận xét…' : feedback ? (showFeedback ? 'Ẩn nhận xét AI' : 'Nhận xét AI') : 'Nhận xét AI'}
+          {feedbackLoading ? 'Loading tips…' : feedback ? (showFeedback ? 'Hide tips' : 'Sentence tips') : 'Sentence tips'}
         </button>
         <button
           type="button"
           className="er-btn"
           disabled={scoring || scoreDisabled}
-          title={scoreDisabled ? 'Đang có 1 lượt chấm chạy — đợi xong rồi chấm tiếp' : 'Chấm lại điểm cho câu này'}
+          title={scoreDisabled ? 'Another scoring run is in progress — please wait' : 'Rescore this sentence'}
           onClick={onScore}
           data-testid="btn-rescore"
         >
-          {scoring ? 'Đang chấm…' : 'Chấm lại'}
+          {scoring ? 'Scoring…' : 'Rescore'}
         </button>
       </div>
 
       {/* Bảng điểm từng chữ — panel RIÊNG, chỉ render khi user mở. */}
       {showStats && (
       <div style={{ marginTop: 12 }} data-testid="word-stats-table">
-          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Điểm từng chữ ({words.length})</h3>
+          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Word scores ({words.length})</h3>
           {words.length === 0 ? (
-            <div className="portal-empty">Chưa có chi tiết từng chữ (bản heuristic không có word_details).</div>
+            <div className="portal-empty">No per-word details (the heuristic result has no word_details).</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="portal-table" style={{ width: '100%', fontSize: 13 }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left' }}>Chữ</th>
-                    <th style={{ textAlign: 'right' }}>Điểm</th>
-                    <th style={{ textAlign: 'left' }}>Trạng thái</th>
+                    <th style={{ textAlign: 'left' }}>Word</th>
+                    <th style={{ textAlign: 'right' }}>Score</th>
+                    <th style={{ textAlign: 'left' }}>Status</th>
                     <th style={{ textAlign: 'left' }}>IPA</th>
                   </tr>
                 </thead>
@@ -235,13 +235,13 @@ export function ReadingScoreCard({
           )}
           {topErrors.length > 0 && (
             <div style={{ marginTop: 10 }}>
-              <h4 style={{ fontSize: 13, marginBottom: 6 }}>Lỗi âm nổi bật</h4>
+              <h4 style={{ fontSize: 13, marginBottom: 6 }}>Top sound errors</h4>
               <ul style={{ fontSize: 13, paddingLeft: 18, margin: 0 }}>
                 {topErrors.map((e, i) => (
                   <li key={i}>
                     <b>{e.pattern}</b> ×{e.count}
                     {Array.isArray(e.examples) && e.examples.length > 0 && (
-                      <span className="portal-muted"> — vd: {e.examples.join(', ')}</span>
+                      <span className="portal-muted"> — e.g.: {e.examples.join(', ')}</span>
                     )}
                   </li>
                 ))}
@@ -250,7 +250,7 @@ export function ReadingScoreCard({
           )}
           {phonemes.length > 0 && (
             <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
-              {phonemes.length} phoneme đã đối chiếu (xem bảng điểm từng chữ là đủ cho đa số người học).
+              {phonemes.length} phonemes compared (the word table is enough for most learners).
             </p>
           )}
         </div>
@@ -259,10 +259,10 @@ export function ReadingScoreCard({
       {/* Nhận xét AI — panel RIÊNG, chỉ render khi user mở. */}
       {showFeedback && (
       <div style={{ marginTop: 12 }} data-testid="ai-feedback-panel">
-        <h3 style={{ fontSize: 14, marginBottom: 8 }}>Nhận xét AI</h3>
+        <h3 style={{ fontSize: 14, marginBottom: 8 }}>Sentence tips</h3>
         {!feedback ? (
           <div className="portal-empty">
-            {feedbackLoading ? 'AI đang đọc bảng điểm của bạn…' : 'Bấm “Nhận xét AI” để xin góp ý — AI chỉ đọc bảng điểm đã lưu, không chấm lại.'}
+            {feedbackLoading ? 'AI is reading your score table…' : 'Press “Sentence tips” to get suggestions — AI only reads the saved scores, it does not rescore.'}
           </div>
         ) : (
           <AIFeedbackBody feedback={feedback} />
@@ -281,11 +281,11 @@ function AIFeedbackBody({ feedback }) {
     return <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{feedback.feedback_raw}</p>;
   }
   const blocks = [
-    ['Tổng quan', feedback.summary],
-    ['Phát âm', feedback.pronunciation_feedback],
-    ['Trọng âm', feedback.stress_feedback],
-    ['Ngữ điệu', feedback.intonation_feedback],
-    ['Trôi chảy', feedback.fluency_feedback],
+    ['Overview', feedback.summary],
+    ['Pronunciation', feedback.pronunciation_feedback],
+    ['Stress', feedback.stress_feedback],
+    ['Intonation', feedback.intonation_feedback],
+    ['Fluency', feedback.fluency_feedback],
   ].filter(([, v]) => v);
   return (
     <div style={{ display: 'grid', gap: 8 }}>
@@ -297,12 +297,12 @@ function AIFeedbackBody({ feedback }) {
       ))}
       {Array.isArray(feedback.priority_errors) && feedback.priority_errors.length > 0 && (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 800 }}>Ưu tiên sửa</div>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>Fix first</div>
           <ul style={{ fontSize: 14, paddingLeft: 18, margin: '4px 0 0' }}>
             {feedback.priority_errors.map((e, i) => (
               <li key={i}>
                 <b>{e.word}</b>{e.vi ? ` (“${e.vi}”)` : ''} — {e.issue}
-                {(e.advice || e.how_to || e.tip) ? <div style={{ color: '#555' }}>Cách sửa: {e.advice || e.how_to || e.tip}</div> : null}
+                {(e.advice || e.how_to || e.tip) ? <div style={{ color: '#555' }}>Fix: {e.advice || e.how_to || e.tip}</div> : null}
               </li>
             ))}
           </ul>
@@ -310,7 +310,7 @@ function AIFeedbackBody({ feedback }) {
       )}
       {Array.isArray(feedback.practice_plan) && feedback.practice_plan.length > 0 && (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 800 }}>Luyện tiếp</div>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>Practice next</div>
           <ol style={{ fontSize: 14, paddingLeft: 18, margin: '4px 0 0' }}>
             {feedback.practice_plan.map((step, i) => <li key={i}>{step}</li>)}
           </ol>

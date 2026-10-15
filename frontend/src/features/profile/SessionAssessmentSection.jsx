@@ -30,7 +30,7 @@ export function SessionAssessmentSection() {
           <div className="pf-hero__hello">English assessment</div>
           <div className="pf-hero__title">Replay what you said, level up how you say it.</div>
           <div className="pf-hero__sub">
-            Chấm điểm phát âm từng câu, xem nhận xét AI và nghe lại mẫu đọc đúng.
+            Score each sentence, read AI feedback, and listen to the correct pronunciation.
           </div>
         </div>
         <HiAcademicCap size={40} aria-hidden="true" />
@@ -46,7 +46,7 @@ export function SessionAssessmentSection() {
         </section>
       ) : sessions.length === 0 ? (
         <section className="portal-panel">
-          <div className="portal-empty">Chưa có session nào — vào phòng nói vài câu rồi quay lại.</div>
+          <div className="portal-empty">No sessions yet — join a room and say a few sentences, then come back.</div>
         </section>
       ) : (
         <>

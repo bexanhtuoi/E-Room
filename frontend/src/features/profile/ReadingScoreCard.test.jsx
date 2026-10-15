@@ -21,7 +21,7 @@ describe('ReadingScoreCard', () => {
   it('hiện đúng 1 nút chấm khi chưa có điểm', () => {
     render(<ReadingScoreCard utterance={{ text: DEMO_TEXT }} onScore={vi.fn()} onFeedback={vi.fn()} />);
     expect(screen.getByTestId('reading-unscored')).toBeTruthy();
-    expect(screen.getAllByText('Chấm điểm AI').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Score with AI').length).toBeGreaterThan(0);
     expect(screen.queryByTestId('btn-rescore')).toBeNull();
   });
 
@@ -41,7 +41,7 @@ describe('ReadingScoreCard', () => {
     // 2 nút toggle + 1 nút chấm lại.
     expect(screen.getByTestId('btn-word-stats')).toBeTruthy();
     expect(screen.getByTestId('btn-ai-feedback')).toBeTruthy();
-    expect(screen.getByTestId('btn-rescore').textContent).toBe('Chấm lại');
+    expect(screen.getByTestId('btn-rescore').textContent).toBe('Rescore');
   });
 
   it('bấm Thống kê điểm số mới mở bảng riêng', () => {
@@ -104,7 +104,7 @@ describe('ReadingScoreCard', () => {
       />,
     );
     expect(screen.queryByTestId('reading-overall')).toBeNull();
-    expect(screen.getByTestId('reading-heuristic').textContent).toContain('thiếu audio');
+    expect(screen.getByTestId('reading-heuristic').textContent).toContain('no audio');
   });
 
   it('bản heuristic quiet_audio hiện hướng dẫn nói to hơn', () => {
@@ -120,7 +120,7 @@ describe('ReadingScoreCard', () => {
       />,
     );
     expect(screen.queryByTestId('reading-overall')).toBeNull();
-    expect(screen.getByTestId('reading-heuristic').textContent).toContain('nói to hơn');
+    expect(screen.getByTestId('reading-heuristic').textContent).toContain('too quiet');
   });
 
   it('chữ khớp lệch vẫn hiện điểm thật thay vì Không nghe rõ', () => {
@@ -148,8 +148,8 @@ describe('ReadingScoreCard', () => {
     );
     fireEvent.click(screen.getByTestId('btn-word-stats'));
     const table = screen.getByTestId('word-stats-table');
-    expect(table.textContent).toContain('Khớp lệch');
+    expect(table.textContent).toContain('Misaligned');
     expect(table.textContent).toContain('32.2');
-    expect(table.textContent).not.toContain('Không nghe rõ');
+    expect(table.textContent).not.toContain('Unclear audio');
   });
 });

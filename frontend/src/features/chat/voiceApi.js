@@ -5,10 +5,10 @@ const DEFAULT_VOICE = 'af_heart';
 
 // Fallback khi API chưa sẵn — khớp 4 giọng backend đã test.
 export const FALLBACK_VOICES = [
-  { id: 'af_heart', label: 'Heart — nữ Mỹ' },
-  { id: 'am_adam', label: 'Adam — nam Mỹ' },
-  { id: 'bf_emma', label: 'Emma — nữ Anh' },
-  { id: 'bm_george', label: 'George — nam Anh' },
+  { id: 'af_heart', label: 'Heart — US female' },
+  { id: 'am_adam', label: 'Adam — US male' },
+  { id: 'bf_emma', label: 'Emma — UK female' },
+  { id: 'bm_george', label: 'George — UK male' },
 ];
 
 const api = new ApiClient();

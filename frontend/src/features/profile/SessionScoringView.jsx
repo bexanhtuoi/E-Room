@@ -119,8 +119,8 @@ function SpeakButton({ text, voice }) {
       className="portal-topic pf-chipbtn"
       onClick={play}
       disabled={state === 'loading'}
-      title={state === 'error' ? 'TTS chưa sẵn sàng (server Kokoro :8002)' : 'Nghe mẫu đọc đúng'}
-      aria-label={`Nghe: ${String(text || '').slice(0, 40)}`}
+      title={state === 'error' ? 'TTS not ready (Kokoro server :8002)' : 'Listen to the correct pronunciation'}
+      aria-label={`Listen: ${String(text || '').slice(0, 40)}`}
       style={iconBtn}
     >
       <HiSpeakerWave size={14} /> {state === 'loading' ? '…' : state === 'playing' ? '▶' : ''}
@@ -189,7 +189,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
   }
   function shortSentence(u, max = 70) {
     const s = String(u?.corrected_text || u?.text || '').replace(/\s+/g, ' ').trim();
-    if (!s) return '(câu trống)';
+    if (!s) return '(empty sentence)';
     return s.length > max ? `${s.slice(0, max - 1)}…` : s;
   }
   const scoredCount = useMemo(
@@ -247,7 +247,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     } catch (error) {
       setFbError(
         error?.code === 'SESSION_NO_SCORED_UTTERANCES'
-          ? 'Chưa có câu nào được chấm trong session này — chấm ít nhất 1 câu ở mục dưới trước.'
+          ? 'No sentence has been scored in this session yet — score at least 1 sentence below first.'
           : error?.message || 'AI could not answer right now',
       );
     } finally {
@@ -262,14 +262,14 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       const { data } = await speechQuery.refetch();
       const list = Array.isArray(data) ? data : [];
       if (list.some((u) => u?.message_id === messageId && u?.pronunciation)) return;
-      if (Date.now() > deadline) throw new Error('Chấm điểm quá lâu — thử lại sau.');
+      if (Date.now() > deadline) throw new Error('Scoring took too long — please try again.');
     }
   }
 
   async function scoreUtterance(entry) {
     const key = entry?.message_id ?? entry?.created_at ?? Math.random();
     if (busyScoreKey !== null || entry?.message_id == null) {
-      if (entry?.message_id == null) setScoreError('Câu log cũ không có message_id — không chấm lại được.');
+      if (entry?.message_id == null) setScoreError('This old log entry has no message_id — cannot score it.');
       return;
     }
     setBusyScoreKey(key);
@@ -281,7 +281,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       }
       await speechQuery.refetch();
     } catch (error) {
-      setScoreError(error?.message || 'Chấm điểm thất bại');
+      setScoreError(error?.message || 'Scoring failed');
     } finally {
       setBusyScoreKey(null);
     }
@@ -296,7 +296,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       await fetchJson(`/rooms/${room.id}/speech-logs/${entry.message_id}/feedback`, { method: 'POST', body: JSON.stringify({}) });
       await speechQuery.refetch();
     } catch (error) {
-      setScoreError(error?.message || 'Xin nhận xét thất bại');
+      setScoreError(error?.message || 'Failed to get feedback');
     } finally {
       setBusyFbKey(null);
     }
@@ -337,7 +337,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
       // Sửa sau khi chấm thì backend reset điểm → tải lại cả 2 nguồn.
       await Promise.all([speechQuery.refetch(), messagesQuery.refetch()]);
     } catch (error) {
-      setScoreError(error?.message || 'Sửa câu thất bại');
+      setScoreError(error?.message || 'Failed to save the edit');
     } finally {
       setEditSaving(false);
     }
@@ -419,17 +419,18 @@ export function SessionScoringView({ sessionId: propSessionId }) {
             ) : !sessionFb ? (
               <>
                 <p className="portal-muted" style={{ fontSize: 13 }}>
-                  AI đọc điểm các câu bạn đã chấm trong session này rồi góp ý gọn:
-                  chỉ nêu từ sai / mất hơi, cách sửa và 3 bước luyện. Chưa chấm câu nào thì chấm ở mục dưới trước.
+                  AI reads the scores of the sentences you scored in this session and gives concise
+                  feedback: only the mispronounced words, how to fix them, and a 3-step drill. If
+                  nothing is scored yet, score a sentence in the section below first.
                 </p>
                 <button
                   type="button"
                   className="er-btn"
                   disabled={fbLoading || !hasScored}
-                  title={hasScored ? undefined : 'Chấm ít nhất 1 câu ở mục dưới trước'}
+                  title={hasScored ? undefined : 'Score at least 1 sentence in the section below first'}
                   onClick={askSessionFeedback}
                 >
-                  {fbLoading ? 'AI đang đọc điểm…' : 'Get AI feedback'}
+                  {fbLoading ? 'AI is reading scores…' : 'Get AI feedback'}
                 </button>
                 {fbError && <div className="er-alert er-alert--err" style={{ marginTop: 8 }}>{fbError}</div>}
               </>
@@ -438,7 +439,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                 <SessionFeedbackBody feedback={sessionFb} />
                 <div style={{ marginTop: 10 }}>
                   <button type="button" className="er-btn" disabled={fbLoading} onClick={askSessionFeedback}>
-                    {fbLoading ? 'AI đang đọc điểm…' : 'Refresh feedback'}
+                    {fbLoading ? 'AI is reading scores…' : 'Refresh feedback'}
                   </button>
                 </div>
                 {fbError && <div className="er-alert er-alert--err" style={{ marginTop: 8 }}>{fbError}</div>}
@@ -449,23 +450,23 @@ export function SessionScoringView({ sessionId: propSessionId }) {
           <section className="portal-panel">
             <div className="portal-panel__head">
               <h2>My pronunciation scores</h2>
-              <span className="portal-muted">{scoredCount}/{myUtterances.length} đã chấm</span>
+              <span className="portal-muted">{scoredCount}/{myUtterances.length} scored</span>
             </div>
             {speechQuery.isError ? (
-              <div className="portal-empty">Chưa tải được câu đã nói (speech log). Vào phòng nói vài câu rồi quay lại.</div>
+              <div className="portal-empty">Could not load your spoken sentences (speech log). Join a room and speak a few sentences, then come back.</div>
             ) : speechQuery.isLoading ? (
               <div className="portal-skeleton"><span /><span /></div>
             ) : myUtterances.length === 0 ? (
-              <div className="portal-empty">Bạn chưa nói câu nào trong session này (hoặc câu nói chưa vào log).</div>
+              <div className="portal-empty">You did not say anything in this session (or nothing reached the log).</div>
             ) : selectedUtterance ? (
               <div style={{ display: 'grid', gap: 12, marginTop: 12, marginBottom: 16 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <label htmlFor="pron-sentence-picker" style={{ fontSize: 13, fontWeight: 700 }}>
-                    Chọn câu ({(selectedIndex >= 0 ? selectedIndex : 0) + 1}/{myUtterances.length}):
+                    Choose sentence ({(selectedIndex >= 0 ? selectedIndex : 0) + 1}/{myUtterances.length}):
                   </label>
                   <select
                     id="pron-sentence-picker"
-                    aria-label="Chọn câu để chấm"
+                    aria-label="Choose a sentence to score"
                     value={selectedCardKey}
                     onChange={(e) => setSelectedKey(e.target.value)}
                     style={{ flex: '1 1 220px', minWidth: 0, border: '1px solid #111', padding: '8px', fontSize: 13, background: '#fff', cursor: 'pointer' }}
@@ -473,10 +474,10 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                     {myUtterances.map((u, i) => {
                       const key = utteranceKey(u, i);
                       const score = u?.pronunciation?.score;
-                      const status = score != null ? `${Number(score).toFixed(1)}đ` : 'chưa chấm';
+                      const status = score != null ? `${Number(score).toFixed(1)} pts` : 'not scored';
                       return (
                         <option key={key} value={key}>
-                          Câu {i + 1} — {shortSentence(u)} ({status})
+                          Sentence {i + 1} — {shortSentence(u)} ({status})
                         </option>
                       );
                     })}
@@ -487,22 +488,22 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                       className="portal-topic pf-chipbtn"
                       onClick={() => stepSentence(-1)}
                       disabled={myUtterances.length < 2}
-                      title="Câu trước"
-                      aria-label="Câu trước"
+                      title="Previous sentence"
+                      aria-label="Previous sentence"
                       style={{ padding: '6px 10px', cursor: myUtterances.length < 2 ? 'default' : 'pointer' }}
                     >
-                      ‹ Trước
+                      ‹ Prev
                     </button>
                     <button
                       type="button"
                       className="portal-topic pf-chipbtn"
                       onClick={() => stepSentence(1)}
                       disabled={myUtterances.length < 2}
-                      title="Câu tiếp theo"
-                      aria-label="Câu tiếp theo"
+                      title="Next sentence"
+                      aria-label="Next sentence"
                       style={{ padding: '6px 10px', cursor: myUtterances.length < 2 ? 'default' : 'pointer' }}
                     >
-                      Sau ›
+                      Next ›
                     </button>
                   </span>
                 </div>
@@ -525,7 +526,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
             {scoreError && <div className="er-alert er-alert--err" style={{ marginTop: 8 }}>{scoreError}</div>}
             {busyScoreKey !== null && (
               <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
-                Máy host đang chấm 1 câu — các nút chấm khác tạm khóa để không quá tải (chấm tuần tự).
+                The host is scoring one sentence — other score buttons are temporarily locked (sequential scoring).
               </p>
             )}
           </section>
@@ -558,25 +559,25 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                             <input
                               className="er-input" value={editText}
                               onChange={(e) => setEditText(e.target.value)}
-                              aria-label="Sửa câu đã nói"
+                              aria-label="Edit spoken sentence"
                               disabled={editSaving}
                               style={{ flex: 1, fontSize: 13 }}
                             />
                             <button type="button" className="er-btn" disabled={editSaving || !editText.trim()} onClick={() => saveEdit(line)}>
-                              {editSaving ? '…' : 'Lưu'}
+                              {editSaving ? '…' : 'Save'}
                             </button>
                             <button type="button" className="portal-topic pf-chipbtn" disabled={editSaving} onClick={() => setEditingId(null)}>
-                              Hủy
+                              Cancel
                             </button>
                           </span>
                         ) : (
                           <span className={line.speaker ? 'portal-row__sub pf-chattext' : 'portal-row__text pf-chattext'}>
                             {shown}
-                            {isEdited && <span className="portal-badge" style={{ marginLeft: 6 }} title="Bạn đã sửa lại câu này (bản STT gốc đã thay bằng bản sửa)">đã sửa</span>}
+                            {isEdited && <span className="portal-badge" style={{ marginLeft: 6 }} title="You edited this sentence (the original transcript was replaced)">edited</span>}
                           </span>
                         )}
                         {mine?.pronunciation == null && isEdited && (
-                          <span className="portal-muted" style={{ fontSize: 12 }}>Câu đã sửa nên điểm cũ bị xóa — chấm lại ở mục My pronunciation scores.</span>
+                          <span className="portal-muted" style={{ fontSize: 12 }}>This sentence was edited, so the old score was cleared — score it again under My pronunciation scores.</span>
                         )}
                       </span>
                       {!isEditing && (
@@ -584,8 +585,8 @@ export function SessionScoringView({ sessionId: propSessionId }) {
                           {mine && (
                             <button
                               type="button" className="portal-topic pf-chipbtn"
-                              title="Tự sửa lại câu này"
-                              aria-label={`Sửa: ${line.body.slice(0, 40)}`}
+                              title="Edit this sentence"
+                              aria-label={`Edit: ${line.body.slice(0, 40)}`}
                               onClick={() => { setEditingId(line.id); setEditText(shown); }}
                               style={iconBtn}
                             >
@@ -624,7 +625,7 @@ function SessionFeedbackBody({ feedback }) {
             {errors.map((e, i) => (
               <li key={i}>
                 <b>{e.word}</b>{e.vi ? ` (“${e.vi}”)` : ''} — {e.issue}
-                {e.how_to ? <div style={{ color: '#555' }}>Cách sửa: {e.how_to}</div> : (e.tip ? ` → ${e.tip}` : '')}
+                {e.how_to ? <div style={{ color: '#555' }}>Fix: {e.how_to}</div> : (e.tip ? ` → ${e.tip}` : '')}
               </li>
             ))}
           </ul>
@@ -639,7 +640,7 @@ function SessionFeedbackBody({ feedback }) {
         </div>
       )}
       {!feedback.summary && errors.length === 0 && plan.length === 0 && (
-        <p className="portal-muted" style={{ fontSize: 13 }}>AI không trả đúng định dạng — bấm Refresh để thử lại.</p>
+        <p className="portal-muted" style={{ fontSize: 13 }}>The AI returned an invalid format — press Refresh to try again.</p>
       )}
     </div>
   );
