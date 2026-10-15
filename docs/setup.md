@@ -39,6 +39,8 @@ Chấm điểm phát âm (XLSR phoneme GOP only, đã bỏ wav2vec-base) chọn 
 | `remote` | `SCORER_URL=http://<EC2-IP>:8005` + `SCORER_API_KEY` | POST wav sang server scorer, lỗi tự rớt về local |
 | `remote-strict` | như trên | Chỉ dùng server ngoài, lỗi thì bỏ qua câu đó |
 
+Remote có circuit breaker: fail liên tiếp `SCORER_MAX_RETRIES` (mặc định 3) lần thì ngừng gọi remote, mỗi câu rớt thẳng về local để khỏi mất thời gian chờ; sau `SCORER_RETRY_COOLDOWN_SECONDS` (mặc định 900s) tự thử lại 1 lần. Mỗi worker process cũng probe remote tối đa 3 lần lúc khởi động (`GET /openapi.json`), fail hết thì mở mạch từ đầu.
+
 Server scorer chạy trên EC2 `m7i-flex.large` Sydney, Ubuntu 24.04, code ở `backend/ec2/` như backend mini:
 `config.py` (env) + `schemas.py` (request) + `models.py` (nạp model, gọi `app.ai.pronunciation`) +
 `helpers.py` (auth, sanitize, wav tạm) + `api.py` (`GET /warm`, `POST /score`, `POST /v1/embeddings`,

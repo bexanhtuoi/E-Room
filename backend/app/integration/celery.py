@@ -69,5 +69,14 @@ try:
         from app.integration.observability import setup_tracing
 
         setup_tracing()
+
+    @worker_process_init.connect(weak=False)
+    def init_worker_scorer_probe(**kwargs) -> None:
+        try:
+            from app.integration.scorer_client import probe_remote_scorer
+
+            probe_remote_scorer()
+        except Exception:
+            pass
 except Exception:
     pass

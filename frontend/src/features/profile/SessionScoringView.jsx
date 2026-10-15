@@ -142,8 +142,6 @@ export function SessionScoringView({ sessionId: propSessionId }) {
   // Chấm tuần tự: chỉ 1 lượt chấm chạy tại 1 thời điểm (máy host).
   const [busyScoreKey, setBusyScoreKey] = useState(null);
   const [scoreError, setScoreError] = useState('');
-  // Trạng thái hiển thị dưới dropdown khi đang chấm: 'sending' (đang gửi
-  // request) hoặc 'queued' (đã xếp hàng, chờ ai-worker trả điểm).
   const [scoreStatus, setScoreStatus] = useState(null);
   const [busyFbKey, setBusyFbKey] = useState(null);
   // Tự sửa câu đã nói trong What was said.
@@ -184,8 +182,6 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     return dedupeByAttempt(inSession);
   }, [speechQuery.data, session]);
 
-  // Dropdown chọn câu để chấm: chỉ hiện 1 thẻ ReadingScoreCard cho câu
-  // đang chọn (trước đây render 1 loạt thẻ, không biết nút nào của câu nào).
   function utteranceKey(u, i) {
     const raw = u?.message_id ?? u?.created_at ?? i;
     return String(raw);
@@ -207,7 +203,6 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     }
     const keys = myUtterances.map((u, i) => utteranceKey(u, i));
     if (selectedKey == null || !keys.includes(String(selectedKey))) {
-      // Ưu tiên câu chưa chấm đầu tiên để user chấm tiếp cho nhanh.
       const firstUnscored = myUtterances.findIndex((u) => u?.pronunciation == null);
       setSelectedKey(keys[firstUnscored >= 0 ? firstUnscored : 0]);
     }
@@ -280,10 +275,6 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     setScoreStatus('sending');
     try {
       const res = await fetchJson(`/rooms/${room.id}/speech-logs/${entry.message_id}/score`, { method: 'POST' });
-      // Giữ nút xám cho đến khi điểm thật sự về: backend có 2 nhánh — sync
-      // (trả utterance kèm pronunciation) và queued (ai-worker chấm sau).
-      // Chỉ mở khóa khi câu đã có pronunciation; nếu response chưa có điểm
-      // (kể cả khi backend không báo queued) thì vẫn poll chờ worker.
       if (!res?.pronunciation) {
         setScoreStatus('queued');
         await waitForScore(entry.message_id);

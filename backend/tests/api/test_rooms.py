@@ -56,7 +56,6 @@ class TestRoomCrud:
         assert client.get(f"/api/v1/rooms/{fresh['id']}").status_code == 200
 
     def test_room_language_defaults_and_updates(self, client: TestClient, alice: dict):
-        # English-only mac dinh: "vi"/"auto" deu normalize ve "en".
         room = create_room(client, f"lang-room-{alice['id']}")
         assert room["language"] == "en"
 

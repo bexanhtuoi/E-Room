@@ -108,3 +108,121 @@ def test_router_maps_legacy_lambda_names(monkeypatch, tmp_path):
 
             with pytest.raises(ScorerUnavailableError):
                 scoring.score_with_backend(audio_path=str(audio), reference_text="hi")
+
+
+class FailScorerClient:
+    calls: list = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def post(self, url, json, headers=None):
+        type(self).calls.append(url)
+        raise RuntimeError("boom")
+
+    def get(self, url, headers=None):
+        type(self).calls.append(url)
+        raise RuntimeError("boom")
+
+
+class OkScorerClient(FailScorerClient):
+    def post(self, url, json, headers=None):
+        type(self).calls.append(url)
+
+        class Resp:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"overall": 9.0}
+
+        return Resp()
+
+    def get(self, url, headers=None):
+        type(self).calls.append(url)
+
+        class Resp:
+            status_code = 200
+
+        return Resp()
+
+
+class TestRemoteCircuitBreaker:
+    @pytest.fixture(autouse=True)
+    def _reset_circuit(self):
+        FailScorerClient.calls = []
+        OkScorerClient.calls = []
+        scorer_client.reset_scorer_circuit()
+        yield
+        scorer_client.reset_scorer_circuit()
+
+    def test_circuit_opens_after_max_retries(self, monkeypatch):
+        monkeypatch.setattr(settings, "scorer_url", "https://scorer.example")
+        monkeypatch.setattr(settings, "scorer_max_retries", 3)
+        monkeypatch.setattr(scorer_client.httpx, "Client", FailScorerClient)
+
+        for _ in range(3):
+            with pytest.raises(ScorerUnavailableError):
+                scorer_client.score_remote(b"wav", "hi")
+        assert len(FailScorerClient.calls) == 3
+        assert scorer_client.remote_circuit_open() is True
+
+        with pytest.raises(ScorerUnavailableError):
+            scorer_client.score_remote(b"wav", "hi")
+        assert len(FailScorerClient.calls) == 3
+
+    def test_success_resets_failures(self, monkeypatch):
+        monkeypatch.setattr(settings, "scorer_url", "https://scorer.example")
+        monkeypatch.setattr(settings, "scorer_max_retries", 3)
+        monkeypatch.setattr(scorer_client.httpx, "Client", FailScorerClient)
+
+        for _ in range(2):
+            with pytest.raises(ScorerUnavailableError):
+                scorer_client.score_remote(b"wav", "hi")
+        assert scorer_client.remote_circuit_open() is False
+
+        monkeypatch.setattr(scorer_client.httpx, "Client", OkScorerClient)
+        assert scorer_client.score_remote(b"wav", "hi") == {"overall": 9.0}
+        assert scorer_client.read_scorer_circuit() == {}
+        assert scorer_client.remote_circuit_open() is False
+
+    def test_cooldown_sets_key_ttl_and_expiry_closes(self, monkeypatch):
+        from app.integration.redis import get_redis_client
+
+        monkeypatch.setattr(settings, "scorer_url", "https://scorer.example")
+        monkeypatch.setattr(settings, "scorer_max_retries", 3)
+        monkeypatch.setattr(settings, "scorer_retry_cooldown_seconds", 60.0)
+        monkeypatch.setattr(scorer_client.httpx, "Client", FailScorerClient)
+
+        for _ in range(3):
+            with pytest.raises(ScorerUnavailableError):
+                scorer_client.score_remote(b"wav", "hi")
+        assert scorer_client.remote_circuit_open() is True
+
+        ttl = get_redis_client().ttl(scorer_client.SCORER_CIRCUIT_KEY)
+        assert 0 < ttl <= 60
+
+        scorer_client.reset_scorer_circuit()
+        assert scorer_client.remote_circuit_open() is False
+
+    def test_probe_opens_circuit_when_down(self, monkeypatch):
+        monkeypatch.setattr(settings, "scorer_url", "https://scorer.example")
+        monkeypatch.setattr(settings, "scorer_max_retries", 3)
+        monkeypatch.setattr(scorer_client.httpx, "Client", FailScorerClient)
+
+        assert scorer_client.probe_remote_scorer() is False
+        assert len(FailScorerClient.calls) == 3
+        assert scorer_client.remote_circuit_open() is True
+
+    def test_probe_success_keeps_circuit_closed(self, monkeypatch):
+        monkeypatch.setattr(settings, "scorer_url", "https://scorer.example")
+        monkeypatch.setattr(scorer_client.httpx, "Client", OkScorerClient)
+
+        assert scorer_client.probe_remote_scorer() is True
+        assert scorer_client.remote_circuit_open() is False

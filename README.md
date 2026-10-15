@@ -168,6 +168,7 @@ Xem đầy đủ ở `backend/.env.example`. Quan trọng nhất:
 | `LLM_MODEL` | `google/gemma-4-e2b` | Model chat + nhận xét phát âm AI (không key riêng) |
 | `STT_PROVIDER` | `auto` | `whisper_server` = ép dùng server GPU (chết thì fallback local) |
 | `STT_SERVER_BASE_URL` | — | STT server, ví dụ `http://<IP-máy-AI>:8001/v1` |
+| `STT_ENGLISH_ONLY` | `true` | Ép mọi luồng STT về English (`false` = mở lại `vi`/`auto`) |
 | `TTS_BASE_URL` | `http://localhost:8002/v1` | TTS server (Kokoro-compatible) |
 | `EMBEDDING_BASE_URL` | — (trống = dùng chung `LLM_BASE_URL`) | Embedding server riêng (khi có) |
 | `QDRANT_HOST` / `QDRANT_PORT` | `localhost` / `6333` | Vector DB (trong docker: `qdrant`) |
@@ -178,6 +179,8 @@ Xem đầy đủ ở `backend/.env.example`. Quan trọng nhất:
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Login Google (cần OAuth Client ID, không dùng service-account) |
 | `PRONUN_BASE_URL` | — | Scorer remote (không có thì chấm local → heuristic) |
 | `SCORING_MAX_PARALLEL` | `1` | Số lượt chấm local chạy song song (1 = tuần tự, chống OOM máy host) |
+| `SCORER_MAX_RETRIES` | `3` | Remote fail liên tiếp bao nhiêu lần thì ngừng gọi (mở mạch, rớt về local) |
+| `SCORER_RETRY_COOLDOWN_SECONDS` | `900.0` | Sau bao lâu thử lại remote 1 lần (half-open) |
 | `SPEECH_LOG_DIR` | `backend/log/speech` | Nơi lưu transcript + audio từng câu (runtime, không commit) |
 
 > ⚠️ `.env` / `.env.docker` / `livekit.yaml` không commit (đã có trong `.gitignore`). Clone mới thì copy từ `.env.example` / `livekit.yaml.example` rồi điền secret.

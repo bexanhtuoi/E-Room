@@ -167,13 +167,10 @@ def score_single_utterance(
             return score_room_utterance(db, room_id, user_id, message_id, session_id)
         except Exception:
             log.exception("Single scoring failed | room=%s msg=%s", room_id, message_id)
-            return _write_scorer_failed_marker(room_id, user_id, message_id)
+            return write_scorer_failed_marker(room_id, user_id, message_id)
 
 
-def _write_scorer_failed_marker(room_id: int, user_id: Any, message_id: Any) -> Optional[Dict[str, Any]]:
-    # Worker lỗi mà im lặng thì UI poll 10 phút vô vọng — ghi marker heuristic
-    # reason=scorer_failed để UI mở khóa ngay với nút Rescore. Không đè điểm
-    # thật đã có (trường hợp chấm lại lỗi giữa chừng).
+def write_scorer_failed_marker(room_id: int, user_id: Any, message_id: Any) -> Optional[Dict[str, Any]]:
     try:
         from app.ai.pronunciation import heuristic_score
         from app.ai.stt.speech_log import attach_pronunciation, read_user_log
@@ -235,8 +232,6 @@ def score_room_utterances(room_id: int) -> int:
                 try:
                     updated = score_room_utterance(db, room_id, user_id, entry.get("message_id"), session_id)
                 except SoftTimeLimitExceeded:
-                    # Het gio mem: dung em de Celery danh dau xong phan viec,
-                    # cau con lai giu pending cho dot cham sau/nut Rescore.
                     log.warning("Room batch stopped at soft limit | room_id=%s scored=%s", room_id, scored)
                     return scored
                 except Exception:

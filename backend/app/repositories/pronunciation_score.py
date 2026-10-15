@@ -13,10 +13,7 @@ class PronunciationScoreCrud(CRUDRepository):
         super().__init__(model=PronunciationScore)
 
     @staticmethod
-    def _coerce_user_id(user_id: Any) -> Any:
-        # user_id co the ve dang str (vd "12" tu ten file log user_12.jsonl).
-        # Postgres khong co operator integer = varchar nen phai ep ve int
-        # truoc khi dua vao WHERE, keo ca lenh chet nhu log da thay.
+    def coerce_user_id(user_id: Any) -> Any:
         try:
             return int(user_id)
         except (TypeError, ValueError):
@@ -30,7 +27,7 @@ class PronunciationScoreCrud(CRUDRepository):
         stmt = (
             select(PronunciationScore)
             .where(PronunciationScore.room_id == room_id)
-            .where(PronunciationScore.user_id == self._coerce_user_id(user_id))
+            .where(PronunciationScore.user_id == self.coerce_user_id(user_id))
             .where(PronunciationScore.message_id == message_id)
             .order_by(PronunciationScore.id.desc())
         )
@@ -50,7 +47,7 @@ class PronunciationScoreCrud(CRUDRepository):
         scores = report.get("scores") or {}
         payload = {
             "room_id": room_id,
-            "user_id": self._coerce_user_id(user_id),
+            "user_id": self.coerce_user_id(user_id),
             "message_id": message_id,
             "session_id": session_id,
             "scored_text": score.get("scored_text", ""),
@@ -102,7 +99,7 @@ class PronunciationScoreCrud(CRUDRepository):
         stmt = (
             select(PronunciationScore)
             .where(PronunciationScore.room_id == room_id)
-            .where(PronunciationScore.user_id == self._coerce_user_id(user_id))
+            .where(PronunciationScore.user_id == self.coerce_user_id(user_id))
             .where(time_match)
             .order_by(PronunciationScore.id.asc())
         )

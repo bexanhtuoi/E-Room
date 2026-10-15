@@ -28,8 +28,6 @@ STT_PROMPTS = {
 
 
 def resolve_stt_language(value) -> str:
-    # English-only: moi input (room language, STT_LANGUAGE, "auto") deu ve "en"
-    # de Whisper pin English, khong detect tieng Viet.
     if settings.stt_english_only:
         return "en"
     text = str(value if value is not None else settings.stt_language or "en").strip().lower()

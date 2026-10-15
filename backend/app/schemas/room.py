@@ -47,7 +47,6 @@ SPOKEN_LANGUAGES = ("en", "vi", "auto")
 
 
 def normalize_language(value) -> str:
-    # English-only: chan tao/cap nhat room "vi" hay "auto" tu API.
     try:
         from app.config import settings
 

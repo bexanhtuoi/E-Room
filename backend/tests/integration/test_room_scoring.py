@@ -105,8 +105,6 @@ class TestScoreRoomUtterances:
         assert entries[0]["pronunciation"] == good
 
     def test_batch_passes_int_user_id_to_db(self, monkeypatch, tmp_path):
-        # Hoi quy loi Postgres integer = varchar: batch tung truyen raw_uid
-        # (str tu ten file user_<id>.jsonl) vao upsert_score.
         from app import config as config_module
         from app.ai.stt import speech_log as speech_log_module
         from app.tasks.scoring import score_room_utterances
