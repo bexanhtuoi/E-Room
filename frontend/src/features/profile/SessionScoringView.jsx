@@ -65,22 +65,6 @@ export function inWindow(iso, startIso, endIso) {
   return true;
 }
 
-// Nhiều utterance cùng 1 attempt được chấm chung 1 bản điểm
-// (backend dùng raw.wav + toàn bộ text của attempt). Gộp hiển thị
-// còn 1 thẻ cho gọn — giữ utterance đầu tiên của mỗi attempt.
-export function dedupeByAttempt(list) {
-  const seen = new Set();
-  const out = [];
-  for (const u of Array.isArray(list) ? list : []) {
-    const aid = u?.pronunciation?.attempt_id;
-    const key = aid != null ? `attempt:${aid}` : `msg:${u?.message_id ?? u?.created_at}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(u);
-  }
-  return out;
-}
-
 // Cache object URL theo giọng + câu để bấm loa lần 2 không gọi TTS lại.
 const ttsCache = new Map();
 
@@ -178,8 +162,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
   const myUtterances = useMemo(() => {
     const list = Array.isArray(speechQuery.data) ? speechQuery.data : [];
     if (!session) return [];
-    const inSession = list.filter((u) => inWindow(u?.created_at, session.joined_at, session?.left_at));
-    return dedupeByAttempt(inSession);
+    return list.filter((u) => inWindow(u?.created_at, session.joined_at, session?.left_at));
   }, [speechQuery.data, session]);
 
   function utteranceKey(u, i) {
