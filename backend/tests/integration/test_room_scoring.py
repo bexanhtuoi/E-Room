@@ -104,6 +104,75 @@ class TestScoreRoomUtterances:
         entries = speech_log_module.read_user_log(room_id, user_id)
         assert entries[0]["pronunciation"] == good
 
+    def test_batch_passes_int_user_id_to_db(self, monkeypatch, tmp_path):
+        # Hoi quy loi Postgres integer = varchar: batch tung truyen raw_uid
+        # (str tu ten file user_<id>.jsonl) vao upsert_score.
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.tasks.scoring import score_room_utterances
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+
+        with Session(engine) as db:
+            room_id = make_speech_room(db, "intuid")
+            user_id = 424205
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 21, "hello world")
+
+            seen = []
+            real_upsert = pronunciation_score_crud.upsert_score
+
+            def spy_upsert(*args, **kwargs):
+                user_id_ = kwargs.get("user_id", args[2] if len(args) > 2 else None)
+                seen.append(user_id_)
+                return real_upsert(*args, **kwargs)
+
+            monkeypatch.setattr(pronunciation_score_crud, "upsert_score", spy_upsert)
+            with patch("app.ai.pronunciation.score_pronunciation", return_value=dict(MOCK_SCORE)):
+                assert score_room_utterances(room_id) == 1
+
+        assert seen and all(type(value) is int for value in seen)
+
+    def test_batch_stops_gracefully_on_soft_limit(self, monkeypatch, tmp_path):
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.tasks.scoring import score_room_utterances
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+
+        with Session(engine) as db:
+            room_id = make_speech_room(db, "softlimit")
+            user_id = 424206
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 31, "first sentence")
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 32, "second sentence")
+
+            calls = []
+
+            def fake_score(db_, room_id_, user_id_, message_id_, session_id_=None):
+                calls.append(message_id_)
+                if len(calls) > 1:
+                    raise SoftTimeLimitExceeded()
+                return {"ok": True}
+
+            with patch("app.tasks.scoring.score_room_utterance", side_effect=fake_score):
+                assert score_room_utterances(room_id) == 1
+        assert calls == [31, 32]
+
+    def test_find_coerces_string_user_id(self, monkeypatch, tmp_path):
+        from app import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+
+        with Session(engine) as db:
+            room_id = make_speech_room(db, "coerce")
+            pronunciation_score_crud.upsert_score(
+                db, room_id, 424207, 41, None, {"score": 80.0, "method": "local-v2"},
+            )
+            found = pronunciation_score_crud.find_for_utterance(db, room_id, "424207", 41)
+            assert found is not None
+            assert found.overall == 80.0
+
     def test_delete_room_cascades_scores(self, monkeypatch, tmp_path):
         from app import config as config_module
         from app.ai.stt import speech_log as speech_log_module

@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlmodel import Session
 
 from app.config import settings
@@ -232,7 +233,12 @@ def score_room_utterances(room_id: int) -> int:
 
             for entry in pending:
                 try:
-                    updated = score_room_utterance(db, room_id, raw_uid, entry.get("message_id"), session_id)
+                    updated = score_room_utterance(db, room_id, user_id, entry.get("message_id"), session_id)
+                except SoftTimeLimitExceeded:
+                    # Het gio mem: dung em de Celery danh dau xong phan viec,
+                    # cau con lai giu pending cho dot cham sau/nut Rescore.
+                    log.warning("Room batch stopped at soft limit | room_id=%s scored=%s", room_id, scored)
+                    return scored
                 except Exception:
                     log.exception("Batch scoring failed | room=%s msg=%s", room_id, entry.get("message_id"))
                     continue
