@@ -524,12 +524,51 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
             top.append(e)
         if len(top) >= 3:
             break
+    dimension_labels = (
+        ("sounds", "Phát âm"),
+        ("stress", "Trọng âm"),
+        ("fluency", "Lưu loát"),
+        ("completeness", "Hoàn thiện"),
+    )
+    dim_scores = report.get("scores") or {}
+    dim_values = []
+    for key, label in dimension_labels:
+        value = dim_scores.get(key)
+        if isinstance(value, (int, float)):
+            dim_values.append((label, round(float(value), 1)))
+    if avg >= 85:
+        verdict = "Tốt — giữ phong độ"
+    elif avg >= 70:
+        verdict = "Khá — sửa vài âm là lên điểm"
+    elif avg >= 50:
+        verdict = "Trung bình — cần luyện trọng tâm"
+    else:
+        verdict = "Còn yếu — quay lại luyện từng âm cơ bản"
+    if dim_values:
+        best = max(dim_values, key=lambda item: item[1])
+        worst = min(dim_values, key=lambda item: item[1])
+        dimension_part = f" Mạnh nhất: {best[0]} ({best[1]}). Yếu nhất: {worst[0]} ({worst[1]})."
+    else:
+        dimension_part = ""
     if top:
         listed = "; ".join(f"'{e['word']}' ({e['issue']})" for e in top)
-
-        summary = f"Chấm {n} câu, điểm trung bình {avg}. Cần sửa nhất: {listed}."
+        error_part = f" Cần sửa: {listed}."
+        if n == 1:
+            next_action = f" Luyện '{top[0]['word']}' trước rồi chấm lại."
+        else:
+            next_action = f" Luyện {len(top)} từ trên trước rồi chấm lại."
     else:
-        summary = f"Chấm {n} câu, điểm trung bình {avg}. Không phát hiện lỗi âm rõ rệt — giữ phong độ."
+        error_part = " Không phát hiện lỗi âm rõ rệt."
+        next_action = " Giữ nhịp nói đều và chấm câu mới."
+    summary = f"Tổng quan ({n} câu, trung bình {avg}): {verdict}.{dimension_part}{error_part}{next_action}"
+    if top:
+        sound_part = "; ".join(f"'{e['word']}' ({e['issue']})" for e in top)
+        pronunciation_feedback = (
+            f"Âm cần sửa: {sound_part}. "
+            f"Đọc chậm từng từ theo phiên âm IPA, ghi âm rồi so với mẫu 3 lần."
+        )
+    else:
+        pronunciation_feedback = "Không phát hiện lỗi âm rõ rệt — giữ nguyên cách phát âm hiện tại."
     error_words = [{"word": e["word"], "issue": e["issue"] or "cần luyện thêm",
                     "tip": e["how_to"], "how_to": e["how_to"], "vi": e["vi"]} for e in top]
     if top:
@@ -548,7 +587,7 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
         ]
     return {
         "summary": summary,
-        "pronunciation_feedback": summary,
+        "pronunciation_feedback": pronunciation_feedback,
         "stress_feedback": "",
         "intonation_feedback": "",
         "fluency_feedback": "",

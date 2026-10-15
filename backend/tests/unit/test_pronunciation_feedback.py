@@ -136,6 +136,23 @@ class TestFallbackFeedback:
         assert out["summary"]
         assert len(out["practice_plan"]) == 3
 
+    def test_fallback_overview_differs_from_pronunciation(self):
+        from app.ai.pronunciation import build_fallback_feedback
+
+        report = {
+            "scores": {"sounds": 68.0, "stress": 80.0, "fluency": 75.0, "completeness": 100.0, "overall": 74.5},
+            "word_details": [
+                {"word": "Hello", "score": 50.0, "status": "pronunciation_error", "expected_ipa": "/hʌloʊ/"},
+            ],
+            "top_errors": [],
+        }
+        out = build_fallback_feedback(report, "scoring_report")
+        assert out["pronunciation_feedback"] != out["summary"]
+        assert "Mạnh nhất" in out["summary"]
+        assert "Yếu nhất" in out["summary"]
+        assert "Hello" in out["pronunciation_feedback"]
+        assert "Tổng quan" not in out["pronunciation_feedback"]
+
 
 class TestNormalizeFeedback:
     # LLM theo prompt cũ trả how_to (không advice), thiếu practice_plan

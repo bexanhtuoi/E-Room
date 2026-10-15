@@ -169,6 +169,37 @@ services:
       redis:
         condition: service_healthy
 
+  stt-server:
+    image: fedirz/faster-whisper-server:latest-cuda
+    container_name: stt-server
+    ports:
+      - "8001:8000"
+    environment:
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 8000
+      ENABLE_UI: "true"
+      WHISPER__TTL: 300
+      WHISPER__INFERENCE_DEVICE: cuda
+      WHISPER__COMPUTE_TYPE: float16
+      WHISPER__MODEL: distil-large-v3
+      HF_HUB_OFFLINE: 0
+    volumes:
+      - whisper_cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
+
   # llama:
   #   image: ghcr.io/ggml-org/llama.cpp:server
   #   container_name: llama
@@ -337,4 +368,5 @@ volumes:
   grafana_data:
   loki_data:
   tempo_data:
+  whisper_cache:
 
