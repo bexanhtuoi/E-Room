@@ -172,6 +172,8 @@ services:
   stt-server:
     image: fedirz/faster-whisper-server:latest-cuda
     container_name: stt-server
+    profiles:
+      - stt
     ports:
       - "8001:8000"
     environment:
