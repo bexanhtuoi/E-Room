@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { HiArrowLeft, HiChatBubbleLeftRight, HiClock, HiPencil, HiSparkles, HiSpeakerWave, HiUsers } from 'react-icons/hi2';
@@ -180,6 +180,51 @@ export function SessionScoringView({ sessionId: propSessionId }) {
     const inSession = list.filter((u) => inWindow(u?.created_at, session.joined_at, session?.left_at));
     return dedupeByAttempt(inSession);
   }, [speechQuery.data, session]);
+
+  // Dropdown chọn câu để chấm: chỉ hiện 1 thẻ ReadingScoreCard cho câu
+  // đang chọn (trước đây render 1 loạt thẻ, không biết nút nào của câu nào).
+  function utteranceKey(u, i) {
+    const raw = u?.message_id ?? u?.created_at ?? i;
+    return String(raw);
+  }
+  function shortSentence(u, max = 70) {
+    const s = String(u?.corrected_text || u?.text || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '(câu trống)';
+    return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+  }
+  const scoredCount = useMemo(
+    () => myUtterances.filter((u) => u?.pronunciation != null).length,
+    [myUtterances],
+  );
+  const [selectedKey, setSelectedKey] = useState(null);
+  useEffect(() => {
+    if (myUtterances.length === 0) {
+      setSelectedKey(null);
+      return;
+    }
+    const keys = myUtterances.map((u, i) => utteranceKey(u, i));
+    if (selectedKey == null || !keys.includes(String(selectedKey))) {
+      // Ưu tiên câu chưa chấm đầu tiên để user chấm tiếp cho nhanh.
+      const firstUnscored = myUtterances.findIndex((u) => u?.pronunciation == null);
+      setSelectedKey(keys[firstUnscored >= 0 ? firstUnscored : 0]);
+    }
+  }, [myUtterances, selectedKey]);
+  const selectedIndex = Math.max(
+    0,
+    myUtterances.findIndex((u, i) => utteranceKey(u, i) === String(selectedKey)),
+  );
+  const selectedUtterance = myUtterances.length > 0
+    ? myUtterances[selectedIndex >= 0 ? selectedIndex : 0]
+    : null;
+  const selectedCardKey = selectedUtterance
+    ? utteranceKey(selectedUtterance, selectedIndex >= 0 ? selectedIndex : 0)
+    : 'none';
+  function stepSentence(dir) {
+    if (myUtterances.length === 0) return;
+    const cur = selectedIndex >= 0 ? selectedIndex : 0;
+    const next = (cur + dir + myUtterances.length) % myUtterances.length;
+    setSelectedKey(utteranceKey(myUtterances[next], next));
+  }
 
   function changeVoice(next) {
     setVoice(next);
@@ -404,7 +449,7 @@ export function SessionScoringView({ sessionId: propSessionId }) {
           <section className="portal-panel">
             <div className="portal-panel__head">
               <h2>My pronunciation scores</h2>
-              <span className="portal-muted">{myUtterances.length} lines</span>
+              <span className="portal-muted">{scoredCount}/{myUtterances.length} đã chấm</span>
             </div>
             {speechQuery.isError ? (
               <div className="portal-empty">Chưa tải được câu đã nói (speech log). Vào phòng nói vài câu rồi quay lại.</div>
@@ -412,29 +457,71 @@ export function SessionScoringView({ sessionId: propSessionId }) {
               <div className="portal-skeleton"><span /><span /></div>
             ) : myUtterances.length === 0 ? (
               <div className="portal-empty">Bạn chưa nói câu nào trong session này (hoặc câu nói chưa vào log).</div>
-            ) : (
-              <div className="portal-stack">
-                {myUtterances.map((u, i) => {
-                  const key = u?.message_id ?? u?.created_at ?? i;
-                  return (
-                    <ReadingScoreCard
-                      key={key}
-                      utterance={{
-                        text: u?.text,
-                        corrected_text: u?.corrected_text || u?.text,
-                        pronunciation: u?.pronunciation || null,
-                        feedback: u?.feedback || null,
-                      }}
-                      scoring={busyScoreKey === key}
-                      feedbackLoading={busyFbKey === key}
-                      scoreDisabled={busyScoreKey !== null && busyScoreKey !== key}
-                      onScore={() => scoreUtterance(u)}
-                      onFeedback={() => feedbackUtterance(u)}
-                    />
-                  );
-                })}
+            ) : selectedUtterance ? (
+              <div style={{ display: 'grid', gap: 12, marginTop: 12, marginBottom: 16 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label htmlFor="pron-sentence-picker" style={{ fontSize: 13, fontWeight: 700 }}>
+                    Chọn câu ({(selectedIndex >= 0 ? selectedIndex : 0) + 1}/{myUtterances.length}):
+                  </label>
+                  <select
+                    id="pron-sentence-picker"
+                    aria-label="Chọn câu để chấm"
+                    value={selectedCardKey}
+                    onChange={(e) => setSelectedKey(e.target.value)}
+                    style={{ flex: '1 1 220px', minWidth: 0, border: '1px solid #111', padding: '8px', fontSize: 13, background: '#fff', cursor: 'pointer' }}
+                  >
+                    {myUtterances.map((u, i) => {
+                      const key = utteranceKey(u, i);
+                      const score = u?.pronunciation?.score;
+                      const status = score != null ? `${Number(score).toFixed(1)}đ` : 'chưa chấm';
+                      return (
+                        <option key={key} value={key}>
+                          Câu {i + 1} — {shortSentence(u)} ({status})
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <span style={{ display: 'inline-flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="portal-topic pf-chipbtn"
+                      onClick={() => stepSentence(-1)}
+                      disabled={myUtterances.length < 2}
+                      title="Câu trước"
+                      aria-label="Câu trước"
+                      style={{ padding: '6px 10px', cursor: myUtterances.length < 2 ? 'default' : 'pointer' }}
+                    >
+                      ‹ Trước
+                    </button>
+                    <button
+                      type="button"
+                      className="portal-topic pf-chipbtn"
+                      onClick={() => stepSentence(1)}
+                      disabled={myUtterances.length < 2}
+                      title="Câu tiếp theo"
+                      aria-label="Câu tiếp theo"
+                      style={{ padding: '6px 10px', cursor: myUtterances.length < 2 ? 'default' : 'pointer' }}
+                    >
+                      Sau ›
+                    </button>
+                  </span>
+                </div>
+                <ReadingScoreCard
+                  key={selectedCardKey}
+                  utterance={{
+                    text: selectedUtterance?.text,
+                    corrected_text: selectedUtterance?.corrected_text || selectedUtterance?.text,
+                    pronunciation: selectedUtterance?.pronunciation || null,
+                    feedback: selectedUtterance?.feedback || null,
+                  }}
+                  scoring={busyScoreKey === (selectedUtterance?.message_id ?? selectedUtterance?.created_at)}
+                  feedbackLoading={busyFbKey === (selectedUtterance?.message_id ?? selectedUtterance?.created_at)}
+                  scoreDisabled={busyScoreKey !== null && busyScoreKey !== (selectedUtterance?.message_id ?? selectedUtterance?.created_at)}
+                  onScore={() => scoreUtterance(selectedUtterance)}
+                  onFeedback={() => feedbackUtterance(selectedUtterance)}
+                />
               </div>
-            )}
+            ) : null}
             {scoreError && <div className="er-alert er-alert--err" style={{ marginTop: 8 }}>{scoreError}</div>}
             {busyScoreKey !== null && (
               <p className="portal-muted" style={{ fontSize: 12, marginTop: 8 }}>
