@@ -56,8 +56,20 @@ class TestRoomCrud:
         assert client.get(f"/api/v1/rooms/{fresh['id']}").status_code == 200
 
     def test_room_language_defaults_and_updates(self, client: TestClient, alice: dict):
+        # English-only mac dinh: "vi"/"auto" deu normalize ve "en".
         room = create_room(client, f"lang-room-{alice['id']}")
         assert room["language"] == "en"
+
+        updated = client.patch(f"/api/v1/rooms/{room['id']}", json={"language": "vi"})
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["language"] == "en"
+
+        auto_room = client.post("/api/v1/rooms/", json={"name": f"auto-room-{alice['id']}", "language": "auto"}).json()
+        assert auto_room["language"] == "en"
+
+    def test_room_language_multi_when_not_english_only(self, client: TestClient, alice: dict, monkeypatch):
+        monkeypatch.setattr(settings, "stt_english_only", False)
+        room = create_room(client, f"lang-room-{alice['id']}")
 
         updated = client.patch(f"/api/v1/rooms/{room['id']}", json={"language": "vi"})
         assert updated.status_code == 200, updated.text

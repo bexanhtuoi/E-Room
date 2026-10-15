@@ -47,6 +47,14 @@ SPOKEN_LANGUAGES = ("en", "vi", "auto")
 
 
 def normalize_language(value) -> str:
+    # English-only: chan tao/cap nhat room "vi" hay "auto" tu API.
+    try:
+        from app.config import settings
+
+        if settings.stt_english_only:
+            return "en"
+    except Exception:
+        pass
     text = str(value or "").strip().lower()
     return text if text in SPOKEN_LANGUAGES else "en"
 

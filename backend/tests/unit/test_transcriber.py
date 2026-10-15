@@ -310,9 +310,21 @@ class TestSTTFunctions:
 
         assert stt_module.STT_PROVIDERS["custom_api"] is transcribe_cloud_whisper
 
-    def test_resolve_stt_language_order(self):
+    def test_resolve_stt_language_order(self, monkeypatch):
+        from app import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "stt_english_only", False)
         assert resolve_stt_language("vi") == "vi"
         assert resolve_stt_language("AUTO") == "auto"
+        assert resolve_stt_language("xx") == "en"
+        assert resolve_stt_language(None) == "en"
+
+    def test_resolve_stt_language_english_only(self, monkeypatch):
+        from app import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "stt_english_only", True)
+        assert resolve_stt_language("vi") == "en"
+        assert resolve_stt_language("auto") == "en"
         assert resolve_stt_language("xx") == "en"
         assert resolve_stt_language(None) == "en"
 
@@ -322,7 +334,10 @@ class TestSTTFunctions:
         assert "tiếng Việt" in build_stt_prompt("vi")
         assert build_stt_prompt("auto") == build_stt_prompt("xx")
 
-    def test_faster_whisper_auto_omits_language_param(self):
+    def test_faster_whisper_auto_omits_language_param(self, monkeypatch):
+        from app import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "stt_english_only", False)
         mock_response = MagicMock(status_code=200)
         mock_response.json.return_value = {"text": "xin chao", "language": "vi", "duration": 1.0, "segments": []}
 
@@ -336,7 +351,10 @@ class TestSTTFunctions:
         _, kwargs = post.call_args
         assert "language" not in kwargs.get("data", {})
 
-    def test_faster_whisper_pins_language_param(self):
+    def test_faster_whisper_pins_language_param(self, monkeypatch):
+        from app import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "stt_english_only", False)
         mock_response = MagicMock(status_code=200)
         mock_response.json.return_value = {"text": "xin chao", "language": "vi", "duration": 1.0, "segments": []}
 

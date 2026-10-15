@@ -98,6 +98,9 @@ class Settings:
     stt_server_alive_timeout: float = float(os.getenv("STT_SERVER_ALIVE_TIMEOUT", 3.0))
     stt_server_alive_ttl: float = float(os.getenv("STT_SERVER_ALIVE_TTL", 60.0))
     stt_language: str = os.getenv("STT_LANGUAGE", "en")  # en | vi | auto
+    # English-only: ep moi luong STT ve "en" (room language, detect, prompt),
+    # ke ca khi room/API gui "vi" hay "auto". Tat de mo lai da ngon ngu.
+    stt_english_only: bool = os.getenv("STT_ENGLISH_ONLY", "true").lower() in ("true", "1", "yes")
     stt_cloud_api_key: str = os.getenv("STT_CLOUD_API_KEY", "")
     stt_cloud_base_url: str = os.getenv("STT_CLOUD_BASE_URL", "https://api.openai.com/v1")
     stt_cloud_model: str = os.getenv("STT_CLOUD_MODEL", "whisper-1")

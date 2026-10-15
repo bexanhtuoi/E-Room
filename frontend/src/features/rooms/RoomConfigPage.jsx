@@ -237,9 +237,10 @@ function ConfigForm({ room, defaultPrompt, onReset }) {
               onChange={(e) => setLanguage(e.target.value)}
             >
               <option value="en">English only</option>
-              <option value="vi">Vietnamese only</option>
-              <option value="auto">Auto-detect each sentence</option>
+              <option value="vi" disabled>Vietnamese only (disabled - English-only STT)</option>
+              <option value="auto" disabled>Auto-detect each sentence (disabled - English-only STT)</option>
             </select>
+              <p className="portal-muted" style={{ fontSize: 12, marginTop: 6 }}>STT is configured English-only on the server, so transcripts always use English.</p>
           </div>
         </div>
       </section>
