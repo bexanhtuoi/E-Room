@@ -450,6 +450,19 @@ def merge_chunk_reports(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
             "n_no_evidence": no_ev}
 
 
+def resolve_word_status(status: str, has_scores: bool, wscore: float, anchored: bool) -> str:
+    if status == "scored":
+        if not has_scores:
+            return "no_evidence"
+
+        return "ok" if wscore >= 70.0 else "pronunciation_error"
+
+    if status == "misaligned" and not anchored and wscore >= 70.0:
+        return "ok"
+
+    return status
+
+
 def score_phones(
     wav,
     sr: int,
@@ -776,10 +789,7 @@ def score_phones(
 
         n_phones = len(phonemes) - n_ph0
 
-        if status == "scored":
-            word_status = "ok" if pscores and wscore >= 70.0 else "pronunciation_error" if pscores else "no_evidence"
-        else:
-            word_status = status
+        word_status = resolve_word_status(status, bool(pscores), wscore, anchored)
 
         pron = get_pronunciation(w, accent)
 
