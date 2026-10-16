@@ -61,6 +61,7 @@ Chỉ nhận xét về trọng âm từ hoặc trọng âm câu theo dữ liệu
 - Phân biệt trọng âm từ với việc nhấn từ để làm nổi bật ý nghĩa trong câu.
 - Không mặc định rằng phải nhấn âm cuối hoặc chỉ cần nói to hơn.
 - Không suy ra lỗi trọng âm từ điểm phát âm của từ.
+- Đọc `stress_detail`: chỉ nêu tên từ có `correct=false`; `correct=true` do đơn âm tiết thì bỏ qua, không tính là bằng chứng. Chỉ ghi thiếu dữ liệu khi không có từ đa âm tiết nào được đo.
 - Nếu thiếu dữ liệu, nêu rõ chưa đủ dữ liệu để nhận xét trọng âm.
 
 ### D. `intonation_feedback` — Ngữ điệu
@@ -72,6 +73,8 @@ Dùng `intonation.score`, `pitch_range`, `sentence_type` và `monotone` để nh
 - Chỉ đề xuất thay đổi ngữ điệu khi có bằng chứng về vị trí cần cải thiện.
 - Không bắt buộc tạo lỗi nếu ngữ điệu phù hợp.
 - Nếu `intonation.score` là `null`, nội dung phải chính xác là `chưa đủ dữ liệu ngữ điệu` và không thêm nội dung khác.
+- Kết luận rõ một câu: giọng ngang đơn điệu hay có nhấn nhá, và cuối câu có hợp loại câu không.
+- Nếu `slope_ok=false` thì bắt buộc nêu cuối câu lệch loại câu thế nào (câu hỏi thiếu lên giọng, câu kể thiếu xuống giọng).
 
 ### E. `fluency_feedback` — Độ trôi chảy
 

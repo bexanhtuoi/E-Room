@@ -35,6 +35,8 @@ class TestPromptSections:
         assert "Chỉ trả về một đối tượng JSON" in SYSTEM_PROMPT
         assert "quá trình suy nghĩ" in SYSTEM_PROMPT
         assert "ONLY the JSON" in SESSION_FEEDBACK_PROMPT
+        assert "stress_detail" in SYSTEM_PROMPT
+        assert "slope_ok" in SYSTEM_PROMPT
 
     def test_extract_json_strips_think_block(self):
         from app.ai.pronunciation import strip_reasoning
@@ -177,6 +179,39 @@ class TestFallbackFeedback:
         assert "Yếu nhất" in out["summary"]
         assert "Hello" in out["pronunciation_feedback"]
         assert "Tổng quan" not in out["pronunciation_feedback"]
+
+    def test_fallback_covers_all_four_criteria(self):
+        from app.ai.pronunciation import build_fallback_feedback
+
+        report = {
+            "scores": {"sounds": 60.0, "stress": 70.0, "fluency": 80.0, "completeness": 100.0, "overall": 63.3},
+            "word_details": [
+                {"word": "is", "score": 40.0, "status": "misaligned", "expected_ipa": "/ɪz/"},
+            ],
+            "stress_detail": [
+                {"word": "is", "expected_stress": 0, "detected_stress": 1, "correct": False},
+                {"word": "a", "expected_stress": 0, "detected_stress": 0, "correct": True},
+            ],
+            "intonation": {"score": 70.0, "monotone": True, "pitch_range": 15.0, "sentence_type": "question", "slope_ok": False},
+            "fluency": {"wpm": 70.0, "pause_ratio": 0.1, "long_pause_count": 2, "hesitation_count": 0, "repetition_count": 0, "score": 80.0},
+            "top_errors": [],
+        }
+        out = build_fallback_feedback(report, "scoring_report")
+        assert "'is'" in out["stress_feedback"]
+        assert "ngang" in out["intonation_feedback"]
+        assert "chưa lên giọng" in out["intonation_feedback"]
+        assert "nghỉ dài 2 lần" in out["fluency_feedback"]
+        assert "nói chậm" in out["fluency_feedback"]
+        sections = [out["summary"], out["pronunciation_feedback"], out["stress_feedback"], out["intonation_feedback"], out["fluency_feedback"]]
+        assert len(set(sections)) == len(sections)
+
+    def test_fallback_empty_criteria_stay_hidden(self):
+        from app.ai.pronunciation import build_fallback_feedback
+
+        out = build_fallback_feedback({}, "session_scores")
+        assert out["stress_feedback"] == ""
+        assert out["intonation_feedback"] == ""
+        assert out["fluency_feedback"] == ""
 
 
 class TestNormalizeFeedback:
