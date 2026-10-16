@@ -56,3 +56,20 @@ class TestSessionLinesSpeaker:
         assert len(lines) == 1
         assert lines[0]["speaker"] == "AI"
         assert "- **Item one:** done" in lines[0]["text"]
+
+    def test_lines_follow_spoken_order(self):
+        import json
+
+        first = make_message(MessageRole.USER, 9, "first spoken")
+        first.meta_data = json.dumps({"source": "speech_to_text", "spoken_at": "2026-09-14T14:20:01+00:00"})
+        second = make_message(MessageRole.USER, 9, "second spoken")
+        second.meta_data = json.dumps({"source": "speech_to_text", "spoken_at": "2026-09-14T14:20:02+00:00"})
+        users = [SimpleNamespace(id=9, full_name="An")]
+
+        with (
+            patch("app.services.session.message_crud.get_many", return_value=[second, first]),
+            patch("app.services.session.user_crud.get_by_ids", return_value=users),
+        ):
+            lines = session_service.session_lines(object(), make_session(9))
+
+        assert [line["text"] for line in lines] == ["first spoken", "second spoken"]

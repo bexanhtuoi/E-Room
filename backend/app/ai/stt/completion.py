@@ -21,6 +21,7 @@ def build_transcript_payload(
     text: str,
     confidence: float,
     duration: float,
+    spoken_at: Optional[str] = None,
 ) -> str:
     return json.dumps(
         {
@@ -32,6 +33,7 @@ def build_transcript_payload(
             "text": text,
             "confidence": confidence,
             "duration": duration,
+            "spoken_at": spoken_at,
             "is_final": True,
         }
     )
@@ -61,6 +63,8 @@ async def handle_speech_completion(
 
         detected_language = result.get("language") or spoken_language
 
+        spoken_at = getattr(raw_ctx, "spoken_at", None)
+
         log.info(
             "Transcribed text | room_id=%s user=%s lang=%s text='%s' conf=%.2f",
             room_id,
@@ -71,7 +75,7 @@ async def handle_speech_completion(
         )
 
         # 2. Lưu transcript (database + JSONL), trả None khi trùng/lỗi
-        saved = save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, detected_language)
+        saved = save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, detected_language, spoken_at)
 
         if saved is None:
             return
@@ -79,7 +83,7 @@ async def handle_speech_completion(
         message_id, user_id, user_name = saved
 
         # 3. Broadcast lên LiveKit để các user khác nhận được transcript
-        await broadcast_completion(room, room_id, message_id, user_id, user_name, text, confidence, duration)
+        await broadcast_completion(room, room_id, message_id, user_id, user_name, text, confidence, duration, spoken_at)
 
     except Exception as error:
         log.exception(
@@ -90,7 +94,7 @@ async def handle_speech_completion(
         )
 
 
-def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, detected_language):
+def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, detected_language, spoken_at=None):
     text = result["text"].strip()
 
     confidence = result.get("confidence", 1.0)
@@ -111,6 +115,7 @@ def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, 
         avg_logprob=avg_logprob,
         words_count=len(words),
         language=detected_language,
+        spoken_at=spoken_at,
     )
 
     if message_id is None:
@@ -148,6 +153,7 @@ def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, 
             provider=result.get("provider", "whisper_server"),
             audio_data=audio_data,
             sample_rate=16000,
+            spoken_at=spoken_at,
         )
     except Exception:
         log.exception("Speech log append failed | room_id=%s user=%s", room_id, user_identity)
@@ -155,7 +161,7 @@ def save_completion_result(room_id, user_identity, audio_data, raw_ctx, result, 
     return message_id, user_id, user_name
 
 
-async def broadcast_completion(room, room_id, message_id, user_id, user_name, text, confidence, duration) -> None:
+async def broadcast_completion(room, room_id, message_id, user_id, user_name, text, confidence, duration, spoken_at=None) -> None:
     payload = build_transcript_payload(
         message_id=message_id,
         room_id=room_id,
@@ -164,6 +170,7 @@ async def broadcast_completion(room, room_id, message_id, user_id, user_name, te
         text=text,
         confidence=confidence,
         duration=duration,
+        spoken_at=spoken_at,
     )
 
     if hasattr(room, "local_participant") and room.local_participant:

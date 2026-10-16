@@ -521,3 +521,30 @@ class TestTranscriberFunctions:
         with Session(engine) as db:
             assert is_recent_duplicate(db, 424242, None, text) is True
             assert is_recent_duplicate(db, 424242, None, "something else entirely") is False
+
+    def test_save_transcript_stores_spoken_at(self):
+        import json
+        import uuid
+
+        from sqlmodel import Session
+
+        from app.database import engine
+        from app.repositories.message import message_crud
+
+        text = f"spoken stamp {uuid.uuid4().hex[:8]}"
+        stamped = "2026-10-15T12:00:01+00:00"
+        mid, _, _ = message_crud.save_transcript(
+            room_id=424243,
+            user_identity="nobody",
+            text=text,
+            duration=1.0,
+            confidence=0.9,
+            avg_logprob=-0.2,
+            words_count=2,
+            spoken_at=stamped,
+        )
+        assert mid is not None
+
+        with Session(engine) as db:
+            row = message_crud.get_one(db, id=mid)
+            assert json.loads(row.meta_data or "{}").get("spoken_at") == stamped

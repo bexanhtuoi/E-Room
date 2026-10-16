@@ -120,6 +120,7 @@ def append_utterance(
     provider: str = "whisper_server",
     audio_data=None,
     sample_rate: int = 16000,
+    spoken_at: Optional[str] = None,
 ) -> Dict[str, Any]:
     audio_file = save_utterance_audio(room_id, user_id, message_id, audio_data, sample_rate)
 
@@ -140,6 +141,7 @@ def append_utterance(
         "audio_file": audio_file,
         "pronunciation": None,
         "feedback": None,
+        "spoken_at": spoken_at,
         "created_at": utcnow_iso(),
         "edited_at": None,
     }
@@ -176,8 +178,31 @@ def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     return entries
 
 
+def speech_order_key(entry: Dict[str, Any]) -> datetime:
+    spoken = parse_order_moment(entry.get("spoken_at"))
+
+    created = parse_order_moment(entry.get("created_at"))
+
+    return spoken or created or datetime.min
+
+
+def parse_order_moment(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+
+    try:
+        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return parsed
+
+
 def read_user_log(room_id: int, user_id: Any) -> List[Dict[str, Any]]:
-    return read_jsonl(user_log_path(room_id, user_id))
+    return sorted(read_jsonl(user_log_path(room_id, user_id)), key=speech_order_key)
 
 
 def list_room_users(room_id: int) -> List[str]:
@@ -203,7 +228,7 @@ def get_room_transcript_for_summary(room_id: int) -> List[Dict[str, Any]]:
     for entries in read_room_logs(room_id).values():
         merged.extend(entries)
 
-    merged.sort(key=lambda e: str(e.get("created_at", "")))
+    merged.sort(key=speech_order_key)
 
     return [
         {

@@ -1,4 +1,3 @@
-import json
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -10,6 +9,7 @@ from app.ai.stt.speech_log import (
     attach_pronunciation,
     get_room_transcript_for_summary,
     read_user_log,
+    speech_order_key,
     update_corrected_text,
 )
 
@@ -84,6 +84,32 @@ class TestSpeechLog:
         monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
         monkeypatch.setattr(cfg.settings, "speech_log_save_audio", False, raising=False)
         assert update_corrected_text(5555, 1, 999999, "x") is None
+
+    def test_read_user_log_orders_by_spoken_at(self, tmp_path, monkeypatch):
+        import app.config as cfg
+
+        monkeypatch.setattr(cfg.settings, "speech_log_dir", str(tmp_path), raising=False)
+        monkeypatch.setattr(cfg.settings, "speech_log_save_audio", False, raising=False)
+
+        append_utterance(room_id=3003, user_id=4, user_name="D", message_id=2, text="second completed",
+                         audio_data=None, spoken_at="2026-10-15T12:00:02+00:00")
+        append_utterance(room_id=3003, user_id=4, user_name="D", message_id=1, text="first completed",
+                         audio_data=None, spoken_at="2026-10-15T12:00:01+00:00")
+
+        logs = read_user_log(3003, 4)
+
+        assert [entry["message_id"] for entry in logs] == [1, 2]
+
+        earlier_spoken = speech_order_key({
+            "spoken_at": "2026-10-15T12:00:01+00:00",
+            "created_at": "2026-10-15T12:00:05+00:00",
+        })
+        later_created = speech_order_key({
+            "spoken_at": None,
+            "created_at": "2026-10-15T12:00:02+00:00",
+        })
+
+        assert earlier_spoken < later_created
 
     def test_raw_edit_rescore_flow(self, tmp_path, monkeypatch):
         import app.config as cfg

@@ -82,6 +82,7 @@ class MessageCrud(CRUDRepository):
         avg_logprob: float,
         words_count: int,
         language: Optional[str] = None,
+        spoken_at: Optional[str] = None,
     ) -> tuple[Optional[int], Optional[int], str]:
         user_id: Optional[int] = None
 
@@ -111,6 +112,7 @@ class MessageCrud(CRUDRepository):
                 "confidence": confidence,
                 "avg_logprob": avg_logprob,
                 "words_count": words_count,
+                "spoken_at": spoken_at,
             }
 
             message = self.create(

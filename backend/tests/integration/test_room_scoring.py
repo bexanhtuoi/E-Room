@@ -3,13 +3,14 @@ from __future__ import annotations
 import uuid
 from unittest.mock import patch
 
+import numpy as np
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.tasks.scoring import score_room_utterances
 from app.database import engine
-from app.services import room_crud, session_crud
 from app.repositories.pronunciation_score import pronunciation_score_crud
+from app.services import room_crud, session_crud
+from app.tasks.scoring import score_room_utterances
 
 MOCK_SCORE = {
     "overall": 82.0,
@@ -188,6 +189,87 @@ class TestScoreRoomUtterances:
 
         entries = speech_log_module.read_user_log(room_id, user_id)
         assert entries[0]["pronunciation"]["scored_at"]
+
+    def test_chunk_scores_own_span_not_whole_attempt(self, monkeypatch, tmp_path):
+        import json
+
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.ai.stt.helpers import convert_audio_to_wav_bytes
+        from app.ai.stt.paths import metadata_path, raw_audio_path
+        from app.tasks.scoring import score_room_utterance
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+
+        with Session(engine) as db:
+            room_id = make_speech_room(db, "chunked")
+            user_id = 424209
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 71, "second sentence here")
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 72, "third sentence here")
+
+            attempt_id = "u424209_test"
+            raw_audio_path(room_id, attempt_id).write_bytes(
+                convert_audio_to_wav_bytes((np.sin(2 * np.pi * 440 * np.arange(16000 * 6) / 16000) * 16000).astype(np.int16), 16000)
+            )
+            metadata_path(room_id, attempt_id).write_text(json.dumps({
+                "attempt_id": attempt_id,
+                "user_id": user_id,
+                "utterances": [
+                    {"index": 0, "message_id": 71, "start_sample": 16000, "end_sample": 48000, "start_sec": 1.0, "end_sec": 3.0},
+                    {"index": 1, "message_id": 72, "start_sample": 48000, "end_sample": 80000, "start_sec": 3.0, "end_sec": 5.0},
+                ],
+            }), encoding="utf-8")
+
+            seen = {}
+
+            def fake_score(**kwargs):
+                from pathlib import Path
+
+                from app.ai.pronunciation.audio import load_wav_16k
+
+                seen["reference_text"] = kwargs.get("reference_text")
+                clip, rate = load_wav_16k(Path(kwargs.get("audio_path")).read_bytes())
+                seen["duration"] = len(clip) / rate
+                return dict(MOCK_SCORE)
+
+            with patch("app.tasks.scoring.score_with_backend", side_effect=fake_score):
+                updated = score_room_utterance(db, room_id, user_id, 71, None)
+
+            assert updated is not None
+            assert seen["reference_text"] == "second sentence here"
+            assert abs(seen["duration"] - 2.0) < 0.1
+
+    def test_chunk_falls_back_without_span(self, monkeypatch, tmp_path):
+        import json
+
+        from app import config as config_module
+        from app.ai.stt import speech_log as speech_log_module
+        from app.ai.stt.helpers import convert_audio_to_wav_bytes
+        from app.ai.stt.paths import metadata_path, raw_audio_path
+        from app.tasks.scoring import slice_attempt_span
+
+        monkeypatch.setattr(config_module.settings, "speech_log_dir", str(tmp_path))
+
+        with Session(engine) as db:
+            room_id = make_speech_room(db, "nospan")
+            user_id = 424210
+            speech_log_module.append_utterance(room_id, user_id, "Tester", 81, "lone sentence")
+
+            attempt_id = "u424210_test"
+            raw_audio_path(room_id, attempt_id).write_bytes(
+                convert_audio_to_wav_bytes(np.zeros(16000 * 2, dtype=np.int16), 16000)
+            )
+            metadata_path(room_id, attempt_id).write_text(json.dumps({
+                "attempt_id": attempt_id,
+                "user_id": user_id,
+                "utterances": [{"index": 0, "message_id": 81}],
+            }), encoding="utf-8")
+
+            from app.ai.stt.recorder import find_attempt_by_message
+
+            attempt = find_attempt_by_message(room_id, user_id, 81)
+            assert attempt is not None
+            assert slice_attempt_span(room_id, attempt, {"message_id": 81}) == (None, [])
 
     def test_delete_room_cascades_scores(self, monkeypatch, tmp_path):
         from app import config as config_module

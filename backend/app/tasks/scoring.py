@@ -58,6 +58,51 @@ def score_with_backend(
     )
 
 
+def slice_attempt_span(room_id: int, attempt: Dict[str, Any], span: Dict[str, Any]) -> tuple:
+    from app.ai.pronunciation.audio import load_wav_16k
+    from app.ai.stt.audio_store import fetch_audio_bytes, materialize_temp_wav
+    from app.ai.stt.helpers import convert_audio_to_wav_bytes
+
+    raw_bytes = None
+
+    raw_path = attempt.get("raw_path")
+
+    if raw_path is not None:
+        try:
+            with open(raw_path, "rb") as handle:
+                raw_bytes = handle.read()
+        except OSError:
+            raw_bytes = None
+
+    if raw_bytes is None and attempt.get("raw_object"):
+        raw_bytes = fetch_audio_bytes(room_id, attempt.get("raw_object"))
+
+    if not raw_bytes:
+        return None, []
+
+    try:
+        wav, sr = load_wav_16k(raw_bytes)
+    except Exception:
+        return None, []
+
+    if wav is None or len(wav) == 0 or not sr:
+        return None, []
+
+    start = max(0, int(float(span.get("start_sec") or 0.0) * sr))
+
+    end = min(len(wav), int(float(span.get("end_sec") or 0.0) * sr))
+
+    if end - start < int(0.2 * sr):
+        return None, []
+
+    clip_path = materialize_temp_wav(convert_audio_to_wav_bytes(wav[start:end], sample_rate=sr))
+
+    if clip_path is None:
+        return None, []
+
+    return clip_path, [clip_path]
+
+
 def score_room_utterance(
     db: Session,
     room_id: int,
@@ -98,29 +143,45 @@ def score_room_utterance(
     temp_paths: list = []
 
     if attempt and (attempt.get("raw_path") is not None or attempt.get("raw_object")):
-        by_id = {e.get("message_id"): e for e in entries}
+        span = next(
+            (u for u in (attempt.get("utterances") or []) if u.get("message_id") == message_id),
+            None,
+        )
 
-        parts = [
-            (by_id[mid].get("corrected_text") or by_id[mid].get("text", ""))
-            for mid in attempt.get("message_ids", [])
-            if mid in by_id and (by_id[mid].get("corrected_text") or by_id[mid].get("text", "")).strip()
-        ]
+        if span is not None:
+            chunk_path, chunk_temps = slice_attempt_span(room_id, attempt, span)
 
-        if parts:
-            if attempt.get("raw_path") is not None:
-                audio_path = attempt["raw_path"]
-            else:
-                raw_bytes = fetch_audio_bytes(room_id, attempt.get("raw_object"))
+            temp_paths.extend(chunk_temps)
 
-                if raw_bytes is not None:
-                    audio_path = materialize_temp_wav(raw_bytes)
-
-                    temp_paths.append(audio_path)
-
-            if audio_path is not None:
-                reference = " ".join(parts)
+            if chunk_path is not None:
+                audio_path = chunk_path
 
                 attempt_id = attempt.get("attempt_id")
+
+        if audio_path is None:
+            by_id = {e.get("message_id"): e for e in entries}
+
+            parts = [
+                (by_id[mid].get("corrected_text") or by_id[mid].get("text", ""))
+                for mid in attempt.get("message_ids", [])
+                if mid in by_id and (by_id[mid].get("corrected_text") or by_id[mid].get("text", "")).strip()
+            ]
+
+            if parts:
+                if attempt.get("raw_path") is not None:
+                    audio_path = attempt["raw_path"]
+                else:
+                    raw_bytes = fetch_audio_bytes(room_id, attempt.get("raw_object"))
+
+                    if raw_bytes is not None:
+                        audio_path = materialize_temp_wav(raw_bytes)
+
+                        temp_paths.append(audio_path)
+
+                if audio_path is not None:
+                    reference = " ".join(parts)
+
+                    attempt_id = attempt.get("attempt_id")
 
     if audio_path is None:
         audio_file = entry.get("audio_file")

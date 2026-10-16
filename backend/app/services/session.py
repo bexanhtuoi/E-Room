@@ -51,6 +51,22 @@ class SessionService(ServiceBase):
 
             kept.append(message)
 
+        ordered = []
+
+        for message in kept:
+            try:
+                meta = json.loads(message.meta_data or "{}") or {}
+            except (TypeError, ValueError):
+                meta = {}
+
+            moment = parse_log_time(meta.get("spoken_at")) or as_naive_utc(message.created_at)
+
+            ordered.append((moment, message))
+
+        ordered.sort(key=lambda item: (item[0], getattr(item[1], "id", 0) or 0))
+
+        kept = [message for _, message in ordered]
+
         names = {}
 
         ids = {message.user_id for message in kept if message.user_id}

@@ -2,6 +2,7 @@ import json
 import os
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,9 +16,9 @@ log = get_logger("app.ai.stt.recorder")
 
 class UtteranceRef:
 
-    __slots__ = ("_recorder", "room_id", "attempt_id", "index")
+    __slots__ = ("_recorder", "room_id", "attempt_id", "index", "spoken_at")
 
-    def __init__(self, recorder: "RawAttemptRecorder", room_id: int, attempt_id: str, index: int) -> None:
+    def __init__(self, recorder: "RawAttemptRecorder", room_id: int, attempt_id: str, index: int, spoken_at: Optional[str] = None) -> None:
         self._recorder = recorder
 
         self.room_id = room_id
@@ -25,6 +26,8 @@ class UtteranceRef:
         self.attempt_id = attempt_id
 
         self.index = index
+
+        self.spoken_at = spoken_at
 
     def attach(self, message_id: Optional[int], text: Optional[str]) -> None:
         self._recorder.attach_result(self, message_id, text)
@@ -90,6 +93,8 @@ class RawAttemptRecorder:
 
         self._samples_written = 0
 
+        self._wall_epoch: Optional[float] = None
+
         self._data_bytes = 0
 
         self._last_voice_sample = 0
@@ -145,6 +150,9 @@ class RawAttemptRecorder:
             data = pcm.astype("<i2", copy=False).tobytes()
 
             self._buffer.extend(data)
+
+            if self._wall_epoch is None:
+                self._wall_epoch = time.time()
 
             self._samples_written += len(pcm)
 
@@ -214,7 +222,14 @@ class RawAttemptRecorder:
 
         utt["status"] = "finalized"
 
-        ref = UtteranceRef(self, self.room_id, self._attempt_id, utt["index"])
+        spoken_at = None
+
+        if self._wall_epoch is not None:
+            spoken_at = datetime.fromtimestamp(
+                self._wall_epoch + start / self.sample_rate, tz=timezone.utc
+            ).isoformat()
+
+        ref = UtteranceRef(self, self.room_id, self._attempt_id, utt["index"], spoken_at)
 
         self._current_utt = None
 

@@ -157,6 +157,21 @@ class TestRawAttemptLifecycle:
         assert ref1.index == 0
         assert ref2.index == 1
 
+    def test_utterance_refs_carry_speech_order(self, speech_dir):
+        from datetime import datetime
+
+        rec = _make_recorder()
+        for _ in range(6):
+            rec.write_frame(_voice_frame())
+        rec.begin_utterance(0)
+        ref1 = rec.end_utterance(6 * 1600)
+        rec.begin_utterance(10 * 1600)
+        ref2 = rec.end_utterance(5 * 1600)
+
+        assert ref1 is not None and ref2 is not None
+        assert ref1.spoken_at is not None and ref2.spoken_at is not None
+        assert datetime.fromisoformat(ref2.spoken_at) > datetime.fromisoformat(ref1.spoken_at)
+
     def test_buffer_stays_bounded(self, speech_dir):
         rec = _make_recorder(flush_bytes=4096)
         max_seen = 0
