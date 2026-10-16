@@ -39,7 +39,9 @@ def speak(
 
     if not text:
         return None
+
     chosen_voice = voice or settings.tts_voice
+
     # Tốc độ giọng người (~0.9). 1.0 của Kokoro nghe hơi vội.
     chosen_speed = speed if speed is not None else settings.tts_speed
 
@@ -57,10 +59,12 @@ def speak(
                     "speed": chosen_speed,
                 },
             )
+
         if response.status_code != 200:
             log.error("TTS request failed | status=%s err=%s", response.status_code, response.text[:300])
 
             return None
+
         return response.content or None
     except Exception as error:
         log.error("TTS exception | err=%s", error)

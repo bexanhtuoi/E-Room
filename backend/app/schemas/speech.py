@@ -37,10 +37,13 @@ class SpeechLogUpdateSchema(BaseModel):
     @classmethod
     def validate_text(cls, value: str) -> str:
         text = (value or "").strip()
+
         if not text:
             raise ValueError("corrected_text must not be empty")
+
         if len(text) > 4000:
             raise ValueError("corrected_text too long (max 4000)")
+
         return text
 
 

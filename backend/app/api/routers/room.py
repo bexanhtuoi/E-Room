@@ -57,6 +57,7 @@ def get_room(
     _: str = Depends(require_auth),
 ) -> RoomResponse:
     room = room_service.get_room_or_404(db, room_id)
+
     room_service.ensure_room_access(room, request.state.current_user)
 
     return room
@@ -179,7 +180,9 @@ async def handle_livekit_webhook(
     db: Session = Depends(get_session),
 ) -> dict:
     auth_header = request.headers.get("Authorization", "")
+
     raw_body = await request.body()
+
     event = room_service.verify_webhook_token(auth_header, raw_body)
 
     try:
@@ -191,7 +194,9 @@ async def handle_livekit_webhook(
         return {"status": "ignored"}
 
     event_type = body.get("event") or event.get("event")
+
     room_name = body.get("room", {}).get("name") or event.get("room", {}).get("name")
+
     participant_identity = body.get("participant", {}).get("identity") or event.get("participant", {}).get("identity")
 
     if not room_name:

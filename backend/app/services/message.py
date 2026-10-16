@@ -109,6 +109,7 @@ class MessageService(ServiceBase):
         from app.services.room import room_service
 
         message = self.one_or_404(message_crud.get_one, MessageNotFoundError, db, id=message_id)
+
         room = room_crud.get_one(db, id=message.room_id)
 
         if room is not None:
@@ -124,17 +125,22 @@ class MessageService(ServiceBase):
         from app.tasks.room_jobs import enqueue_ai_job
 
         room = self.one_or_404(room_crud.get_one, RoomNotFoundError, db, id=message_in.room_id)
+
         room_service.ensure_room_access(room, user)
 
         obj_in_data = message_in.model_dump()
+
         obj_in_data["user_id"] = user.id
+
         obj_in_data["role"] = MessageRole.USER
+
         obj_in_data["meta_data"] = scrub_meta(obj_in_data.get("meta_data"))
 
         new_message = message_crud.create(db, obj_in=obj_in_data)
 
         try:
             mark_room_activity(message_in.room_id)
+
             query = strip_ai_mention(message_in.text)
 
             if query:

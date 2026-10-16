@@ -2,19 +2,23 @@ from sqlmodel import Session, select
 
 from app.models import Message, MessageRole, Room, User
 
-# Chi 2 room co san hoi thoai mau de trang chu hien thi sinh dong.
-# Cac room con lai de trong that — khong seed user ao.
+# Chỉ 2 room có sẵn hội thoại mẫu để trang chủ hiển thị sinh động.
+# Các room còn lại để trống thật — không seed user ảo.
 SEEDED_ROOM_NAMES = ["AI Agents & Automation", "Digital Art & Design"]
+
 MEMBER_EMAILS = ["nam@gmail.com", "linh@gmail.com"]
 
 
 def seed_messages(session: Session) -> int:
     rooms = session.exec(select(Room).where(Room.name.in_(SEEDED_ROOM_NAMES))).all()
+
     members = session.exec(select(User).where(User.email.in_(MEMBER_EMAILS))).all()
+
     if len(rooms) == 0 or len(members) < 2:
         return 0
 
     room_by_name = {room.name: room for room in rooms}
+
     if "AI Agents & Automation" not in room_by_name or "Digital Art & Design" not in room_by_name:
         return 0
 
@@ -57,6 +61,7 @@ def seed_messages(session: Session) -> int:
     ]
 
     inserted = 0
+
     for data in messages:
         existing = session.exec(
             select(Message).where(
@@ -64,9 +69,13 @@ def seed_messages(session: Session) -> int:
                 Message.text == data["text"],
             )
         ).first()
+
         if existing is None:
             session.add(Message(**data))
+
             inserted += 1
+
     if inserted > 0:
         session.commit()
+
     return inserted

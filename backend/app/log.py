@@ -44,24 +44,29 @@ CONSOLE_COLORS = {
 
 def resolve_log_config(name: str) -> tuple[str, str]:
     default = ("app.log", "APP")
+
     for prefix, config in LOG_FILE_MAP.items():
         if name == prefix or name.startswith(prefix + "."):
             return config
+
     return default
 
 
 class LogTypeFilter(logging.Filter):
     def __init__(self, log_type: str) -> None:
         super().__init__()
+
         self.log_type = log_type
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.log_type = self.log_type
+
         return True
 
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
+
     sys.stderr.reconfigure(encoding="utf-8")
 except Exception:
     pass
@@ -75,35 +80,46 @@ def get_logger(
     backup_count: int = 5,
 ) -> logging.Logger:
     logger = logging.getLogger(name)
+
     if logger.handlers:
         return logger
 
     log_path, log_type = resolve_log_config(name)
+
     log_path = log_file or str(BASE_LOG_DIR / log_path)
+
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
     console_formatter = colorlog.ColoredFormatter(
         fmt="%(log_color)s%(levelname)s%(reset)s:     [%(log_type)s] %(message)s - FILE: %(name)s - TIME: %(asctime)s",
         log_colors=CONSOLE_COLORS,
     )
+
     console_handler = logging.StreamHandler(sys.stdout)
+
     console_handler.setFormatter(console_formatter)
 
     file_handler = RotatingFileHandler(
         log_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
     )
+
     file_handler.setFormatter(logging.Formatter(LOGGING_FORMATTER))
 
     logger.addHandler(console_handler)
+
     logger.addHandler(file_handler)
 
     log_type_filter = LogTypeFilter(log_type)
+
     logger.addFilter(log_type_filter)
 
     effective_level = level or settings.log_level.upper()
+
     if effective_level not in DEBUG_LEVELS:
         logger.warning("Invalid logging level %s. Setting logging level to DEBUG.", effective_level)
+
         effective_level = "DEBUG"
+
     logger.setLevel(effective_level)
 
     return logger
@@ -111,6 +127,7 @@ def get_logger(
 
 def db_log(table: str, operation: str, detail: str) -> None:
     logger = get_logger("app.services", level="INFO")
+
     logger.info("DB %s | table=%s | %s", operation, table, detail)
 
 
@@ -120,4 +137,5 @@ def _js(obj) -> str:
 
 def log_call(name: str, params: dict, results):
     logger = get_logger("app.ai", level="INFO")
+
     logger.info("Function: %s\nParameters:\n%s\nResults:\n%s", name, _js(params), _js(results))

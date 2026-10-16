@@ -22,6 +22,7 @@ def score_fluency(
     low = (whisper_text or "").lower()
 
     hes = sum(low.count(x) for x in [" uh ", " um ", " er ", " ah "])
+
     # repetition: từ lặp liền nhau
     toks = tok_words(whisper_text)
 
@@ -30,7 +31,8 @@ def score_fluency(
     phones = sum(len(w) for w in toks)
 
     art = phones / max(0.1, duration_s - pause_dur)
-    # rubric 0-100, band rong: cham that (<50) hoac ban qua nhanh moi tru nang
+
+    # rubric 0-100, band rộng: chấm thật (<50) hoặc bản quá nhanh mới trừ nặng
     s = 100.0
 
     if 90 <= wpm <= 200:
@@ -60,12 +62,14 @@ def score_completeness(
 ) -> Dict:
     if mode == "read_aloud" and original:
         return score_completeness_read_aloud(original, corrected, mode)
+
     details = word_details or []
 
     total = len(details)
 
     if not total:
         return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 0.0}
+
     missing = [
         str(d.get("word", ""))
         for d in details
@@ -80,6 +84,7 @@ def score_completeness(
 def score_completeness_read_aloud(original: Optional[str], corrected: str, mode: str) -> Dict:
     if not original:
         return {"mode": mode, "missing_words": [], "extra_words": [], "wer_vs_original": None, "score": 100.0}
+
     a, b = tok_words(original), tok_words(corrected)
 
     sa, sb = set(a), set(b)
@@ -87,6 +92,7 @@ def score_completeness_read_aloud(original: Optional[str], corrected: str, mode:
     missing = [w for w in a if w not in sb]
 
     extra = [w for w in b if w not in sa]
+
     # WER đơn giản
     sm = difflib.SequenceMatcher(None, a, b)
 
@@ -102,30 +108,39 @@ def calculate_overall(sounds: float, stress: float, fluency: float, completeness
     return round(0.5*sounds + 0.25*stress + 0.15*fluency + 0.10*completeness, 1)
 
 
-# Nguong cham ngu dieu rule-based (don vi Hz, tru diem theo thang 0-100).
+# Ngưỡng chấm ngữ điệu rule-based (đơn vị Hz, trừ điểm theo thang 0-100).
 INTON_MIN_VOICED = 0.1
+
 INTON_MONOTONE_STD = 15.0
+
 INTON_FLAT_STD = 25.0
+
 INTON_NARROW_RANGE = 20.0
+
 INTON_MED_RANGE = 40.0
+
 INTON_RISE_SLOPE = 5.0
+
 INTON_STMT_MAX_SLOPE = 15.0
+
 INTON_PEN_MONOTONE = 30.0
+
 INTON_PEN_NARROW = 20.0
+
 INTON_PEN_MED = 10.0
+
 INTON_PEN_SLOPE = 15.0
 
 
+# Chấm ngữ điệu rule-based, KHÔNG so giọng mẫu (giọng AI không chuẩn
+# bằng giọng thật) nên chỉ dùng số liệu F0 có sẵn + dấu câu.
+# Rubric 0-100: trừ khi đều-đều (monotone), dải cao độ hẹp, hoặc
+# hướng cuối câu sai loại câu (hỏi phải lên, kể không vọt).
+# Điểm này chỉ đưa vào report cho LLM đọc, KHÔNG hiện UI,
+# KHÔNG cộng vào overall (giữ nguyên trọng số cũ).
 def score_intonation(f0: Dict, text: str = "") -> Dict:
-    """Chấm ngữ điệu rule-based, KHÔNG so giọng mẫu (giọng AI không chuẩn
-    bằng giọng thật) nên chỉ dùng số liệu F0 có sẵn + dấu câu.
-
-    Rubric 0-100: trừ khi đều-đều (monotone), dải cao độ hẹp, hoặc
-    hướng cuối câu sai loại câu (hỏi phải lên, kể không vọt).
-    Điểm này chỉ đưa vào report cho LLM đọc, KHÔNG hiện UI,
-    KHÔNG cộng vào overall (giữ nguyên trọng số cũ).
-    """
     voiced = float(f0.get("voiced_ratio") or 0.0)
+
     median = float(f0.get("median_f0") or 0.0)
 
     if voiced < INTON_MIN_VOICED or median <= 0.0:
@@ -135,30 +150,40 @@ def score_intonation(f0: Dict, text: str = "") -> Dict:
                 "note": "không đủ tín hiệu giọng để chấm ngữ điệu"}
 
     std = float(f0.get("std_f0") or 0.0)
+
     prange = float(f0.get("range_f0") or 0.0)
+
     slope = float(f0.get("final_slope") or 0.0)
+
     monotone = std < INTON_MONOTONE_STD and voiced > INTON_MIN_VOICED
 
     tail = (text or "").strip()
+
     if tail.endswith("?"):
         sentence_type = "question"
+
         slope_ok = slope > INTON_RISE_SLOPE
     elif tail.endswith("!"):
         sentence_type = "exclaim"
+
         slope_ok = abs(slope) > INTON_RISE_SLOPE
     else:
         sentence_type = "statement"
+
         slope_ok = slope < INTON_STMT_MAX_SLOPE
 
     s = 100.0
+
     if monotone:
         s -= INTON_PEN_MONOTONE
     elif std < INTON_FLAT_STD:
         s -= INTON_PEN_MED
+
     if prange < INTON_NARROW_RANGE:
         s -= INTON_PEN_NARROW
     elif prange < INTON_MED_RANGE:
         s -= INTON_PEN_MED
+
     if not slope_ok:
         s -= INTON_PEN_SLOPE
 

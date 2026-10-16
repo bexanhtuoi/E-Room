@@ -32,33 +32,44 @@ def mark_room_activity(room_id: int) -> None:
 def format_room_message(db: Session, message, cache: dict) -> str:
     if message.role == MessageRole.AI:
         return f"AI [chat]: {message.text}"
+
     if message.user_id not in cache:
         cache[message.user_id] = (
             user_crud.get_one(db, id=message.user_id).full_name if message.user_id else "Someone"
         ) or f"User {message.user_id}"
+
     try:
         source = (json.loads(message.meta_data or "{}") or {}).get("source", "")
     except (TypeError, ValueError):
         source = ""
+
     channel = "voice" if source == "speech_to_text" else "chat"
+
     return f"{cache[message.user_id]} [{channel}]: {message.text}"
 
 
 def recent_room_context(db: Session, room_id: int, limit: int) -> list:
     recent = message_crud.get_many(db, room_id=room_id, order_by="id", desc=True, limit=limit)
+
     cache: dict = {}
+
     return [format_room_message(db, message, cache) for message in reversed(list(recent))]
 
 
 def clear_stale_worker_locks() -> int:
     cleared = 0
+
     for pattern in ("room:*:transcriber_running", "room:*:observer_running"):
         stale = scan_keys(pattern)
+
         if stale:
             delete(*stale)
+
             cleared += len(stale)
+
     if cleared:
         log.info("Cleared stale worker locks | count=%s", cleared)
+
     return cleared
 
 
@@ -82,6 +93,7 @@ def publish_task(lock_key: str, task_id: str, task_fn, args: list, queue: str) -
         task_fn.apply_async(args=args, task_id=task_id, queue=queue)
     except Exception:
         release_worker_lock(lock_key, task_id)
+
         raise
 
     return True

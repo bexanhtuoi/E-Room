@@ -1,4 +1,4 @@
-﻿import httpx
+import httpx
 
 from app.config import settings
 from app.log import get_logger
@@ -19,29 +19,39 @@ def pick_docs(documents: list[dict], results: list, top_k: int) -> list[dict]:
 
     for r in results:
         idx = r.get("index")
+
         score = r.get("relevance_score", 0)
+
         if idx is not None and idx < len(documents):
             doc = dict(documents[idx])
+
             doc["rerank_score"] = score
+
             reranked.append(doc)
 
     reranked.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+
     return reranked[:top_k]
 
 
 async def post_rerank(client, base_url: str, payload: dict, headers: dict):
     try:
         resp = await client.post(v1_url(base_url), json=payload, headers=headers)
+
         if resp.status_code == 404:
             resp = await client.post(legacy_url(base_url), json=payload, headers=headers)
+
         resp.raise_for_status()
+
         return resp.json()
     except httpx.HTTPStatusError as e:
         body = ""
+
         try:
             body = str(e.response.json().get("error", {}).get("message", ""))[:200]
         except Exception:
             body = str(e.response.content[:200])
+
         log.error("Reranker HTTP %d: %s", e.response.status_code, body)
     except httpx.TimeoutException:
         log.error("Reranker timeout after 300s")
@@ -60,15 +70,22 @@ async def rerank_documents(
         return documents
 
     base_url = settings.reranker_base_url or settings.llm_base_url
+
     api_key = settings.reranker_api_key or settings.llm_api_key
+
     model = settings.reranker_model
+
     if not model:
         log.warning("No reranker model configured, returning raw docs")
+
         return documents[:top_k]
 
     texts = [d["text"] for d in documents]
+
     total_chars = sum(len(t) for t in texts)
+
     payload = {"model": model, "query": query, "documents": texts, "top_k": top_k}
+
     headers = {"Authorization": f"Bearer {api_key}"}
 
     log.info(
@@ -82,11 +99,16 @@ async def rerank_documents(
         data = await post_rerank(client, base_url, payload, headers)
 
     results = data.get("results", [])
+
     if not results:
         log.warning("Reranker returned empty results, fallback to raw order")
+
         return documents[:top_k]
 
     reranked = pick_docs(documents, results, top_k)
+
     top_scores = [f"{d.get('rerank_score', 0):.4f}" for d in reranked[:5]]
+
     log.info("Rerank OK: %d results, top scores=[%s]", len(results), ", ".join(top_scores))
+
     return reranked

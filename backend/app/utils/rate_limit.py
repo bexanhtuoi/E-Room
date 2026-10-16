@@ -29,6 +29,7 @@ def check_rate_limit(request: Request, scope: str, limit: int, window_seconds: i
 
     try:
         client = get_redis_client()
+
         attempts = client.incr(key)
 
         if attempts == 1:

@@ -72,14 +72,18 @@ def aresilient(
 
             while True:
                 attempt += 1
+
                 seen_any = False
+
                 published = False
 
                 try:
                     async for event in func(*args, **kwargs):
                         seen_any = True
+
                         if is_content_event(event):
                             published = True
+
                         yield event
 
                     if published or seen_any:

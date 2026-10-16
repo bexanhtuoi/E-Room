@@ -22,6 +22,7 @@ async def google_callback(code: str, db: Session = Depends(get_session)):
         return RedirectResponse(google_auth_service.frontend_redirect_url(ok=False))
 
     response = RedirectResponse(google_auth_service.frontend_redirect_url(ok=True))
+
     set_auth_cookie(response, token, expires)
 
     return response

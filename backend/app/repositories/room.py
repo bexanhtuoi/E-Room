@@ -25,6 +25,7 @@ class RoomCrud(CRUDRepository):
             session_crud.delete(db, db_obj=db_session)
 
         room_docs = document_crud.get_many(db, room_id=room_id)
+
         for doc in room_docs:
             document_crud.delete(db, db_obj=doc)
 
@@ -33,7 +34,9 @@ class RoomCrud(CRUDRepository):
                 drop_doc_storage(doc)
 
         redis_delete(room_presence_key(room_id))
+
         room = self.get_one(db, id=room_id)
+
         if room is not None:
             self.delete(db, db_obj=room)
 

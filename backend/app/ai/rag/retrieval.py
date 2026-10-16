@@ -24,9 +24,11 @@ def get_embed_model():
 
 async def retrieve_relevant_documents(query: str, k: int = 10, tag: str | None = None, reranking: bool = False, rerank_k: int = 5) -> list[dict]:
     client = get_store()
+
     embed_model = get_embed_model()
 
     k = min(max(k, 1), 10)
+
     reranking = False
 
     query_dense, query_sparse = await asyncio.gather(
@@ -35,6 +37,7 @@ async def retrieve_relevant_documents(query: str, k: int = 10, tag: str | None =
     )
 
     qfilter = None
+
     if tag is not None:
         qfilter = QdrantFilter(must=[FieldCondition(key="tag", match=MatchValue(value=tag))])
 

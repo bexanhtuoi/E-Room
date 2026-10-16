@@ -16,6 +16,7 @@ __all__ = [
 ]
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
+
 USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
@@ -48,6 +49,7 @@ class GoogleAuthService(ServiceBase):
 
     def frontend_redirect_url(self, ok: bool) -> str:
         base = settings.frontend_url.rstrip("/")
+
         suffix = "/rooms?google=ok" if ok else "/login?google=error"
 
         return f"{base}{suffix}"
@@ -128,12 +130,14 @@ class GoogleAuthService(ServiceBase):
         self.ensure_google_configured()
 
         info = await self.fetch_google_profile(code)
+
         user = self.find_or_create_google_user(db, info or {})
 
         if user is None:
             return None, None
 
         expires = timedelta(minutes=settings.access_token_expires_minutes)
+
         token = create_access_token(data=user.id, expires_delta=expires)
 
         return token, expires

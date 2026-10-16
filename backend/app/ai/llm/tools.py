@@ -14,14 +14,17 @@ from app.services.session import session_service
 from app.shared.keys import room_tag
 
 MAX_TOOL_LINES = 100
+
 MAX_SEARCH_HITS = 20
 
 
 def load_lines(session_id: int) -> list:
     with Session(engine) as db:
         db_session = session_crud.get_one(db, id=session_id)
+
         if not db_session:
             return []
+
         return session_service.session_lines(db, db_session)
 
 
@@ -53,7 +56,9 @@ async def retrieval_documents(query: str, k: int = 10, tag: str | None = None, r
 
 async def run_retrieval(query: Any, k: int, tag: Any, reranking: bool, rerank_k: int) -> list[dict]:
     query = str(query) if not isinstance(query, str) else query
+
     tag = str(tag) if tag and not isinstance(tag, str) else tag
+
     tag = None if tag in ("None", "none", "", "null", "nan") else tag
 
     try:
@@ -64,6 +69,7 @@ async def run_retrieval(query: Any, k: int, tag: Any, reranking: bool, rerank_k:
         results = []
 
     log_call("retrieval_documents", {"query": query, "k": k, "tag": tag, "reranking": reranking, "rerank_k": rerank_k}, results)
+
     return results
 
 
@@ -109,6 +115,7 @@ async def web_search(query: str, k: int = 10) -> list[dict]:
         results = [{"title": "Search failed", "url": "", "content": f"Web search error: {e}"}]
 
     log_call("web_search", {"query": query}, results)
+
     return results
 
 
@@ -127,11 +134,14 @@ Returns: total line count, first index (always 0), last index, and the speaker l
 """)
 def transcript_info(session_id: int) -> str:
     all_lines = load_lines(session_id)
+
     if not all_lines:
         return "This session has no transcript lines."
 
     total = len(all_lines)
+
     speakers = sorted({str(line.get("speaker") or "?") for line in all_lines})
+
     return (
         f"This session transcript has {total} lines, "
         f"numbered {0}-{total - 1} (0 = oldest, {total - 1} = newest). "
@@ -150,12 +160,16 @@ Args:
 """)
 def get_more_messages(session_id: int, start_index: int = 0, count: int = 50) -> str:
     all_lines = load_lines(session_id)
+
     start = max(0, int(start_index))
+
     end = min(len(all_lines), start + max(1, min(int(count), MAX_TOOL_LINES)))
+
     if start >= len(all_lines):
         return "No more lines: start_index is past the end of the transcript."
 
     chunk = all_lines[start:end]
+
     return f"Lines {start}-{end - 1} of {len(all_lines)}:\n" + format_lines(chunk)
 
 
@@ -169,19 +183,26 @@ Args:
 """)
 def search_transcript(session_id: int, keyword: str = "") -> str:
     all_lines = load_lines(session_id)
+
     needle = str(keyword or "").strip().lower()
+
     if len(needle) < 2:
         return "Give a keyword of at least 2 characters."
 
     hits = [i for i, line in enumerate(all_lines) if needle in str(line.get("text", "")).lower()]
+
     if not hits:
         return f"No line in this session mentions '{keyword.strip()}'."
 
     shown = hits[:MAX_SEARCH_HITS]
+
     out = [f"Found {len(hits)} line(s) mentioning '{keyword.strip()}':"]
+
     for i in shown:
         line = all_lines[i]
+
         out.append(f"[{i}] {line.get('speaker', '?')}: {line.get('text', '')}")
+
     if len(hits) > len(shown):
         out.append(f"...and {len(hits) - len(shown)} more. Use get_more_messages around those indexes.")
 

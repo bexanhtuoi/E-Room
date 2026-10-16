@@ -49,6 +49,7 @@ def get_object(object_name: str) -> bytes:
         return response.read()
     finally:
         response.close()
+
         response.release_conn()
 
 
@@ -58,17 +59,23 @@ def delete_object(object_name: str) -> None:
 
 def get_url(object_name: str) -> str:
     scheme = "https" if settings.minio_secure else "http"
+
     return f"{scheme}://{settings.minio_endpoint}/{settings.minio_bucket}/{object_name}"
 
 
 def put_avatar(file_bytes: bytes, user_id: int | str) -> str:
     object_name = f"avatars/{user_id}"
+
     put_object(object_name, file_bytes)
+
     return object_name
 
 
 def put_document(file_bytes: bytes, filename: str, room_id: int | str | None = None) -> str:
     scope = f"room_{room_id}" if room_id is not None else "general"
+
     object_name = f"documents/{scope}/{uuid4().hex}_{filename}"
+
     put_object(object_name, file_bytes)
+
     return object_name

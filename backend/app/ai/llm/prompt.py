@@ -1,10 +1,11 @@
-﻿import os
+import os
 from functools import lru_cache
 from typing import List
 
 from app.models import DocumentKind
 
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Thư mục prompts/*.md nằm ở app/ai/prompts (cùng cấp các subpackage).
 PROMPTS_DIR = os.path.join(os.path.dirname(AGENT_DIR), "prompts")
 
@@ -32,14 +33,17 @@ def get_main_prompt() -> str:
 
 def room_system_prompt(room) -> str:
     prompt = (getattr(room, "system_prompt", None) or "").strip() if room is not None else ""
+
     return prompt or get_main_prompt()
 
 
 def room_tag_rule(room, documents: List) -> str:
     if room is None:
         return ""
+
     if not any(getattr(doc, "kind", None) == DocumentKind.FILE for doc in documents or []):
         return ""
+
     return (
         "This room has a knowledge base. When you need facts, always call "
         "retrieval_documents before answering from general knowledge. "

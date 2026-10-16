@@ -28,6 +28,7 @@ class NotificationService(ServiceBase):
 
     def create_notification(self, db: Session, user, notification_in):
         obj_in_data = notification_in.model_dump()
+
         obj_in_data["user_id"] = user.id
 
         return notification_crud.create(db, obj_in=obj_in_data)

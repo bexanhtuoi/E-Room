@@ -9,7 +9,7 @@ from app.utils.datetime_utils import now_utc
 
 
 class RoomStatus(StrEnum):
-    # 3 trang thai: live (co nguoi) - open (trong) - ended (chet)
+    # 3 trạng thái: live (có người) - open (trống) - ended (kết thúc)
     IDLE = "idle"
     ACTIVE = "active"
     ENDED = "ended"

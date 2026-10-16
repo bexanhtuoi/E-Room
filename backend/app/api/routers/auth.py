@@ -45,6 +45,7 @@ def login(
     _, token, expires = auth_service.login_user(db, form_data.username, form_data.password)
 
     response = JSONResponse(content={"message": "Login successful"})
+
     set_auth_cookie(response, token, expires)
 
     return response
@@ -53,6 +54,7 @@ def login(
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout() -> JSONResponse:
     response = JSONResponse(content={"message": "Logout successful"})
+
     response.delete_cookie(key="access_token")
 
     return response

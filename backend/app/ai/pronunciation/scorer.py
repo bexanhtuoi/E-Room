@@ -293,6 +293,7 @@ def heuristic_score(
     words_count: int = 0,
 ) -> Dict[str, Any]:
     conf_part = max(0.0, min(1.0, confidence)) * 60.0
+
     # avg_logprob thường nằm [-2, 0]; map về 0-25 điểm
     logprob_norm = max(0.0, min(1.0, (avg_logprob + 2.0) / 2.0))
 
@@ -300,6 +301,7 @@ def heuristic_score(
 
     if duration > 0 and words_count > 0:
         wpm = (words_count / duration) * 60.0
+
         # 90-170 wpm là vùng tự nhiên cho speaking practice
         if 90 <= wpm <= 170:
             fluency = 15.0
@@ -307,6 +309,7 @@ def heuristic_score(
             fluency = 10.0
         else:
             fluency = 5.0
+
     score = round(conf_part + logprob_norm * 25.0 + fluency, 1)
 
     return {
@@ -415,10 +418,12 @@ def score_via_pronun_service(
         raise NotImplementedError(
             "PRONUN_BASE_URL chưa cấu hình — chấm local hoặc heuristic."
         )
+
     audio_bytes = Path(audio_path).read_bytes()
 
     if len(audio_bytes) > 100 * 1024 * 1024:
         raise ValueError("Audio > 100MB.")
+
     payload = {
         "whisper_raw": "",
         "user_corrected": reference_text,
@@ -436,8 +441,10 @@ def score_via_pronun_service(
         resp.raise_for_status()
 
         report = resp.json()
+
     if "error" in report and "scores" not in report:
         raise RuntimeError(f"pronun scorer: {report.get('error')}")
+
     return report_to_hook(report, "pronun-v2")
 
 
@@ -453,6 +460,7 @@ def score_with_wav2vec2(
         return score_local(audio_path, reference_text, language, accent, word_spans)
     except Exception as error:
         log.warning("local scoring failed (%s), thử pronun service", error)
+
     return score_via_pronun_service(audio_path, reference_text, language)
 
 
@@ -493,6 +501,7 @@ def score_pronunciation(
                     quality = check_audio_quality(probe_wav, probe_sr)
                 except Exception:
                     quality = {"ok": True, "peak": 0.0, "rms": 0.0, "duration_s": 0.0, "hint": ""}
+
                 if not quality["ok"]:
                     log.info(
                         "scoring skipped, audio too quiet | peak=%s rms=%s path=%s",
@@ -504,9 +513,11 @@ def score_pronunciation(
                     result["audio_quality"] = quality
 
                     return result
+
                 spans = word_spans if word_spans is not None else words
 
                 return score_with_wav2vec2(path, reference_text, language, accent, spans)
+
             log.warning("scoring thiếu audio (file không tồn tại: %s) — fallback heuristic", audio_path)
 
             return heuristic("no_audio")
@@ -518,8 +529,10 @@ def score_pronunciation(
             log.warning("local scoring failed, fallback heuristic | err=%s", error)
 
             return heuristic("scorer_failed")
+
     if prefer_wav2vec and reference_text.strip():
         log.warning("scoring thiếu audio (audio_path=%r) — fallback heuristic", audio_path)
 
         return heuristic("no_audio")
+
     return heuristic("heuristic")

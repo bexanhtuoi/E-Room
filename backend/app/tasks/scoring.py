@@ -73,11 +73,14 @@ def score_room_utterance(
         return None
 
     entries = read_user_log(room_id, user_id)
+
     entry = next((e for e in entries if e.get("message_id") == message_id), None)
+
     if entry is None:
         return None
 
     reference = (entry.get("corrected_text") or entry.get("text") or "").strip()
+
     if not reference:
         return None
 
@@ -89,33 +92,47 @@ def score_room_utterance(
     import os
 
     audio_path = None
+
     attempt_id: Any = None
+
     temp_paths: list = []
+
     if attempt and (attempt.get("raw_path") is not None or attempt.get("raw_object")):
         by_id = {e.get("message_id"): e for e in entries}
+
         parts = [
             (by_id[mid].get("corrected_text") or by_id[mid].get("text", ""))
             for mid in attempt.get("message_ids", [])
             if mid in by_id and (by_id[mid].get("corrected_text") or by_id[mid].get("text", "")).strip()
         ]
+
         if parts:
             if attempt.get("raw_path") is not None:
                 audio_path = attempt["raw_path"]
             else:
                 raw_bytes = fetch_audio_bytes(room_id, attempt.get("raw_object"))
+
                 if raw_bytes is not None:
                     audio_path = materialize_temp_wav(raw_bytes)
+
                     temp_paths.append(audio_path)
+
             if audio_path is not None:
                 reference = " ".join(parts)
+
                 attempt_id = attempt.get("attempt_id")
+
     if audio_path is None:
         audio_file = entry.get("audio_file")
+
         audio_path = resolve_audio_path(room_id, audio_file)
+
         if audio_path is None and is_s3_ref(audio_file):
             raw_bytes = fetch_audio_bytes(room_id, audio_file)
+
             if raw_bytes is not None:
                 audio_path = materialize_temp_wav(raw_bytes)
+
                 temp_paths.append(audio_path)
 
     try:
@@ -134,7 +151,9 @@ def score_room_utterance(
                 os.unlink(temp_path)
             except OSError:
                 pass
+
     score["scored_text"] = reference
+
     if attempt_id is not None:
         score["attempt_id"] = attempt_id
 
@@ -171,6 +190,7 @@ def score_single_utterance(
             return score_room_utterance(db, room_id, user_id, message_id, session_id)
         except Exception:
             log.exception("Single scoring failed | room=%s msg=%s", room_id, message_id)
+
             return write_scorer_failed_marker(room_id, user_id, message_id)
 
 
@@ -180,21 +200,29 @@ def write_scorer_failed_marker(room_id: int, user_id: Any, message_id: Any) -> O
         from app.ai.stt.speech_log import attach_pronunciation, read_user_log
 
         entries = read_user_log(room_id, user_id)
+
         entry = next((e for e in entries if e.get("message_id") == message_id), None)
+
         if entry is None or entry.get("pronunciation") is not None:
             return None
+
         words = entry.get("words") or []
+
         marker = heuristic_score(
             confidence=entry.get("confidence", 1.0),
             avg_logprob=entry.get("avg_logprob", 0.0),
             duration=entry.get("duration", 0.0),
             words_count=len(words),
         )
+
         marker["reason"] = "scorer_failed"
+
         marker["scored_text"] = (entry.get("corrected_text") or entry.get("text") or "").strip()
+
         return attach_pronunciation(room_id, user_id, message_id, marker)
     except Exception:
         log.exception("Failed to write scorer_failed marker | room=%s msg=%s", room_id, message_id)
+
         return None
 
 
@@ -206,9 +234,11 @@ def score_room_utterances(room_id: int) -> int:
         raw_uids = list_room_users(room_id)
     except Exception as error:
         log.warning("Room scoring skipped, no speech logs | room_id=%s error=%s", room_id, error)
+
         return 0
 
     scored = 0
+
     with Session(engine) as db:
         if room_crud.get_one(db, id=room_id) is None:
             return 0
@@ -220,16 +250,19 @@ def score_room_utterances(room_id: int) -> int:
                 continue
 
             entries = read_user_log(room_id, raw_uid)
+
             pending = [
                 e for e in entries
                 if e.get("message_id") is not None
                 and not e.get("pronunciation")
                 and (e.get("corrected_text") or e.get("text") or "").strip()
             ]
+
             if not pending:
                 continue
 
             latest = session_crud.get_latest(db, user_id=user_id, room_id=room_id)
+
             session_id = latest.id if latest else None
 
             for entry in pending:
@@ -237,13 +270,17 @@ def score_room_utterances(room_id: int) -> int:
                     updated = score_room_utterance(db, room_id, user_id, entry.get("message_id"), session_id)
                 except SoftTimeLimitExceeded:
                     log.warning("Room batch stopped at soft limit | room_id=%s scored=%s", room_id, scored)
+
                     return scored
                 except Exception:
                     log.exception("Batch scoring failed | room=%s msg=%s", room_id, entry.get("message_id"))
+
                     continue
+
                 if updated is not None:
                     scored += 1
 
     if scored:
         log.info("Room scored after call | room_id=%s utterances=%s", room_id, scored)
+
     return scored

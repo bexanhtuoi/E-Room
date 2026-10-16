@@ -6,34 +6,47 @@ from pydantic import BaseModel, field_validator
 from app.models import RoomStatus
 
 MAX_TOPICS_PER_ROOM = 5
+
 MAX_SEATS_PER_ROOM = 6
 
 
 def normalize_topic_name(value: str) -> str:
     words = str(value or "").strip().split()
+
     normalized = [word if not word.islower() else word[:1].upper() + word[1:] for word in words]
+
     return " ".join(normalized)
 
 
 def dedupe_str_list(values, clean, limit: int = 0) -> List[str]:
     seen = set()
+
     result = []
+
     for item in values or []:
         name = clean(item)
+
         if not name:
             continue
+
         key = name.lower()
+
         if key in seen:
             continue
+
         seen.add(key)
+
         result.append(name)
+
     return result[:limit] if limit else result
 
 
 def normalize_topic_list(values: Optional[List[str]]) -> List[str]:
     result = dedupe_str_list(values, normalize_topic_name)
+
     if len(result) > MAX_TOPICS_PER_ROOM:
         raise ValueError(f"A room can have at most {MAX_TOPICS_PER_ROOM} topics")
+
     return result
 
 
@@ -54,7 +67,9 @@ def normalize_language(value) -> str:
             return "en"
     except Exception:
         pass
+
     text = str(value or "").strip().lower()
+
     return text if text in SPOKEN_LANGUAGES else "en"
 
 
@@ -63,6 +78,7 @@ MAX_ROOM_EMAILS = 50
 
 def normalize_email(item) -> str:
     email = str(item or "").strip().lower()
+
     return email if "@" in email else ""
 
 
@@ -81,13 +97,16 @@ def emails_from_json(raw) -> List[str]:
 
     if isinstance(raw, list):
         return normalize_email_list(raw)
+
     if isinstance(raw, str):
         try:
             parsed = json.loads(raw)
         except (ValueError, TypeError):
             return []
+
         if isinstance(parsed, list):
             return normalize_email_list(parsed)
+
     return []
 
 
@@ -96,37 +115,47 @@ def topics_from_json(raw) -> List[str]:
 
     if isinstance(raw, list):
         return normalize_topic_list(raw)
+
     if isinstance(raw, str):
         try:
             parsed = json.loads(raw)
         except (ValueError, TypeError):
             return []
+
         if isinstance(parsed, list):
             return [str(item) for item in parsed if str(item).strip()]
+
     return []
 
 
 def clean_name(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
+
     text = value.strip()
+
     if not text:
         raise ValueError("Room name must not be empty")
+
     return text[:120]
 
 
 def clean_text(value: Optional[str], limit: int) -> Optional[str]:
     if value is None:
         return None
+
     text = value.strip()
+
     return text[:limit] if text else None
 
 
 def clean_seats(value: Optional[int]) -> Optional[int]:
     if value is None:
         return None
+
     if value < 1 or value > MAX_SEATS_PER_ROOM:
         raise ValueError(f"Seats must be between 1 and {MAX_SEATS_PER_ROOM}")
+
     return value
 
 
@@ -235,6 +264,7 @@ class RoomUpdateSchema(BaseModel):
     def validate_update_language(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
+
         return normalize_language(value)
 
 

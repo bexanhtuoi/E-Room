@@ -32,11 +32,13 @@ def live_ids(room: rtc.Room) -> set:
 async def live_humans(room: rtc.Room, room_id: int) -> bool:
     for _ in range(3):
         await asyncio.sleep(2)
+
         if live_ids(room):
             return True
 
     if scard(room_presence_key(room_id)) > 0:
         delete(room_presence_key(room_id))
+
         log.info("Ghost presence cleared | room_id=%s", room_id)
 
     return False
@@ -49,8 +51,10 @@ def split_words(text: str) -> list[str]:
 def normalize_event(event: Any) -> tuple[str, str]:
     if isinstance(event, str):
         return "token", event
+
     if isinstance(event, dict):
         return event.get("kind", "token"), event.get("text", "")
+
     return "token", ""
 
 
@@ -75,6 +79,7 @@ async def publish_piece(
             "is_final": False,
         }
     )
+
     await room.local_participant.publish_data(payload, reliable=True)
 
 
@@ -85,12 +90,15 @@ async def stream_to_room(
     job_id: str = "",
 ) -> str:
     room = rtc.Room()
+
     stream_id = str(uuid4())
+
     token = create_token(
         room_name=str(room_id),
         user_id=identity or AI_ASSISTANT_IDENTITY,
         user_name=AI_PARTICIPANT_NAME,
     )
+
     full_text = ""
 
     await room.connect(settings.livekit_url, token)
@@ -98,17 +106,21 @@ async def stream_to_room(
     try:
         async for event in events:
             kind, text = normalize_event(event)
+
             if not text:
                 continue
 
             if kind == "thinking":
                 for piece in split_words(text):
                     await publish_piece(room, stream_id, room_id, piece, thinking=True, job_id=job_id)
+
                 continue
 
             full_text += text
+
             for piece in split_words(text):
                 await publish_piece(room, stream_id, room_id, piece, job_id=job_id)
+
                 await asyncio.sleep(WORD_PACE_SECONDS)
 
         payload = json.dumps(
@@ -123,7 +135,9 @@ async def stream_to_room(
                 "is_final": True,
             }
         )
+
         await room.local_participant.publish_data(payload, reliable=True)
+
         return full_text
     finally:
         await room.disconnect()

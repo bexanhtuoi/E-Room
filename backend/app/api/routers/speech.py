@@ -103,6 +103,7 @@ def feedback_utterance(
     _: str = Depends(require_auth),
 ) -> SpeechUtterance:
     opts = body or SpeechFeedbackRequest()
+
     result = speech_service.feedback_utterance(
         db,
         request.state.current_user,

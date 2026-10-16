@@ -37,7 +37,9 @@ from app.utils.upload import media_type_for, read_upload
 log = get_logger("app.services.room")
 
 PRESENCE_TTL_SECONDS = 6 * 3600
+
 MAX_ROOM_FILE_BYTES = 10 * 1024 * 1024
+
 ROOM_FILE_TYPES = {"pdf", "md", "txt"}
 
 __all__ = [
@@ -52,6 +54,7 @@ class RoomService(ServiceBase):
             return set(smembers(room_presence_key(room_id)))
         except RedisError as error:
             log.warning("Presence read failed | room_id=%s error=%s", room_id, error)
+
             return set()
 
 
@@ -60,13 +63,16 @@ class RoomService(ServiceBase):
             return scard(room_presence_key(room_id))
         except RedisError as error:
             log.warning("Presence count failed | room_id=%s error=%s", room_id, error)
+
             return None
 
 
     def presence_add(self, room_id: int, identity: str) -> None:
         try:
             key = room_presence_key(room_id)
+
             sadd(key, str(identity))
+
             expire(key, PRESENCE_TTL_SECONDS)
         except RedisError as error:
             log.warning("Presence add failed | room_id=%s error=%s", room_id, error)
@@ -75,10 +81,13 @@ class RoomService(ServiceBase):
     def presence_remove(self, room_id: int, identity: str) -> Optional[int]:
         try:
             key = room_presence_key(room_id)
+
             srem(key, str(identity))
+
             return scard(key)
         except RedisError as error:
             log.warning("Presence remove failed | room_id=%s error=%s", room_id, error)
+
             return None
 
 
@@ -99,6 +108,7 @@ class RoomService(ServiceBase):
             return claim_seat(room_presence_key(room.id), str(identity), room.max_participants or 4, PRESENCE_TTL_SECONDS)
         except RedisError as error:
             log.warning("Seat claim skipped | room_id=%s error=%s", room.id, error)
+
             return True
 
 
@@ -129,6 +139,7 @@ class RoomService(ServiceBase):
 
     def get_host_room(self, db: Session, room_id: int, user) -> Room:
         room = self.get_room_or_404(db, room_id)
+
         ensure_owner(room.host_id, user)
 
         return room
@@ -139,11 +150,13 @@ class RoomService(ServiceBase):
             return [room for room in rooms if not room.is_private]
 
         result = []
+
         for room in rooms:
             try:
                 self.ensure_room_access(room, user)
             except AppException:
                 continue
+
             result.append(room)
 
         return result
@@ -167,11 +180,15 @@ class RoomService(ServiceBase):
             raise RoomNameExistsError()
 
         obj_in_data = room_in.model_dump()
+
         obj_in_data["host_id"] = user.id
+
         obj_in_data["topics"] = topics_to_json(obj_in_data.get("topics"))
+
         obj_in_data["allowed_emails"] = emails_to_json(obj_in_data.get("allowed_emails"))
 
         new_room = room_crud.create(db, obj_in=obj_in_data)
+
         self.notify_room_invites(db, new_room, emails_from_json(new_room.allowed_emails))
 
         return new_room
@@ -182,6 +199,7 @@ class RoomService(ServiceBase):
 
         if room.host_id:
             host = user_crud.get_one(db, id=room.host_id)
+
             host_name = (host.full_name if host else "") or ""
 
         emails = [email for email in emails or []]
@@ -190,6 +208,7 @@ class RoomService(ServiceBase):
             return 0
 
         invited_map = {user.email: user for user in user_crud.get_many(db, User.email.in_(emails))}
+
         invited_ids = [user.id for user in invited_map.values() if user.id != room.host_id]
 
         sent_ids = set()
@@ -200,6 +219,7 @@ class RoomService(ServiceBase):
                     sent_ids.add(notif.user_id)
 
         sent = 0
+
         for email in emails:
             invited = invited_map.get(email)
 
@@ -215,7 +235,9 @@ class RoomService(ServiceBase):
                     "notification_type": NotificationType.INVITE,
                 },
             )
+
             sent_ids.add(invited.id)
+
             sent += 1
 
         return sent
@@ -232,6 +254,7 @@ class RoomService(ServiceBase):
 
         if topic_query:
             scored = []
+
             for room in candidates:
                 haystack = " ".join(
                     [
@@ -240,8 +263,10 @@ class RoomService(ServiceBase):
                         room.topics or "",
                     ]
                 ).lower()
+
                 if topic_query in haystack:
                     scored.append(room)
+
             candidates = scored
 
         if not candidates:
@@ -254,6 +279,7 @@ class RoomService(ServiceBase):
 
     def update_room(self, db: Session, user, room_id: int, room_in) -> Room:
         room = self.get_room_or_404(db, room_id)
+
         ensure_owner(room.host_id, user)
 
         obj_in_data = room_in.model_dump(exclude_unset=True)
@@ -274,6 +300,7 @@ class RoomService(ServiceBase):
 
     def delete_room(self, db: Session, user, room_id: int) -> Room:
         room = self.get_room_or_404(db, room_id)
+
         ensure_owner(room.host_id, user)
 
         room_crud.delete_cascade(db, room_id)
@@ -300,6 +327,7 @@ class RoomService(ServiceBase):
         room = self.get_host_room(db, room_id, user)
 
         raw, suffix = await read_upload(file, ROOM_FILE_TYPES, MAX_ROOM_FILE_BYTES, "File")
+
         object_name = put_document(raw, file.filename or f"room-{room_id}.{suffix}", room_id=room.id)
 
         new_doc = document_crud.create(
@@ -363,6 +391,7 @@ class RoomService(ServiceBase):
             raise DocumentNotFoundError()
 
         document_crud.delete(db, db_obj=doc)
+
         drop_doc_storage(doc)
 
         return doc
@@ -370,6 +399,7 @@ class RoomService(ServiceBase):
 
     def get_room_token_data(self, db: Session, user, room_id: int) -> Dict[str, Any]:
         room = self.get_room_or_404(db, room_id)
+
         self.ensure_room_access(room, user)
 
         if self.room_is_full(room, user.id):
@@ -390,6 +420,7 @@ class RoomService(ServiceBase):
 
     def get_participants_data(self, db: Session, user, room_id: int) -> Dict[str, Any]:
         room = self.get_room_or_404(db, room_id)
+
         self.ensure_room_access(room, user)
 
         return self.participants_or_raise(room_id)
@@ -421,12 +452,14 @@ class RoomService(ServiceBase):
 
         if db_room is None:
             self.presence_add(room_id_int, participant_identity)
+
             return True
 
         if enforce_limit and not self.claim_room_seat(db_room, participant_identity):
             return False
 
         self.presence_add(room_id_int, participant_identity)
+
         mark_room_activity(room_id_int)
 
         if db_room.status != RoomStatus.ACTIVE:
@@ -436,6 +469,7 @@ class RoomService(ServiceBase):
 
         try:
             enqueue_room_observer(room_id_int)
+
             enqueue_room_transcriber(room_id_int)
         except Exception as error:
             log.warning("Room workers not enqueued | room_id=%s error=%s", room_id_int, error)
@@ -455,6 +489,7 @@ class RoomService(ServiceBase):
 
         if remaining is None:
             session_crud.close(db, room_id_int, coerce_user_id(participant_identity))
+
             return
 
         if remaining > 0:
@@ -497,6 +532,7 @@ class RoomService(ServiceBase):
 
     def join_room(self, db: Session, user, room_id: int) -> Dict[str, Any]:
         room = self.get_room_or_404(db, room_id)
+
         self.ensure_room_access(room, user)
 
         # Client gọi trực tiếp khi LiveKit onConnected — không phụ thuộc webhook

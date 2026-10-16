@@ -18,6 +18,7 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
     if not hashed_password:
         return False
+
     return pwd_context.verify(plain_password, hashed_password)
 
 
@@ -26,7 +27,9 @@ def create_access_token(data: Union[str, Any], expires_delta: Optional[timedelta
         expire = now_utc() + expires_delta
     else:
         expire = now_utc() + timedelta(minutes=settings.access_token_expires_minutes)
+
     to_encode = {"exp": expire, "sub": str(data), "type": "access"}
+
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
@@ -35,8 +38,10 @@ def decode_token(token: str) -> Optional[dict[str, Any]]:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except jwt.PyJWTError:
         return None
+
     if payload.get("type") != "access":
         return None
+
     return payload
 
 

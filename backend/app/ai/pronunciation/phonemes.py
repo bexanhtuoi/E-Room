@@ -29,14 +29,18 @@ def observe_phones_fallback(greedy_text: str, canonical_arpa: List[str]) -> List
     # map chữ cái đầu từ greedy sang ARPAbet tương ứng để so với canonical
     if not g:
         return []
+
     first = g.split()[0] if g.split() else g
 
     if first.startswith("S"):
         return ["S"]
+
     if first.startswith("F"):
         return ["F"]
+
     if first.startswith("TH"):
         return ["TH"]
+
     return [canonical_arpa[0] if canonical_arpa else "AH0"]
 
 
@@ -51,6 +55,7 @@ def score_word_sounds(w: Dict, greedy_text: str, accent: str, err_counter: Dict)
                   "start_s": w.get("start_s"), "end_s": w.get("end_s"),
                   "acoustic_confidence": w.get("avg_log_prob"),
                   "expected_ipa": get_pronunciation(word, accent)["ipa"]}
+
         return detail, [], [], []
 
     pron = get_pronunciation(word, accent)
@@ -161,6 +166,7 @@ def score_stress(
         if w.get("status", "scored") == "no_evidence":
             details.append({"word": w.get("word", ""), "expected_stress": None,
                             "detected_stress": None, "correct": None, "reason": "no_evidence"})
+
             continue
 
         pron = get_pronunciation(w.get("word", ""), accent)
@@ -171,6 +177,7 @@ def score_stress(
             details.append({"word": w.get("word", ""), "expected_stress": pron["stress_index"],
                             "detected_stress": pron["stress_index"], "correct": True if n <= 1 else None,
                             "reason": "mono-syllable" if n <= 1 else "missing_span"})
+
             continue
 
         s, e = float(w["start_s"]), float(w["end_s"])
@@ -182,6 +189,7 @@ def score_stress(
         if len(seg) < 160:
             details.append({"word": w.get("word", ""), "expected_stress": pron["stress_index"],
                             "detected_stress": None, "correct": False, "reason": "too_short"})
+
             total += 1
 
             continue
@@ -237,7 +245,7 @@ def score_stress(
 
             proms.append((dur, energy, f))
 
-        # z-norm trong word
+        # Chuẩn hoá z-score trong từ
         def znorm(xs):
             mean = sum(xs) / len(xs)
 
@@ -263,6 +271,7 @@ def score_stress(
 
         details.append({"word": w.get("word", ""), "expected_stress": exp, "detected_stress": det,
                         "correct": ok, "reason": ""})
+
         total += 1
 
         if ok:
@@ -462,7 +471,7 @@ def score_phones(
 
     device = next(model.parameters()).device
 
-    blank_id = 0  # <pad>
+    blank_id = 0  # token đệm <pad>
 
     # 1. Validate audio trước khi forward để fail-fast với lỗi tiếng Việt
     warr = np.asarray(wav, dtype=np.float32).reshape(-1)
@@ -510,7 +519,7 @@ def score_phones(
     if not words:
         return {"error": "Text rỗng."}
 
-    # 3. Canonical phone sequence + word ranges
+    # 3. Chuỗi phone chuẩn + khoảng từ
     seq: List[str] = []
 
     wranges: List[Tuple[int, int, str, List[str]]] = []
@@ -526,13 +535,16 @@ def score_phones(
             skipped_words.append(w)
 
             continue
+
         s0 = len(seq)
 
         seq.extend(toks)
 
         wranges.append((s0, len(seq), w, pron["arpa"]))
+
     if not seq:
         return {"error": "Không map được phoneme nào."}
+
     target_ids = [vocab[t] for t in seq]
 
     try:
@@ -599,6 +611,7 @@ def score_phones(
         if pid != prev:
             if pid != blank_id:
                 collapsed.append(id2tok.get(pid, ""))
+
         prev = pid
 
     phonemes: List[Dict] = []
@@ -666,15 +679,18 @@ def score_phones(
 
         if f0 >= 0:
             span_pred = [id2tok.get(p, "") for p in pred_ids[f0:f1 + 1] if p != blank_id]
-            # collapse
+
+            # Gộp chuỗi phone trùng liền kề
             obs_w, pv = [], None
 
             for t in span_pred:
                 if t != pv:
                     obs_w.append(t)
+
                 pv = t
         else:
             obs_w = []
+
         pairs = needleman(canon, obs_w)
 
         # blank density trên word span
@@ -686,6 +702,7 @@ def score_phones(
             blank_ratio = n_blank / max(1, tot)
         else:
             blank_ratio = 1.0
+
         has_frames = any(phone_ok[p0:p1])
 
         if not has_frames:
@@ -740,6 +757,7 @@ def score_phones(
             phonemes.append({"word": w, "expected": exp, "observed": disp_ob,
                              "type": out_typ, "gop": round(g, 3) if math.isfinite(g) else None,
                              "score": s100 if status in ("scored", "misaligned") else 0.0})
+
             if out_typ == "substitution" and status in ("scored", "misaligned"):
                 pat = f"/{exp}/ -> /{ob}/"
 
@@ -749,6 +767,7 @@ def score_phones(
 
                 if w not in e["examples"]:
                     e["examples"].append(w)
+
         wscore = round(sum(pscores) / len(pscores), 1) if pscores else 0.0
 
         if anchored and not pscores:
@@ -771,6 +790,7 @@ def score_phones(
                          "acoustic_confidence": None, "expected_ipa": pron["ipa"],
                          "blank_ratio": round(blank_ratio, 3),
                          "n_phones": n_phones})
+
     for w in skipped_words:
         wdetails.append({"word": w, "score": 0.0, "status": "no_evidence",
                          "start_s": 0.0, "end_s": 0.0, "acoustic_confidence": None,

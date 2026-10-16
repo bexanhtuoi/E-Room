@@ -6,7 +6,9 @@ class AppException(Exception):
 
     def __init__(self, detail: str = "", code: str = "") -> None:
         self.detail = detail or self.detail
+
         self.code = code or self.code
+
         super().__init__(self.detail)
 
 

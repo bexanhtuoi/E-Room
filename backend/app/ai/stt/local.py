@@ -41,6 +41,7 @@ def get_whisper_model():
         )
 
         log.info("Faster-whisper model loaded successfully")
+
     return whisper_model_instance
 
 

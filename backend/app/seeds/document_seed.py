@@ -5,6 +5,7 @@ from app.models import Document, User
 
 def seed_documents(session: Session) -> int:
     users = session.exec(select(User).where(User.email.in_(["nam@gmail.com", "linh@gmail.com"]))).all()
+
     if len(users) < 2:
         return 0
 
@@ -26,6 +27,7 @@ def seed_documents(session: Session) -> int:
     ]
 
     inserted = 0
+
     for data in documents:
         existing = session.exec(
             select(Document).where(
@@ -33,9 +35,13 @@ def seed_documents(session: Session) -> int:
                 Document.file_name == data["file_name"],
             )
         ).first()
+
         if existing is None:
             session.add(Document(**data))
+
             inserted += 1
+
     if inserted > 0:
         session.commit()
+
     return inserted

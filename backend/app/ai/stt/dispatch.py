@@ -46,14 +46,18 @@ def transcribe_auto(
             log.warning("Whisper host failed mid-call, fallback local | err=%s", str(error)[:150])
 
             out = None
+
         if out:
             return out
+
         log.info("Whisper host trả rỗng, thử local")
+
     return transcribe_faster_whisper(audio_data, sample_rate=sample_rate, **kwargs)
 
 
 def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued: int) -> Optional[str]:
     name = (provider or settings.stt_provider).lower()
+
     # auto được tính như whisper_server khi host đang sống (tràn cloud khi tắc),
     # như local khi host chết (không tràn).
     effective = "whisper_server" if (name == "auto" and is_stt_server_alive()) else name
@@ -67,6 +71,7 @@ def choose_stt_provider(provider: Optional[str], kwargs: Dict[str, Any], queued:
         log.info("STT overflow to cloud | queued=%s", queued)
 
         return "cloud"
+
     return provider
 
 
@@ -87,6 +92,7 @@ async def transcribe_audio_async(
 
     if queued >= STT_OVERFLOW_QUEUED:
         log.warning("STT executor congested | queued=%s", queued)
+
     provider = choose_stt_provider(provider, kwargs, queued)
 
     call = functools.partial(

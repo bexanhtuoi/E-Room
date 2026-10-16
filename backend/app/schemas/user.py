@@ -24,10 +24,13 @@ class UserCreateSchema(UserBaseSchema):
     def password_strength(cls, v: str) -> str:
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
+
         if not any(c.isalpha() for c in v):
             raise ValueError("Password must contain at least one letter")
+
         if not any(c.isdigit() for c in v):
             raise ValueError("Password must contain at least one number")
+
         return v
 
 
@@ -55,13 +58,16 @@ class UserResponse(BaseModel):
 
         if isinstance(raw, list):
             return [str(item).strip()[:60] for item in raw if str(item).strip()][:20]
+
         if isinstance(raw, str):
             try:
                 parsed = json.loads(raw)
             except (ValueError, TypeError):
                 return []
+
             if isinstance(parsed, list):
                 return [str(item).strip()[:60] for item in parsed if str(item).strip()][:20]
+
         return []
 
 
@@ -94,7 +100,9 @@ class UserUpdateSchema(BaseModel):
     def validate_career_field(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
+
         text = v.strip()
+
         return text[:120] if text else None
 
     @field_validator("interests")
@@ -102,6 +110,7 @@ class UserUpdateSchema(BaseModel):
     def validate_interests(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is None:
             return None
+
         return [str(item).strip()[:60] for item in v if str(item).strip()][:20]
 
     @field_validator("learning_goal")
@@ -109,7 +118,9 @@ class UserUpdateSchema(BaseModel):
     def validate_learning_goal(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
+
         text = v.strip()
+
         return text[:500] if text else None
 
     @field_validator("headline", "location")
@@ -117,7 +128,9 @@ class UserUpdateSchema(BaseModel):
     def validate_short_text(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
+
         text = v.strip()
+
         return text[:120] if text else None
 
     @field_validator("role")
@@ -125,6 +138,8 @@ class UserUpdateSchema(BaseModel):
     def validate_role(cls, v: Optional[Union[str, RoleEnum]]) -> Optional[RoleEnum]:
         if v is None:
             return v
+
         if v not in RoleEnum._value2member_map_:
             raise ValueError(f"Invalid role: {v}")
+
         return v

@@ -27,8 +27,9 @@ def get_speech_log_dir() -> Path:
     base = Path(configured) if configured else DEFAULT_DIR
 
     if not base.is_absolute():
-        # Resolve relative từ backend/ root
+        # Phân giải đường dẫn tương đối tính từ gốc backend/
         base = BACKEND_ROOT / base
+
     base.mkdir(parents=True, exist_ok=True)
 
     return base
@@ -41,6 +42,7 @@ def should_save_audio() -> bool:
 
     if isinstance(flag, str):
         return flag.lower() in ("true", "1", "yes")
+
     return bool(flag)
 
 
@@ -75,6 +77,7 @@ def save_utterance_audio(
 ) -> Optional[str]:
     if not should_save_audio() or audio_data is None:
         return None
+
     try:
         from app.ai.stt.audio_store import object_name_for_utterance, put_audio
         from app.ai.stt.helpers import convert_audio_to_wav_bytes
@@ -148,12 +151,14 @@ def append_utterance(
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as error:
         log.warning("Could not append speech log | room=%s user=%s err=%s", room_id, user_id, error)
+
     return entry
 
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
+
     entries: List[Dict[str, Any]] = []
 
     with open(path, encoding="utf-8") as fh:
@@ -162,10 +167,12 @@ def read_jsonl(path: Path) -> List[Dict[str, Any]]:
 
             if not line:
                 continue
+
             try:
                 entries.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
+
     return entries
 
 
@@ -179,9 +186,10 @@ def list_room_users(room_id: int) -> List[str]:
     users: List[str] = []
 
     for child in directory.glob("user_*.jsonl"):
-        stem = child.stem  # user_<id>
+        stem = child.stem  # tên file dạng user_<id>
 
         users.append(stem[len("user_") :])
+
     return sorted(users)
 
 
@@ -194,6 +202,7 @@ def get_room_transcript_for_summary(room_id: int) -> List[Dict[str, Any]]:
 
     for entries in read_room_logs(room_id).values():
         merged.extend(entries)
+
     merged.sort(key=lambda e: str(e.get("created_at", "")))
 
     return [
@@ -220,6 +229,7 @@ def rewrite_user_log(path: Path, entries: list) -> None:
     with open(tmp, "w", encoding="utf-8") as fh:
         for entry in entries:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
     tmp.replace(path)
 
 
@@ -294,6 +304,7 @@ def attach_feedback(
 def resolve_audio_path(room_id: int, audio_file: Optional[str]) -> Optional[Path]:
     if not audio_file:
         return None
+
     candidate = room_dir(room_id) / audio_file
 
     return candidate if candidate.exists() else None

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 from langchain_openai import OpenAIEmbeddings
 
@@ -28,19 +28,25 @@ def documents_embedding(documents: list[str], embed_model: OpenAIEmbeddings) -> 
 
 async def batch_embed(embed_model, texts, batch_size=8):
     results = []
+
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i+batch_size]
+
         try:
             chunk = await asyncio.wait_for(
                 asyncio.to_thread(embed_model.embed_documents, batch),
                 timeout=120,
             )
+
             results.extend(chunk)
         except asyncio.TimeoutError:
             log.warning(f"[batch_embed] batch {i//batch_size} timeout, retrying...")
+
             chunk = await asyncio.wait_for(
                 asyncio.to_thread(embed_model.embed_documents, batch),
                 timeout=180,
             )
+
             results.extend(chunk)
+
     return results

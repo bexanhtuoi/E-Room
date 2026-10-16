@@ -13,9 +13,12 @@ orig_convert = lc_base._convert_delta_to_message_chunk
 
 def keep_reasoning_content(_dict, default_class):
     msg = orig_convert(_dict, default_class)
+
     reasoning = _dict.get("reasoning_content") or _dict.get("reasoning")
+
     if reasoning is not None and hasattr(msg, "additional_kwargs"):
         msg.additional_kwargs = {**(msg.additional_kwargs or {}), "reasoning_content": reasoning}
+
     return msg
 
 
@@ -30,7 +33,9 @@ def reasoning_body(base_url: str, effort: str = "low") -> Dict[str, object]:
     if (effort or "").strip().lower() in ("exclude", "none", "off"):
         if is_openrouter(base_url):
             return {"reasoning": {"exclude": True}}
+
         return {}
+
     if is_openrouter(base_url):
         return {"reasoning": {"effort": "low"}}
 
@@ -58,8 +63,11 @@ def get_llm(timeout: Optional[int] = None, model: Optional[str] = None,
 
 def get_agent(tools=None, prompt=None, model=None, system_extra: str = ""):
     model = model or get_llm()
+
     tools = tools if tools is not None else [retrieval_documents, web_search]
+
     system_prompt = prompt if prompt is not None else get_main_prompt()
+
     if system_extra.strip():
         system_prompt = f"{system_prompt}\n\n{system_extra.strip()}"
 

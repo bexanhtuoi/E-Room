@@ -12,6 +12,7 @@ from app.utils.datetime_utils import now_utc
 from app.utils.upload import read_upload
 
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
+
 AVATAR_TYPES = {"jpg", "png", "webp"}
 
 __all__ = [
@@ -47,6 +48,7 @@ class UserService(ServiceBase):
 
     def update_user(self, db: Session, user, user_id: int, user_in):
         db_user = self.get_user_or_404(db, user_id)
+
         ensure_owner(db_user.id, user)
 
         obj_in_data = user_in.model_dump(exclude_unset=True)
@@ -67,6 +69,7 @@ class UserService(ServiceBase):
 
     def delete_user(self, db: Session, user, user_id: int):
         db_user = self.get_user_or_404(db, user_id)
+
         ensure_owner(db_user.id, user)
 
         user_crud.delete_cascade(db, user_id)
@@ -78,6 +81,7 @@ class UserService(ServiceBase):
         from app.integration.minio import put_avatar
 
         raw, _ = await read_upload(file, AVATAR_TYPES, MAX_AVATAR_BYTES, "Avatar")
+
         put_avatar(raw, user.id)
 
         return user_crud.update(

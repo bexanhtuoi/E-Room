@@ -75,6 +75,7 @@ async def handle_speech_completion(
 
         if saved is None:
             return
+
         message_id, user_id, user_name = saved
 
         # 3. Broadcast lên LiveKit để các user khác nhận được transcript
@@ -180,5 +181,6 @@ def resolve_room_language(room_id: int) -> str:
                 return resolve_stt_language(room.language)
     except Exception:
         log.exception("Room language lookup failed | room_id=%s", room_id)
+
     return resolve_stt_language(None)
 

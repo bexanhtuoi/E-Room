@@ -15,6 +15,7 @@ from app.shared.constants import AI_IDENTITY_PREFIX, AI_TRANSCRIBER_IDENTITY
 from app.shared.keys import room_presence_key, room_transcriber_lock_key
 
 log = get_logger("app.ai.transcriber")
+
 MAX_TRANSCRIBE_SESSION_SECONDS = 300
 
 
@@ -179,11 +180,13 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
 
             if task_id and loop_count % 12 == 0:
                 refresh_worker_lock(lock_key, task_id)
+
             await asyncio.sleep(5)
     finally:
         for task in active_tasks:
             if not task.done():
                 task.cancel()
+
         if stt_tasks:
             try:
                 await asyncio.wait_for(
@@ -192,6 +195,7 @@ async def run_room_transcriber(room_id: int, task_id: str = "") -> None:
                 )
             except asyncio.TimeoutError:
                 log.info("STT drain timed out | room_id=%s pending=%s", room_id, len(stt_tasks))
+
         await room.disconnect()
 
         log.info("Transcriber disconnected from room | room_id=%s", room_id)

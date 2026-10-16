@@ -157,6 +157,7 @@ def score_remote(
         raise ScorerUnavailableError()
 
     payload = base64.b64encode(audio_bytes).decode("ascii")
+
     headers = {"Authorization": f"Bearer {settings.scorer_api_key}"} if settings.scorer_api_key else {}
 
     try:
@@ -176,23 +177,28 @@ def score_remote(
             )
     except Exception as error:
         record_scorer_failure()
+
         raise ScorerUnavailableError() from error
 
     if response.status_code != 200:
         log.error("Scorer request failed | status=%s err=%s", response.status_code, response.text[:300])
 
         record_scorer_failure()
+
         raise ScorerUnavailableError()
 
     try:
         data = response.json()
     except ValueError as error:
         record_scorer_failure()
+
         raise ScorerUnavailableError() from error
 
     if not isinstance(data, dict):
         record_scorer_failure()
+
         raise ScorerUnavailableError()
 
     record_scorer_success()
+
     return data

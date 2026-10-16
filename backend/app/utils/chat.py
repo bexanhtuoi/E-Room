@@ -9,6 +9,7 @@ AI_MENTION_PATTERN = re.compile(r"(?:^|\s)@ai\b", re.IGNORECASE)
 
 def strip_ai_mention(text: str) -> Optional[str]:
     stripped = (text or "").lstrip()
+
     match = AI_MENTION_PATTERN.search(stripped)
 
     if match is None:
@@ -29,5 +30,7 @@ def scrub_meta(raw) -> Optional[str]:
         return None
 
     meta.pop(SESSION_CHAT_KEY, None)
+
     meta.pop("session_id", None)
+
     return json.dumps(meta) if meta else None

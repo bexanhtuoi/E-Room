@@ -85,10 +85,12 @@ def parse_confusion(issue: str) -> Optional[tuple[str, str]]:
 
     if not found:
         return None
+
     exp, obs = found[0][0].strip().lower(), found[0][1].strip().lower()
 
     if not exp or not obs:
         return None
+
     return exp, obs
 
 
@@ -110,8 +112,10 @@ def mouth_guide(arpa: List[str], limit: int = 3) -> str:
 
         if tip not in seen:
             seen.append(tip)
+
         if len(seen) >= limit:
             break
+
     return "; ".join(seen)
 
 
@@ -122,8 +126,11 @@ def guide_for_word(word: str, arpa: List[str], issue: str = "") -> Dict[str, str
 
     if pair is not None:
         how_to = PATTERN_TIPS.get(f"{pair[0]}→{pair[1]}", "")
+
     if not how_to:
         how_to = mouth_guide(arpa)
+
     if not how_to:
         how_to = f"Đọc chậm '{word}' từng âm, ghi âm lại rồi so với mẫu."
+
     return {"how_to": how_to, "vi": vi_reading(arpa)}

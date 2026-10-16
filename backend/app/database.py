@@ -24,6 +24,7 @@ def health() -> bool:
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+
         return True
     except Exception:
         return False
@@ -32,6 +33,7 @@ def health() -> bool:
 def ensure_database() -> None:
 
     url = settings.database_url
+
     if url.startswith("sqlite"):
         return
 
@@ -39,11 +41,13 @@ def ensure_database() -> None:
     from sqlalchemy.engine.url import make_url
 
     parsed = make_url(url)
+
     if not parsed.database:
         return
 
     if is_postgres():
         server_url = f"{parsed.drivername}://{parsed.username}:{parsed.password or ''}@{parsed.host}:{parsed.port}/postgres"
+
         server_engine = create_server_engine(server_url, isolation_level="AUTOCOMMIT")
 
         with server_engine.connect() as conn:
@@ -56,13 +60,16 @@ def ensure_database() -> None:
                 conn.execute(text(f'CREATE DATABASE "{parsed.database}"'))
 
         server_engine.dispose()
+
         return
 
     server_url = f"{parsed.drivername}://{parsed.username}:{parsed.password or ''}@{parsed.host}:{parsed.port}/"
+
     server_engine = create_server_engine(server_url, connect_args=settings.db_connect_args)
 
     with server_engine.connect() as conn:
         conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{parsed.database}`"))
+
         conn.commit()
 
     server_engine.dispose()
@@ -102,10 +109,13 @@ def translate_ddl(ddl: str) -> str:
 def exec_ddl(conn, stmt: str) -> None:
     try:
         conn.execute(text(stmt))
+
         conn.commit()
     except Exception as error:
         conn.rollback()
+
         code = str(getattr(getattr(error, "orig", None), "args", [None])[0] or "")
+
         message = str(error).lower()
 
         if code in ("1060", "1091", "42701", "42P07", "42710", "42P16"):
@@ -177,16 +187,19 @@ def ensure_schema_columns() -> None:
 
     with engine.connect() as conn:
         inspector = inspect(conn)
+
         existing_tables = set(inspector.get_table_names())
 
         for table, columns in wanted.items():
             if table not in existing_tables:
                 continue
+
             existing = {col["name"] for col in inspector.get_columns(table)}
 
             for name, ddl in columns.items():
                 if name in existing:
                     continue
+
                 exec_ddl(conn, f"ALTER TABLE {table} ADD COLUMN {name} {translate_ddl(ddl)}")
 
             for stmt in backfill.get(table, []):
@@ -194,20 +207,25 @@ def ensure_schema_columns() -> None:
 
             if table in dropped:
                 existing = {col["name"] for col in inspector.get_columns(table)}
+
                 for name in dropped[table]:
                     if name not in existing:
                         continue
+
                     exec_ddl(conn, f"ALTER TABLE {table} DROP COLUMN {name}")
 
         if engine.dialect.name not in ("sqlite", "postgresql"):
             for table, columns in modified.items():
                 if table not in existing_tables:
                     continue
+
                 for name, ddl in columns.items():
                     conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {name} {ddl}"))
+
                     conn.commit()
 
             if table in modified and engine.dialect.name not in ("sqlite", "postgresql"):
                 for name, ddl in modified[table].items():
                     conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {name} {ddl}"))
+
                     conn.commit()

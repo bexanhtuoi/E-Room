@@ -5,6 +5,7 @@ from app.models import Notification, NotificationType, User
 
 def seed_notifications(session: Session) -> int:
     users = session.exec(select(User).where(User.email.in_(["nam@gmail.com", "linh@gmail.com"]))).all()
+
     if len(users) < 2:
         return 0
 
@@ -33,6 +34,7 @@ def seed_notifications(session: Session) -> int:
     ]
 
     inserted = 0
+
     for data in notifications:
         existing = session.exec(
             select(Notification).where(
@@ -40,9 +42,13 @@ def seed_notifications(session: Session) -> int:
                 Notification.title == data["title"],
             )
         ).first()
+
         if existing is None:
             session.add(Notification(**data))
+
             inserted += 1
+
     if inserted > 0:
         session.commit()
+
     return inserted

@@ -52,6 +52,7 @@ def set(key: str, value: str, ttl: Optional[int] = None) -> bool:
 
 def set_if_absent(key: str, value: str, ttl: int) -> bool:
     created = get_redis_client().set(key, value, nx=True, ex=ttl)
+
     return bool(created)
 
 
@@ -144,30 +145,41 @@ return 1
 
 def compare_delete(key: str, value: str) -> bool:
     client = get_redis_client()
+
     script = client.register_script(COMPARE_DELETE_SCRIPT)
+
     return bool(script(keys=[key], args=[value]))
 
 
 def compare_refresh(key: str, value: str, ttl: int) -> bool:
     client = get_redis_client()
+
     script = client.register_script(COMPARE_REFRESH_SCRIPT)
+
     return bool(script(keys=[key], args=[value, ttl]))
 
 
 def acquire_slot(name: str, limit: int, ttl: int = 900) -> bool:
     client = get_redis_client()
+
     script = client.register_script(ACQUIRE_SLOT_SCRIPT)
+
     result = script(keys=[f"eroom:slots:{name}"], args=[limit, ttl])
+
     return bool(result)
 
 
 def release_slot(name: str) -> None:
     client = get_redis_client()
+
     script = client.register_script(RELEASE_SLOT_SCRIPT)
+
     script(keys=[f"eroom:slots:{name}"])
 
 
 def claim_seat(key: str, identity: str, limit: int, ttl: int) -> bool:
     client = get_redis_client()
+
     script = client.register_script(CLAIM_SEAT_SCRIPT)
+
     return bool(script(keys=[key], args=[identity, ttl, limit]))

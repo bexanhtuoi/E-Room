@@ -24,6 +24,7 @@ class PronunciationScoreCrud(CRUDRepository):
     ) -> Optional[PronunciationScore]:
         if message_id is None:
             return None
+
         stmt = (
             select(PronunciationScore)
             .where(PronunciationScore.room_id == room_id)
@@ -31,6 +32,7 @@ class PronunciationScoreCrud(CRUDRepository):
             .where(PronunciationScore.message_id == message_id)
             .order_by(PronunciationScore.id.desc())
         )
+
         return db.exec(stmt).first()
 
     def upsert_score(
@@ -43,8 +45,11 @@ class PronunciationScoreCrud(CRUDRepository):
         score: Dict[str, Any],
     ) -> PronunciationScore:
         details = score.get("details") or {}
+
         report = score.get("report") or {}
+
         scores = report.get("scores") or {}
+
         payload = {
             "room_id": room_id,
             "user_id": self.coerce_user_id(user_id),
@@ -61,11 +66,15 @@ class PronunciationScoreCrud(CRUDRepository):
             "report_json": json.dumps(report, ensure_ascii=False),
             "updated_at": now_utc(),
         }
+
         existing = self.find_for_utterance(db, room_id, user_id, message_id)
+
         if existing is None:
             # Sửa text rồi chấm lại (message_id mới hoặc log cũ) -> dòng mới.
             return self.create(db, obj_in={**payload, "feedback_json": None})
+
         payload.pop("message_id", None)
+
         # Chấm lại cùng câu: reset feedback cũ (khớp luật JSONL reset về None).
         return self.update(db, existing, obj_in={**payload, "feedback_json": None})
 
@@ -92,10 +101,13 @@ class PronunciationScoreCrud(CRUDRepository):
         self, db: Session, room_id: int, user_id: int, start, end=None, session_id=None
     ) -> List[PronunciationScore]:
         time_match = PronunciationScore.created_at >= start
+
         if end is not None:
             time_match = time_match & (PronunciationScore.created_at <= end)
+
         if session_id is not None:
             time_match = or_(PronunciationScore.session_id == session_id, time_match)
+
         stmt = (
             select(PronunciationScore)
             .where(PronunciationScore.room_id == room_id)
@@ -103,6 +115,7 @@ class PronunciationScoreCrud(CRUDRepository):
             .where(time_match)
             .order_by(PronunciationScore.id.asc())
         )
+
         return list(db.exec(stmt).all())
 
 

@@ -43,6 +43,7 @@ def authorize_room_access(room, request: Request) -> None:
         return
 
     user: User = request.state.current_user
+
     if not user:
         raise NotAuthenticatedError()
 
@@ -53,6 +54,7 @@ def authorize_room_access(room, request: Request) -> None:
         return
 
     allowed = emails_from_json(room.allowed_emails)
+
     if user.email and user.email.strip().lower() in allowed:
         return
 

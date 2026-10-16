@@ -46,13 +46,16 @@ def g2p_to_phones(word_upper: str) -> Tuple[List[str], bool]:
         raw: List[str] = get_g2p()(word_upper.lower())
     except Exception:
         return ["AH1"], True
+
     # g2p-en có thể trả từ gốc xen kẽ phoneme khi không biết -> lọc token không phải phone
     phones = [t for t in raw if t.strip() and not any(c.islower() for c in t)]
+
     # chuẩn hoá: phone phải là chữ in hoa (+ số stress)
     phones = [t.upper() for t in phones if t.strip()]
 
     if not phones:
         return ["AH1"], True
+
     # đảm bảo có stress: nếu chưa có số nào, gán 1 cho nguyên âm đầu
     if not any(p[-1] in "012" for p in phones):
         for i, p in enumerate(phones):
@@ -60,6 +63,7 @@ def g2p_to_phones(word_upper: str) -> Tuple[List[str], bool]:
                 phones[i] = strip_stress(p) + "1"
 
                 break
+
     return phones, True
 
 
@@ -130,6 +134,7 @@ def get_pronunciation(word: str, accent: str = "en-US") -> Dict:
     if not w:
         return {"word": word, "arpa": [], "ipa": "", "syllables": [],
                 "stress_index": None, "num_syllables": 0, "oov": True, "accent": accent}
+
     wu = w.upper()
 
     oov = False
@@ -145,6 +150,7 @@ def get_pronunciation(word: str, accent: str = "en-US") -> Dict:
             arpa = cands[0].split()
     except Exception:
         arpa = None
+
     if arpa is None:
         arpa, oov = g2p_to_phones(wu)
 

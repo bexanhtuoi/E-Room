@@ -10,6 +10,7 @@ MAX_ROOM_SEATS = 4
 
 def seed_rooms(session: Session) -> int:
     host = session.exec(select(User).where(User.email == "huong@gmail.com")).first()
+
     if host is None:
         return 0
 
@@ -65,15 +66,23 @@ def seed_rooms(session: Session) -> int:
     ]
 
     inserted = 0
+
     for data in rooms:
         existing = session.exec(select(Room).where(Room.name == data["name"])).first()
+
         topics = json.dumps(normalize_topic_list(data.pop("topics")))
+
         if existing is None:
             session.add(Room(**data, topics=topics))
+
             inserted += 1
         elif not existing.topics or existing.topics == "[]":
             existing.topics = topics
+
             existing.description = existing.description or data.get("description")
+
             session.add(existing)
+
     session.commit()
+
     return inserted

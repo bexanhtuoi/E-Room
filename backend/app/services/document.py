@@ -22,6 +22,7 @@ class DocumentService(ServiceBase):
 
     def get_document_data(self, db: Session, user, document_id: int):
         document = self.one_or_404(document_crud.get_one, DocumentNotFoundError, db, id=document_id)
+
         ensure_owner(document.user_id, user)
 
         return document
@@ -32,6 +33,7 @@ class DocumentService(ServiceBase):
             raise BadRequestError(detail="Đường dẫn file không hợp lệ.")
 
         obj_in_data = document_in.model_dump()
+
         obj_in_data["user_id"] = user.id
 
         return document_crud.create(db, obj_in=obj_in_data)

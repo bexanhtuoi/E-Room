@@ -25,6 +25,7 @@ if __name__ == "__main__":
         import shutil
 
         shutil.rmtree(multiproc_dir, ignore_errors=True)
+
         os.makedirs(multiproc_dir, exist_ok=True)
 
     uvicorn.run(

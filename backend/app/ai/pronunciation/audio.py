@@ -85,7 +85,7 @@ def vad_segments(
     silence_s: float = 0.5,
     min_speech_s: float = 0.3,
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
-    hop = 320  # 20ms
+    hop = 320  # Bước nhảy 20 ms (320 mẫu @16 kHz)
 
     rms = frame_rms(wav, hop)
 
@@ -173,7 +173,7 @@ def extract_f0(wav: np.ndarray, sr: int = 16000) -> Dict[str, Any]:
 
         p10, p90 = float(np.percentile(valid, 10)), float(np.percentile(valid, 90))
 
-        # slope 0.5s cuối
+        # độ dốc 0.5 giây cuối
         tail = valid[-25:] if len(valid) >= 25 else valid
 
         slope = float(tail[-1] - tail[0]) if len(tail) >= 2 else 0.0

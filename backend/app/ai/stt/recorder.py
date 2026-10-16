@@ -127,16 +127,19 @@ class RawAttemptRecorder:
     def write_frame(self, frame) -> None:
         if not self._enabled:
             return
+
         try:
             pcm = normalize_pcm_int16(frame)
 
             if pcm is None or len(pcm) == 0:
                 return
+
             has_voice = calculate_audio_rms(pcm) >= self._energy_threshold
 
             if self._file is None:
                 if not has_voice:
                     return
+
                 self.open_attempt()
 
             data = pcm.astype("<i2", copy=False).tobytes()
@@ -149,6 +152,7 @@ class RawAttemptRecorder:
 
             if has_voice:
                 self._last_voice_sample = self._samples_written
+
             if len(self._buffer) >= self._flush_bytes:
                 self.flush()
         except Exception as error:
@@ -162,8 +166,10 @@ class RawAttemptRecorder:
     def begin_utterance(self, start_sample: int) -> None:
         if not self._enabled or self._file is None:
             return
+
         if self._current_utt is not None:
             return
+
         idx = len(self._utterances)
 
         self._utterances.append(
@@ -185,6 +191,7 @@ class RawAttemptRecorder:
     def end_utterance(self, num_samples: int) -> Optional[UtteranceRef]:
         if not self._enabled or self._file is None:
             return None
+
         if self._current_utt is None:
             start = max(0, self._samples_written - max(0, num_samples))
 
@@ -192,6 +199,7 @@ class RawAttemptRecorder:
 
             if self._current_utt is None:
                 return None
+
         utt = self._utterances[self._current_utt]
 
         start = utt.get("start_sample") or 0
@@ -215,6 +223,7 @@ class RawAttemptRecorder:
     def abandon_utterance(self) -> None:
         if not self._enabled or self._file is None or self._current_utt is None:
             return
+
         utt = self._utterances[self._current_utt]
 
         if utt.get("end_sample") is None:
@@ -227,23 +236,27 @@ class RawAttemptRecorder:
             utt["duration_sec"] = utt["end_sec"] - (utt.get("start_sec") or 0.0)
 
             utt["status"] = "dropped"
+
         self._current_utt = None
 
     def check_limits(self) -> None:
         if not self._enabled or self._file is None:
             return
+
         idle_samples = self._samples_written - self._last_voice_sample
 
         if idle_samples > 0 and idle_samples / self.sample_rate >= self._end_silence:
             self.close(reason="idle_silence")
 
             return
+
         if self._samples_written / self.sample_rate >= self._max_seconds:
             self.close(reason="max_duration")
 
     def close(self, reason: str = "stream_end") -> None:
         if not self._enabled or self._attempt_id is None or self._file is None:
             return
+
         try:
             if self._current_utt is not None:
                 utt = self._utterances[self._current_utt]
@@ -258,6 +271,7 @@ class RawAttemptRecorder:
                     utt["duration_sec"] = utt["end_sec"] - (utt.get("start_sec") or 0.0)
 
                     utt["status"] = "truncated"
+
                 self._current_utt = None
 
             self.flush()
@@ -376,6 +390,7 @@ class RawAttemptRecorder:
     def attach_result(self, ref: UtteranceRef, message_id: Optional[int], text: Optional[str]) -> None:
         if not self._enabled or ref is None:
             return
+
         try:
             if self._attempt_id == ref.attempt_id and self._attempt_id is not None:
                 for utt in self._utterances:
@@ -385,16 +400,19 @@ class RawAttemptRecorder:
                         utt["text"] = text
 
                         return
+
                 return
 
             path = metadata_path(ref.room_id, ref.attempt_id)
 
             if not path.exists():
                 return
+
             meta = read_attempt_metadata(path)
 
             if meta is None:
                 return
+
             for utt in meta.get("utterances", []):
                 if utt.get("index") == ref.index:
                     utt["message_id"] = message_id
@@ -404,6 +422,7 @@ class RawAttemptRecorder:
                     break
             else:
                 return
+
             self.write_metadata_atomic(path, meta)
         except Exception as error:
             log.warning(
@@ -454,6 +473,7 @@ class RawAttemptRecorder:
     def flush(self) -> None:
         if self._file is None or not self._buffer:
             return
+
         self._file.write(bytes(self._buffer))
 
         end_pos = self._file.tell()
@@ -474,6 +494,7 @@ class RawAttemptRecorder:
 
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(metadata, fh, ensure_ascii=False, indent=2)
+
         os.replace(tmp, path)
 
 
@@ -492,6 +513,7 @@ def find_attempt_by_message(
         root = attempts_root(room_id)
     except Exception:
         return None
+
     uid = str(user_id) if user_id is not None else None
 
     for meta_file in sorted(root.glob("*/metadata.json")):
@@ -499,9 +521,11 @@ def find_attempt_by_message(
 
         if meta is None:
             continue
+
         if uid is not None and str(meta.get("user_id")) != uid:
             if str(meta.get("user_identity")) != uid:
                 continue
+
         utts = meta.get("utterances", []) or []
 
         ordered = sorted(utts, key=lambda x: x.get("index", 0))
@@ -518,5 +542,6 @@ def find_attempt_by_message(
                 "utterances": ordered,
                 "message_ids": mids,
             }
+
     return None
 

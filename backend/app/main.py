@@ -18,6 +18,7 @@ from app.services import user_crud
 from app.shared.exceptions import AppException
 
 log = get_logger(__name__)
+
 api_log = get_logger("app.api")
 
 SKIP_AUTH_PREFIXES = ("/health", "/api/v1/auth", "/docs", "/openapi.json", "/redoc")
@@ -29,9 +30,11 @@ async def lifespan(app: FastAPI):
     import app.tasks.scoring  # noqa: F401
 
     create_db_and_tables()
+
     log.info("Database và bảng dữ liệu đã sẵn sàng")
 
     db_ok = db_health()
+
     if db_ok:
         log.info("Database health OK")
     else:
@@ -42,6 +45,7 @@ async def lifespan(app: FastAPI):
             counts = seed_all(session)
         except Exception as error:
             log.warning("Seed bỏ qua (worker khác seed trước) | err=%s", str(error)[:150])
+
             counts = {}
 
         log.info(
@@ -64,7 +68,9 @@ async def lifespan(app: FastAPI):
         log.warning("Model XLSR chưa sẵn sàng, lần chấm đầu sẽ tải | err=%s", str(error)[:200])
 
     log.info("%s đã khởi động", settings.app_name)
+
     yield
+
     log.info("%s đã tắt", settings.app_name)
 
 
@@ -86,25 +92,32 @@ async def handle_app_exception(request: Request, exc: AppException):
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
+
     if request.method == "OPTIONS" or path == "/" or path.startswith(SKIP_AUTH_PREFIXES):
         return await call_next(request)
 
     request.state.current_user = None
+
     token = request.cookies.get("access_token")
+
     if token:
         payload = decode_token(token)
+
         user_id = payload.get("sub") if payload else None
+
         if user_id:
             try:
                 user_id = int(user_id)
             except ValueError:
                 user_id = None
+
             if user_id:
                 with Session(engine) as db:
                     request.state.current_user = user_crud.get_one(db, id=user_id)
 
     if path.startswith("/api/v1/admin"):
         user = request.state.current_user
+
         if user is None or user.role != "admin":
             return JSONResponse(status_code=403, content={"detail": "Admin access required"})
 
@@ -116,16 +129,24 @@ async def log_requests(request: Request, call_next):
     from sqlalchemy.exc import OperationalError
 
     start = time.perf_counter()
+
     try:
         response = await call_next(request)
+
         elapsed = time.perf_counter() - start
+
         api_log.info("%s %s -> %s (%.3fs)", request.method, request.url.path, response.status_code, elapsed)
+
         return response
     except Exception as error:
         elapsed = time.perf_counter() - start
+
         text = str(error)
+
         is_db_error = isinstance(error, OperationalError) or "deadlock detected" in text.lower()
+
         detail = text[:300] if is_db_error else type(error).__name__
+
         api_log.error(
             "%s %s -> %s ERROR (%.3fs): %s",
             request.method,
@@ -148,6 +169,7 @@ async def log_requests(request: Request, call_next):
 
             try:
                 response = await call_next(request)
+
                 api_log.info(
                     "%s %s -> RETRY %s (%.3fs)",
                     request.method,
@@ -155,6 +177,7 @@ async def log_requests(request: Request, call_next):
                     response.status_code,
                     time.perf_counter() - start,
                 )
+
                 return response
             except Exception as retry_error:
                 api_log.error(
@@ -175,7 +198,9 @@ app.add_middleware(
 )
 
 setup_metrics(app)
+
 setup_tracing()
+
 setup_fastapi_tracing(app)
 
 app.include_router(api_router, prefix="/api/v1")
@@ -184,7 +209,9 @@ app.include_router(api_router, prefix="/api/v1")
 @app.get("/health")
 async def health():
     db_alive = db_health()
+
     status_code = 200 if db_alive else 503
+
     return JSONResponse(
         status_code=status_code,
         content={

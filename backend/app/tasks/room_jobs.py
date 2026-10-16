@@ -37,8 +37,11 @@ log = get_logger("app.tasks", level="INFO")
 def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: Optional[int] = None) -> Optional[str]:
     try:
         pending_key = room_pending_key(room_id)
+
         incr(pending_key)
+
         expire(pending_key, settings.ai_timeout_seconds)
+
         try:
             task = stream_ai_response.apply_async(
                 args=[room_id, job_type, query, source_message_id],
@@ -47,20 +50,25 @@ def enqueue_ai_job(room_id: int, job_type: str, query: str, source_message_id: O
             )
         except Exception:
             decr(pending_key)
+
             raise
+
         return task.id
     except Exception as error:
         log.warning("AI job not enqueued | room_id=%s job_type=%s error=%s", room_id, job_type, error)
+
         return None
 
 
 def enqueue_room_observer(room_id: int) -> None:
     task_id = uuid4().hex
+
     publish_task(room_observer_lock_key(room_id), task_id, observe_room_audio, [room_id, task_id], settings.ai_observer_queue_name)
 
 
 def enqueue_room_transcriber(room_id: int) -> None:
     task_id = uuid4().hex
+
     publish_task(room_transcriber_lock_key(room_id), task_id, transcribe_room_audio, [room_id, task_id], settings.ai_transcriber_queue_name)
 
 
@@ -75,18 +83,22 @@ def stream_ai_response(
 
     with Session(engine) as db:
         room = room_crud.get_one(db, id=room_id)
+
         if room is not None:
 
             if job_type == "heartbeat" and not room.enable_heartbeat:
                 delete(room_pending_key(room_id))
+
                 return None
 
             if job_type != "heartbeat" and not room.enable_agent:
                 delete(room_pending_key(room_id))
+
                 return None
 
 
     slot_acquired = False
+
     if settings.ai_max_concurrency > 0:
         slot_acquired = acquire_slot("global_ai", settings.ai_max_concurrency, settings.ai_timeout_seconds)
 
@@ -94,6 +106,7 @@ def stream_ai_response(
             raise self.retry(countdown=3, max_retries=100)
 
     remaining_jobs = decr(room_pending_key(room_id))
+
     if remaining_jobs <= 0:
         delete(room_pending_key(room_id))
 
@@ -101,17 +114,22 @@ def stream_ai_response(
         delete(room_heartbeat_key(room_id))
 
     job_tag = getattr(self.request, "id", None) or "manual"
+
     set(room_running_key(room_id), job_tag, ttl=settings.ai_timeout_seconds)
 
     context_room = None
+
     context_docs: list = []
+
     try:
         from app.ai.llm.prompt import room_system_prompt, room_tag_rule
 
         with Session(engine) as db:
             context_room = room_crud.get_one(db, id=room_id)
+
             if context_room is not None:
                 context_docs = document_crud.get_many(db, room_id=room_id)
+
         agent = get_agent(
             tools=[make_room_retrieval_tool(room_id), web_search],
             prompt=room_system_prompt(context_room),
@@ -119,12 +137,16 @@ def stream_ai_response(
         )
     except Exception:
         log.exception("Room context failed | room_id=%s", room_id)
+
         agent = get_agent()
 
 
     limit = 10 if job_type == "heartbeat" else 20
+
     tail = query if job_type == "heartbeat" else f"Current question:\n{query}"
+
     history_lines: list = []
+
     try:
         with Session(engine) as db:
             history_lines = recent_room_context(db, room_id, limit)
@@ -144,7 +166,9 @@ def stream_ai_response(
         )
     except SoftTimeLimitExceeded:
         log.error("AI stream timed out | room_id=%s job_type=%s", room_id, job_type)
+
         soft_minutes = max(1, round(settings.ai_soft_timeout_seconds / 60))
+
         response_text = f"Sorry, I could not finish my response within {soft_minutes} minutes."
     except (APIError, APIConnectionError, APITimeoutError, InternalServerError, RateLimitError) as transient_error:
         if not is_retryable_error(transient_error):
@@ -154,6 +178,7 @@ def stream_ai_response(
                 job_type,
                 transient_error,
             )
+
             response_text = "Sorry, I could not generate a response right now."
         else:
             log.error(
@@ -162,15 +187,19 @@ def stream_ai_response(
                 job_type,
                 transient_error,
             )
+
             raise self.retry(exc=transient_error, countdown=60, max_retries=3)
     except EmptyLLMResponse:
         log.error("AI stream empty after retries | room_id=%s job_type=%s", room_id, job_type)
+
         response_text = ""
     except Exception:
         log.exception("AI stream failed | room_id=%s job_type=%s", room_id, job_type)
+
         response_text = "Sorry, I could not generate a response right now."
     finally:
         delete(room_running_key(room_id))
+
         if slot_acquired:
             release_slot("global_ai")
 
@@ -193,6 +222,7 @@ def stream_ai_response(
                 ),
             },
         )
+
         return message.id
 
 
@@ -201,7 +231,9 @@ def observe_room_audio(self, room_id: int, task_id: str = "") -> None:
     from app.ai.llm.observer import observe_room_audio as observe
 
     observer_key = room_observer_lock_key(room_id)
+
     owner = task_id or self.request.id
+
     if get(observer_key) not in (None, owner):
         return
 
@@ -219,23 +251,32 @@ def transcribe_room_audio(self, room_id: int, task_id: str = "") -> None:
     from app.ai.stt.transcriber import run_room_transcriber
 
     transcriber_key = room_transcriber_lock_key(room_id)
+
     owner = task_id or self.request.id
+
     if get(transcriber_key) not in (None, owner):
         return
 
     with Session(engine) as db:
         room = room_crud.get_one(db, id=room_id)
+
         if room is not None and not room.enable_transcript:
             release_worker_lock(transcriber_key, owner)
+
             return
 
     waited = 0.0
+
     while scard(room_presence_key(room_id)) < 1 and waited < 10:
         time.sleep(2)
+
         waited += 2
+
     if scard(room_presence_key(room_id)) < 1:
         release_worker_lock(transcriber_key, owner)
+
         log.info("Transcriber skipped empty room | room_id=%s", room_id)
+
         return
 
     try:

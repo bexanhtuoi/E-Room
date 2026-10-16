@@ -40,7 +40,9 @@ async def metrics_middleware(request: Request, call_next):
         return await call_next(request)
 
     start = time.perf_counter()
+
     response = await call_next(request)
+
     elapsed = time.perf_counter() - start
 
     route = route_name(request)
@@ -66,6 +68,7 @@ def metrics_registry():
     from prometheus_client.multiprocess import MultiProcessCollector
 
     registry = CollectorRegistry()
+
     MultiProcessCollector(registry)
 
     return registry
@@ -77,6 +80,7 @@ def setup_metrics(app) -> None:
     @app.get("/metrics", include_in_schema=False)
     async def metrics():
         registry = metrics_registry()
+
         data = generate_latest(registry) if registry is not None else generate_latest()
 
         return PlainTextResponse(data, media_type=CONTENT_TYPE_LATEST)
@@ -118,9 +122,13 @@ def setup_tracing(service_name: str = "") -> bool:
         from app.database import engine as db_engine
 
         SQLAlchemyInstrumentor().instrument(engine=db_engine)
+
         RedisInstrumentor().instrument()
+
         HTTPXClientInstrumentor().instrument()
+
         CeleryInstrumentor().instrument()
+
         LoggingInstrumentor(set_logging_format=False)
 
         _traced = True

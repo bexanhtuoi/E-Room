@@ -30,6 +30,7 @@ STT_PROMPTS = {
 def resolve_stt_language(value) -> str:
     if settings.stt_english_only:
         return "en"
+
     text = str(value if value is not None else settings.stt_language or "en").strip().lower()
 
     return text if text in SPOKEN_LANGUAGES else "en"
@@ -52,6 +53,7 @@ def normalize_pcm_int16(audio_data) -> np.ndarray:
     if isinstance(audio_data, np.ndarray):
         if audio_data.dtype == np.int16:
             return audio_data
+
         return (np.clip(audio_data, -1.0, 1.0) * 32767).astype(np.int16)
 
     return np.frombuffer(bytes(audio_data), dtype=np.int16)
@@ -93,6 +95,7 @@ def is_repetitive_hallucination(text: str, min_repeats: int = 4) -> bool:
     for unit in range(1, len(words) // 2 + 1):
         if len(words) % unit != 0:
             continue
+
         if words == words[:unit] * (len(words) // unit):
             return True
 
@@ -112,6 +115,7 @@ def is_loopy_hallucination(text: str, phrase_words: int = 4) -> bool:
 
         if phrase in seen:
             return True
+
         seen.add(phrase)
 
     return False
@@ -136,4 +140,5 @@ def is_prompt_echo(text: str, prompt: str) -> bool:
 
     if joined_prompt in joined_text:
         return True
+
     return len(text_words) >= 5 and joined_text in joined_prompt

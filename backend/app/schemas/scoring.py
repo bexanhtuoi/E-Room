@@ -4,7 +4,9 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 Mode = Literal["read_aloud", "free_speaking"]
+
 AttemptStatus = Literal["recorded", "scoring", "scored", "feedback_generating", "completed", "failed"]
+
 Accent = Literal["en-US", "en-GB"]
 
 
@@ -69,7 +71,7 @@ class ReferenceInfo(BaseModel):
 class WordDetail(BaseModel):
     word: str
     score: float
-    status: str = "ok"  # ok | pronunciation_error | missing_span
+    status: str = "ok"  # trạng thái: ok | pronunciation_error | missing_span
     start_s: Optional[float] = None
     end_s: Optional[float] = None
     acoustic_confidence: Optional[float] = None
@@ -78,16 +80,16 @@ class WordDetail(BaseModel):
 
 class PhonemeDetail(BaseModel):
     word: str
-    expected: str  # IPA, vd /θ/
+    expected: str  # IPA kỳ vọng, vd /θ/
     observed: Optional[str] = None  # IPA từ phone recognizer, None nếu chưa có model
-    type: str = "unknown"  # match | substitution | deletion | insertion | unknown
+    type: str = "unknown"  # loại: match | substitution | deletion | insertion | unknown
     gop: Optional[float] = None  # true GOP khi có phoneme model, None = fallback char-level
     score: float = 0.0
 
 
 class StressDetail(BaseModel):
     word: str
-    expected_stress: Optional[int] = None  # index syllable CMU mark 1
+    expected_stress: Optional[int] = None  # vị trí âm tiết theo nhãn CMU (bắt đầu từ 1)
     detected_stress: Optional[int] = None
     correct: Optional[bool] = None
     reason: str = ""
@@ -121,7 +123,7 @@ class CompletenessDetail(BaseModel):
 
 
 class ErrorDetail(BaseModel):
-    pattern: str  # vd "/θ/ → /s/"
+    pattern: str  # mẫu lỗi, vd "/θ/ → /s/"
     count: int = 1
     examples: list[str] = []
 

@@ -6,6 +6,7 @@ from app.security import hash_password
 
 def seed_admin_user(session: Session) -> int:
     existing = session.exec(select(User).where(User.email == "admin@gmail.com")).first()
+
     if existing is not None:
         return 0
 
@@ -15,8 +16,11 @@ def seed_admin_user(session: Session) -> int:
         full_name="Admin",
         role=RoleEnum.admin,
     )
+
     session.add(admin)
+
     session.commit()
+
     return 1
 
 
@@ -49,11 +53,16 @@ def seed_users(session: Session) -> int:
     ]
 
     inserted = 0
+
     for data in users:
         existing = session.exec(select(User).where(User.email == data["email"])).first()
+
         if existing is None:
             session.add(User(**data))
+
             inserted += 1
+
     if inserted > 0:
         session.commit()
+
     return inserted

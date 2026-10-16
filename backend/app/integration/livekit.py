@@ -10,7 +10,9 @@ import jwt
 from app.config import settings
 
 ALGORITHM = "HS256"
+
 TOKEN_TTL_SECONDS = 3600
+
 WEBHOOK_TOKEN_TTL_SECONDS = 300
 
 

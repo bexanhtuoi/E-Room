@@ -66,6 +66,7 @@ def is_stt_server_alive() -> bool:
     def probe() -> bool:
         try:
             url = (get_stt_server_url_override() or settings.stt_server_base_url).rstrip("/")
+
             # /health nằm ở root (:8001/health), không phải dưới /v1.
             root = url[:-3] if url.endswith("/v1") else url
 
@@ -116,6 +117,7 @@ def transcribe_whisper_server(
             "response_format": "verbose_json",
             "temperature": "0",
         }
+
         # Pin language để skip detect (~30% nhanh hơn). "auto" = để server tự detect.
         if resolved_language in ("en", "vi"):
             data["language"] = resolved_language
@@ -123,7 +125,7 @@ def transcribe_whisper_server(
         if resolved_prompt:
             data["prompt"] = resolved_prompt[:1500]
 
-        # xin word timestamps cho pronunciation scoring + highlight
+        # Xin word timestamps cho chấm phát âm + highlight
         data["timestamp_granularities[]"] = ["word", "segment"]
 
         endpoint = f"{url}/audio/transcriptions"

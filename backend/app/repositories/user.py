@@ -16,8 +16,10 @@ def count_streak(active_days: set, today: date) -> int:
     cursor = today if today in active_days else today - timedelta(days=1)
 
     streak = 0
+
     while cursor in active_days:
         streak += 1
+
         cursor -= timedelta(days=1)
 
     return streak
@@ -44,17 +46,23 @@ class UserCrud(CRUDRepository):
 
         for message in message_crud.get_many(db, user_id=user_id):
             message_crud.delete(db, db_obj=message)
+
         for notif in notification_crud.get_many(db, user_id=user_id):
             notification_crud.delete(db, db_obj=notif)
+
         for doc in document_crud.get_many(db, user_id=user_id):
             document_crud.delete(db, db_obj=doc)
+
         for score in pronunciation_score_crud.get_many(db, user_id=user_id):
             pronunciation_score_crud.delete(db, db_obj=score)
 
     def week_counts(self, db: Session, user_id: int) -> dict:
         now = as_naive_utc(now_utc())
+
         today = now.date()
+
         monday = today - timedelta(days=today.weekday())
+
         last_monday = monday - timedelta(weeks=1)
 
         times = message_crud.get_message_times(
@@ -62,12 +70,15 @@ class UserCrud(CRUDRepository):
             user_id=user_id,
             since=datetime.combine(last_monday, datetime.min.time()),
         )
+
         days = [as_naive_utc(moment).date() for moment in times]
 
         this_week = sum(1 for day in days if day >= monday)
+
         last_week = sum(1 for day in days if last_monday <= day < monday)
 
         recent_counts: dict = {}
+
         for day in days:
             if day >= today - timedelta(days=6):
                 recent_counts[day] = recent_counts.get(day, 0) + 1

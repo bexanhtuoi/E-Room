@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import tempfile
 from typing import List
@@ -15,15 +15,21 @@ from app.utils.file import (
 
 def normalize_split_text(text: str) -> str:
     text = re.sub(r"\n\n+", "\x00", text)
+
     text = re.sub(r"(\w+)-\n(\w+)", r"\1\2", text)
+
     text = text.replace("\n", " ")
+
     text = text.replace("\x00", "\n")
+
     text = re.sub(r"  +", " ", text)
+
     return text.strip()
 
 
 def split_sentences(text: str) -> list[str]:
     sents = re.split(r"(?<=[.?!])\s+", text)
+
     return [s.strip() for s in sents if s.strip()]
 
 
@@ -32,17 +38,24 @@ def split_long_sentence(sent: str, min_size: int) -> list[str]:
         return [sent]
 
     idx = sent.rfind(",")
+
     if idx > 0:
         left = sent[:idx].strip()
+
         right = sent[idx + 1:].strip()
+
         if left and right:
             return split_long_sentence(left, min_size) + split_long_sentence(right, min_size)
 
     words = sent.split()
+
     if len(words) >= 2:
         mid = len(words) // 2
+
         left = " ".join(words[:mid]).strip()
+
         right = " ".join(words[mid:]).strip()
+
         if left and right:
             return split_long_sentence(left, min_size) + split_long_sentence(right, min_size)
 
@@ -51,11 +64,13 @@ def split_long_sentence(sent: str, min_size: int) -> list[str]:
 
 def group_sentences(pieces: list[str], min_size: int, max_size: int, overlap_chars: int) -> list[str]:
     chunks = []
+
     current = ""
 
     for piece in pieces:
         if current and len(current) + 1 + len(piece) > max_size and len(current) >= min_size:
             chunks.append(current)
+
             if overlap_chars > 0 and len(current) > overlap_chars:
                 current = current[-overlap_chars:]
             else:
@@ -63,6 +78,7 @@ def group_sentences(pieces: list[str], min_size: int, max_size: int, overlap_cha
 
         if current:
             current += " "
+
         current += piece
 
     if current.strip():
@@ -73,10 +89,12 @@ def group_sentences(pieces: list[str], min_size: int, max_size: int, overlap_cha
 
 def split_to_chunks(text: str, chunk_size: int = 600, chunk_overlap: int = 50) -> List[str]:
     text = normalize_split_text(text)
+
     if not text:
         return []
 
     pieces = []
+
     for sent in split_sentences(text):
         pieces.extend(split_long_sentence(sent, chunk_size))
 
@@ -96,18 +114,23 @@ def chunking_pdf(
     chunk_overlap: int = 50,
 ) -> list[dict]:
     pages = extract_pdf_text(file_path)
+
     if not pages:
         return []
 
     documents = []
+
     chunk_counter = 0
+
     for page in pages:
         text = apply_noise_filter(page["text"])
+
         if not text.strip():
             continue
 
         for clean in split_to_chunks(text, chunk_size, chunk_overlap):
             chunk_counter += 1
+
             documents.append({
                 "text": clean,
                 "metadata": {
@@ -130,6 +153,7 @@ def chunking_md(
     chunk_overlap: int = 50,
 ) -> list[dict]:
     text = file_bytes.decode("utf-8", errors="ignore")
+
     if not text.strip():
         return []
 
@@ -145,19 +169,24 @@ def chunking_md(
     md_docs = header_splitter.split_text(text)
 
     documents = []
+
     chunk_counter = 0
+
     for doc in md_docs:
         headers = doc.metadata
+
         location_parts = [
             headers.get("h1"),
             headers.get("h2"),
             headers.get("h3"),
             headers.get("h4"),
         ]
+
         location = " > ".join([h for h in location_parts if h])
 
         for clean in split_to_chunks(doc.page_content.strip(), chunk_size, chunk_overlap):
             chunk_counter += 1
+
             documents.append({
                 "text": clean,
                 "metadata": {
@@ -182,12 +211,15 @@ async def chunking_file(
 ) -> list[dict]:
     if file_bytes is None:
         file_bytes = await read_file_from_url(file_path)
+
     source = extract_source_from_url(file_path)
 
     if file_path.endswith(".pdf"):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
             f.write(file_bytes)
+
             tmp = f.name
+
         try:
             return chunking_pdf(tmp, tag, source, chunk_size, chunk_overlap)
         finally:

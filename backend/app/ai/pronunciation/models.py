@@ -37,6 +37,7 @@ def load_torch():
         import torch
 
         torch_lib = torch
+
     return torch_lib
 
 
@@ -64,6 +65,7 @@ def load_vocab() -> Dict[str, int]:
 
     if phone_vocab is not None:
         return phone_vocab
+
     pats = [
         str(Path.home() / ".cache" / "huggingface" / "hub" /
             ("models--" + PHONE_MODEL_ID.replace("/", "--")) / "snapshots" / "*" / "vocab.json"),
@@ -78,8 +80,10 @@ def load_vocab() -> Dict[str, int]:
         fp = hf_hub_download(PHONE_MODEL_ID, "vocab.json")
 
         found = [fp]
+
     with open(found[0], encoding="utf-8") as f:
         phone_vocab = json.load(f)
+
     return phone_vocab
 
 
@@ -241,7 +245,7 @@ def ctc_forced_align(log_probs, target_ids: List[int], blank_id: int):
     return align, float(trellis[num_frames - 1, last])
 
 
-FRAME_STRIDE_S = 0.02  # 1. XLSR downsample 320x @16kHz ~= 20ms/frame
+FRAME_STRIDE_S = 0.02  # 1. XLSR hạ mẫu 320x @16kHz ~= 20 ms/frame
 
-BLANK_RATIO_MISALIGNED = 0.70  # 2. Blank >70% word span -> misalignment, không phải lỗi phát âm
+BLANK_RATIO_MISALIGNED = 0.70  # 2. Tỉ lệ blank >70% span từ -> misalignment, không phải lỗi phát âm
 

@@ -26,6 +26,7 @@ __all__ = [
 class SpeechService(ServiceBase):
     def ensure_room_visible(self, db: Session, user, room_id: int):
         room = room_service.get_room_or_404(db, room_id)
+
         room_service.ensure_room_access(room, user)
 
         return room
@@ -88,6 +89,7 @@ class SpeechService(ServiceBase):
         self.ensure_room_visible(db, user, room_id)
 
         entries = read_user_log(room_id, target_uid)
+
         entry = next((item for item in entries if item.get("message_id") == message_id), None)
 
         if entry is None:
@@ -126,10 +128,13 @@ class SpeechService(ServiceBase):
         from app.tasks.scoring import score_room_utterance, score_single_utterance
 
         room = room_service.get_room_or_404(db, room_id)
+
         room_service.ensure_room_access(room, user)
 
         resolved_uid = self.ensure_scorable_target(db, user, room_id, target_uid)
+
         entry = self.find_utterance_entry(db, user, room_id, resolved_uid, message_id)
+
         open_session = session_crud.get_open(db, user_id=resolved_uid, room_id=room_id)
 
         if self.utterance_needs_heavy_scoring(room_id, resolved_uid, message_id, entry):
@@ -172,9 +177,11 @@ class SpeechService(ServiceBase):
         from app.repositories.pronunciation_score import pronunciation_score_crud
 
         room = room_service.get_room_or_404(db, room_id)
+
         room_service.ensure_room_access(room, user)
 
         resolved_uid = self.ensure_scorable_target(db, user, room_id, target_uid)
+
         entry = self.find_utterance_entry(db, user, room_id, resolved_uid, message_id)
 
         report = (entry.get("pronunciation") or {}).get("report")
@@ -190,6 +197,7 @@ class SpeechService(ServiceBase):
             temperature=temperature,
             max_tokens=max_tokens,
         )
+
         updated = attach_feedback(room_id, resolved_uid, message_id, feedback)
 
         # Write-through feedback vào DB (khớp dòng điểm đã lưu ở POST .../score).

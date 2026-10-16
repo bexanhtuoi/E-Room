@@ -16,6 +16,7 @@ log = get_logger("app.repositories.message")
 
 def is_recent_duplicate(db: Session, room_id: int, user_id: Optional[int], text: str) -> bool:
     cutoff = as_naive_utc(now_utc()) - timedelta(seconds=DUPLICATE_TRANSCRIPT_SECONDS)
+
     existing = db.exec(
         select(Message)
         .where(
@@ -26,6 +27,7 @@ def is_recent_duplicate(db: Session, room_id: int, user_id: Optional[int], text:
         )
         .limit(1)
     ).first()
+
     return existing is not None
 
 
@@ -82,6 +84,7 @@ class MessageCrud(CRUDRepository):
         language: Optional[str] = None,
     ) -> tuple[Optional[int], Optional[int], str]:
         user_id: Optional[int] = None
+
         user_name = user_identity
 
         try:
@@ -92,11 +95,13 @@ class MessageCrud(CRUDRepository):
         with Session(engine) as db:
             if user_id:
                 user_obj = db.exec(select(User).where(User.id == user_id)).first()
+
                 if user_obj:
                     user_name = user_obj.full_name
 
             if is_recent_duplicate(db, room_id, user_id, text):
                 log.info("Dropping duplicate transcript | room_id=%s user=%s text='%s'", room_id, user_identity, text[:80])
+
                 return None, user_id, user_name
 
             meta_data = {
@@ -118,6 +123,7 @@ class MessageCrud(CRUDRepository):
                     "meta_data": json.dumps(meta_data),
                 },
             )
+
             return message.id, user_id, user_name
 
 

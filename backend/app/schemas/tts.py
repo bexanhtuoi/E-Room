@@ -17,10 +17,13 @@ class TTSSpeakRequest(BaseModel):
     @classmethod
     def validate_text(cls, value: str) -> str:
         text = (value or "").strip()
+
         if not text:
             raise ValueError("text must not be empty")
+
         if len(text) > 4000:
             raise ValueError("text too long (max 4000)")
+
         return text
 
     @field_validator("voice")
@@ -30,8 +33,10 @@ class TTSSpeakRequest(BaseModel):
 
         if value is None:
             return None
+
         if not is_supported_voice(value):
             raise ValueError(f"Unsupported voice '{value}'. GET /tts/voices for choices.")
+
         return value
 
     @field_validator("speed")
@@ -39,6 +44,8 @@ class TTSSpeakRequest(BaseModel):
     def validate_speed(cls, value: Optional[float]) -> Optional[float]:
         if value is None:
             return None
+
         if not 0.5 <= value <= 1.5:
             raise ValueError("speed must be between 0.5 and 1.5")
+
         return value

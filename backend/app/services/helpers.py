@@ -64,10 +64,13 @@ def is_session_chat(message) -> bool:
 def parse_log_time(value) -> Optional[datetime]:
     if not value:
         return None
+
     try:
         parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
     except (TypeError, ValueError):
         return None
+
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
     return parsed
