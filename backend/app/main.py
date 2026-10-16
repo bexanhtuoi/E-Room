@@ -58,14 +58,19 @@ async def lifespan(app: FastAPI):
             counts.get("documents", 0),
         )
 
-    try:
-        from app.ai.pronunciation.models import ensure_phone_ready
+    backend = (settings.scorer_backend or "local").lower().replace("lambda", "remote")
 
-        ensure_phone_ready()
+    if backend == "local":
+        try:
+            from app.ai.pronunciation.models import ensure_phone_ready
 
-        log.info("Model XLSR đã sẵn sàng")
-    except Exception as error:
-        log.warning("Model XLSR chưa sẵn sàng, lần chấm đầu sẽ tải | err=%s", str(error)[:200])
+            ensure_phone_ready()
+
+            log.info("Model XLSR đã sẵn sàng")
+        except Exception as error:
+            log.warning("Model XLSR chưa sẵn sàng, lần chấm đầu sẽ tải | err=%s", str(error)[:200])
+    else:
+        log.info("Bỏ preload XLSR vì SCORER_BACKEND=%s, dùng scorer remote", backend)
 
     log.info("%s đã khởi động", settings.app_name)
 
