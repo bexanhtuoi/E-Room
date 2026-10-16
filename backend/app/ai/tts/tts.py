@@ -12,10 +12,10 @@ log = get_logger("app.ai.tts")
 # voice_id -> mô tả ngắn cho UI chọn giọng. af_*/am_* = Mỹ, bf_*/bm_* = Anh.
 # Cả 4 giọng đã test (demo/tts_*.mp3), tốc độ mặc định 0.9.
 ENGLISH_VOICES: List[Dict[str, str]] = [
-    {"id": "af_heart", "label": "Heart — nữ Mỹ, ấm (mặc định)"},
-    {"id": "am_adam", "label": "Adam — nam Mỹ, trầm"},
-    {"id": "bf_emma", "label": "Emma — nữ Anh, chuẩn"},
-    {"id": "bm_george", "label": "George — nam Anh, chuẩn"},
+    {"id": "af_heart", "label": "Heart — US female, warm (default)"},
+    {"id": "am_adam", "label": "Adam — US male, deep"},
+    {"id": "bf_emma", "label": "Emma — UK female, clear"},
+    {"id": "bm_george", "label": "George — UK male, clear"},
 ]
 
 
