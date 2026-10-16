@@ -99,6 +99,39 @@ class TestGenerateFeedback:
         assert messages[0]["content"] == SFP
         assert messages[1]["content"].startswith("session_scores:")
 
+    def test_empty_criteria_filled_from_fallback(self):
+        import json
+
+        report = {
+            "scores": {"sounds": 60.0, "stress": 70.0, "fluency": 80.0, "completeness": 100.0, "overall": 63.3},
+            "word_details": [
+                {"word": "is", "score": 40.0, "status": "misaligned", "expected_ipa": "/ɪz/"},
+            ],
+            "stress_detail": [
+                {"word": "is", "expected_stress": 0, "detected_stress": 1, "correct": False},
+            ],
+            "intonation": {"score": 70.0, "monotone": False, "pitch_range": 80.0, "sentence_type": "statement", "slope_ok": True},
+            "fluency": {"wpm": 120.0, "pause_ratio": 0.1, "long_pause_count": 0, "hesitation_count": 0, "repetition_count": 0, "score": 80.0},
+            "top_errors": [],
+        }
+        partial = {
+            "summary": "Model noi chung chung.",
+            "pronunciation_feedback": "Model noi am.",
+            "stress_feedback": "",
+            "intonation_feedback": "",
+            "fluency_feedback": "",
+            "priority_errors": [{"word": "is", "issue": "sai", "advice": "sua", "vi": "i"}],
+            "practice_plan": ["luyen"],
+        }
+        fake = AsyncMock()
+        fake.ainvoke.return_value = FakeMsg(json.dumps(partial, ensure_ascii=False))
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake):
+            out = asyncio.run(generate_feedback(report))
+        assert out["stress_feedback"] != ""
+        assert out["intonation_feedback"] != ""
+        assert out["fluency_feedback"] != ""
+        assert out["summary"] == "Model noi chung chung."
+
     def test_fast_failure_retries_then_succeeds(self, monkeypatch):
         import app.ai.pronunciation.feedback as feedback_module
 

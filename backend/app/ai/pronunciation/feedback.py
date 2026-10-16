@@ -553,6 +553,9 @@ def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -
         or not parsed.get("summary")
         or not parsed.get("pronunciation_feedback")
         or not parsed.get("priority_errors")
+        or not parsed.get("stress_feedback")
+        or not parsed.get("intonation_feedback")
+        or not parsed.get("fluency_feedback")
     )
 
     if needs_fill:
