@@ -215,7 +215,7 @@ class TestFallbackFeedback:
             out = asyncio.run(generate_feedback(report))
         assert "error" not in out
         assert out["fallback"] is True
-        assert "think" in out["summary"]
+        assert "1 từ cần sửa" in out["summary"]
         assert len(out["practice_plan"]) == 3
 
         session_report = {"session_id": 7, "utterances": [{
@@ -252,7 +252,11 @@ class TestFallbackFeedback:
         assert "Mạnh nhất" in out["summary"]
         assert "Yếu nhất" in out["summary"]
         assert "Hello" in out["pronunciation_feedback"]
+        assert "Hello" not in out["summary"]
         assert "Tổng quan" not in out["pronunciation_feedback"]
+        assert len(out["practice_plan"]) == 3
+        assert "mục trên" in out["practice_plan"][0]
+        assert "'" not in out["practice_plan"][0]
 
     def test_fallback_covers_all_four_criteria(self):
         from app.ai.pronunciation import build_fallback_feedback

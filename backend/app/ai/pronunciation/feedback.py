@@ -745,32 +745,27 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
             dim_values.append((label, round(float(value), 1)))
 
     if avg >= 85:
-        verdict = "Tốt — giữ phong độ"
+        verdict = "Nói tốt rồi, cứ giữ phong độ này"
     elif avg >= 70:
-        verdict = "Khá — sửa vài âm là lên điểm"
+        verdict = "Nói khá rồi, sửa thêm vài âm nữa là lên điểm"
     elif avg >= 50:
-        verdict = "Trung bình — cần luyện trọng tâm"
+        verdict = "Mức trung bình — luyện trọng tâm vài điểm yếu là cải thiện rõ"
     else:
-        verdict = "Còn yếu — quay lại luyện từng âm cơ bản"
+        verdict = "Còn hơi yếu — quay lại luyện từng âm cơ bản đã"
 
     if dim_values:
         best = max(dim_values, key=lambda item: item[1])
 
         worst = min(dim_values, key=lambda item: item[1])
 
-        dimension_part = f" Mạnh nhất: {best[0]} ({best[1]}). Yếu nhất: {worst[0]} ({worst[1]})."
+        dimension_part = f" Mạnh nhất là {best[0]} ({best[1]}), Yếu nhất là {worst[0]} ({worst[1]})."
     else:
         dimension_part = ""
 
     if top:
-        listed = "; ".join(f"'{e['word']}' ({e['issue']})" for e in top)
+        error_part = f" Có {len(top)} từ cần sửa, cách sửa từng từ ở các mục dưới."
 
-        error_part = f" Cần sửa: {listed}."
-
-        if n == 1:
-            next_action = f" Luyện '{top[0]['word']}' trước rồi chấm lại."
-        else:
-            next_action = f" Luyện {len(top)} từ trên trước rồi chấm lại."
+        next_action = " Luyện xong chấm lại để xem điểm lên."
     else:
         error_part = " Không phát hiện lỗi âm rõ rệt."
 
@@ -792,12 +787,10 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
                     "tip": e["how_to"], "how_to": e["how_to"], "vi": e["vi"]} for e in top]
 
     if top:
-        first = top[0]
-
         practice_plan = [
-            f"Luyện từ khó nhất '{first['word']}' (đọc là “{first['vi']}”): {first['how_to']}",
-            "Đọc chậm từng từ sai, ghi âm và so với mẫu 3 lần.",
-            "Nói lại cả đoạn ở tốc độ tự nhiên rồi chấm lại để kiểm tra.",
+            "Đọc chậm các từ ưu tiên ở mục trên, mỗi từ 5 lần, ghi âm lần cuối để so với mẫu.",
+            "Ghép các từ đó vào câu gốc, đọc cả câu 3 lần ở tốc độ tự nhiên.",
+            "So bản ghi với mẫu rồi chấm lại để kiểm tra.",
         ]
     else:
         practice_plan = [
