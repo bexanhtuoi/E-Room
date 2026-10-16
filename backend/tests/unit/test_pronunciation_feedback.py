@@ -132,6 +132,47 @@ class TestGenerateFeedback:
         assert out["fluency_feedback"] != ""
         assert out["summary"] == "Model noi chung chung."
 
+    def test_insufficient_claim_replaced_when_data_exists(self):
+        import json
+
+        from app.ai.pronunciation.feedback import insufficient_data_claim
+
+        assert insufficient_data_claim("Không có đủ dữ liệu về trọng âm để đưa ra nhận xét.") is True
+        assert insufficient_data_claim("Thiếu dữ liệu ngữ điệu.") is True
+        assert insufficient_data_claim("Chưa có dữ liệu.") is True
+        assert insufficient_data_claim("Trọng âm sai: 'people'.") is False
+        assert insufficient_data_claim("") is False
+        assert insufficient_data_claim(None) is False
+
+        report = {
+            "scores": {"sounds": 60.0, "stress": 70.0, "fluency": 80.0, "completeness": 100.0, "overall": 63.3},
+            "word_details": [
+                {"word": "people", "score": 50.0, "status": "misaligned", "expected_ipa": "/pipʌl/"},
+            ],
+            "stress_detail": [
+                {"word": "people", "expected_stress": 0, "detected_stress": 1, "correct": False},
+            ],
+            "intonation": {"score": 70.0, "monotone": False, "pitch_range": 80.0, "sentence_type": "statement", "slope_ok": True},
+            "fluency": {"wpm": 120.0, "pause_ratio": 0.1, "long_pause_count": 0, "hesitation_count": 0, "repetition_count": 0, "score": 80.0},
+            "top_errors": [],
+        }
+        partial = {
+            "summary": "Model tom tat.",
+            "pronunciation_feedback": "Model nhan xet am.",
+            "stress_feedback": "Không có đủ dữ liệu về trọng âm để đưa ra nhận xét.",
+            "intonation_feedback": "Ngu dieu on.",
+            "fluency_feedback": "Troi chay on.",
+            "priority_errors": [{"word": "people", "issue": "sai", "advice": "sua", "vi": "pipol"}],
+            "practice_plan": ["luyen"],
+        }
+        fake = AsyncMock()
+        fake.ainvoke.return_value = FakeMsg(json.dumps(partial, ensure_ascii=False))
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake):
+            out = asyncio.run(generate_feedback(report))
+        assert "'people'" in out["stress_feedback"]
+        assert out["intonation_feedback"] == "Ngu dieu on."
+        assert out["summary"] == "Model tom tat."
+
     def test_fast_failure_retries_then_succeeds(self, monkeypatch):
         import app.ai.pronunciation.feedback as feedback_module
 

@@ -261,6 +261,16 @@ GLUED_LEAK_RE = re.compile("[%s](%s)\\b" % (VI_CHAR, LEAK_WORDS), re.IGNORECASE)
 
 NULL_PAREN_RE = re.compile(r"\s*\([^()]*\bnull\b[^()]*\)", re.IGNORECASE)
 
+INSUFFICIENT_PATTERNS = ("không đủ dữ liệu", "không có đủ dữ liệu", "không có dữ liệu",
+                          "thiếu dữ liệu", "chưa đủ dữ liệu", "chưa có dữ liệu",
+                          "insufficient data", "not enough data")
+
+
+def insufficient_data_claim(text: Any) -> bool:
+    lowered = str(text or "").lower()
+
+    return any(pattern in lowered for pattern in INSUFFICIENT_PATTERNS)
+
 NULL_WORD_RE = re.compile(r"\bnull\b", re.IGNORECASE)
 
 SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
@@ -556,6 +566,7 @@ def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -
         or not parsed.get("stress_feedback")
         or not parsed.get("intonation_feedback")
         or not parsed.get("fluency_feedback")
+        or any(insufficient_data_claim(parsed.get(key)) for key in ("stress_feedback", "intonation_feedback", "fluency_feedback"))
     )
 
     if needs_fill:
@@ -567,6 +578,10 @@ def normalize_feedback(parsed: Dict[str, Any], scoring_report: Dict[str, Any]) -
         for key in ("summary", "pronunciation_feedback", "stress_feedback",
                     "intonation_feedback", "fluency_feedback"):
             if not parsed.get(key) and fallback.get(key):
+                parsed[key] = fallback[key]
+
+        for key in ("stress_feedback", "intonation_feedback", "fluency_feedback"):
+            if insufficient_data_claim(parsed.get(key)) and fallback.get(key):
                 parsed[key] = fallback[key]
 
         if not parsed.get("priority_errors") and fallback.get("priority_errors"):
