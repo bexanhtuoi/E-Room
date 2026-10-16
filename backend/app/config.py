@@ -105,7 +105,7 @@ class Settings:
     # faster-whisper-server riêng (OpenAI-compatible, chạy :8001 để tránh đụng api :8000)
     stt_server_base_url: str = os.getenv("STT_SERVER_BASE_URL", "http://localhost:8001/v1")
     stt_server_api_key: str = os.getenv("STT_SERVER_API_KEY", "cant-be-empty")
-    stt_server_model: str = os.getenv("STT_SERVER_MODEL", "mobiuslabsgmbh/faster-whisper-large-v3-turbo")
+    stt_server_model: str = os.getenv("STT_SERVER_MODEL", "distil-large-v3")
     stt_server_timeout: float = float(os.getenv("STT_SERVER_TIMEOUT", 30.0))
     stt_local_enabled: bool = os.getenv("STT_LOCAL_ENABLED", "true").lower() in ("true", "1", "yes")
     stt_vad_silence_seconds: float = float(os.getenv("STT_VAD_SILENCE_SECONDS", 2.0))
