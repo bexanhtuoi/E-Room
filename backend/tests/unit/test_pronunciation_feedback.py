@@ -22,8 +22,7 @@ class TestPromptSections:
         assert "advice" in SYSTEM_PROMPT  # schema/UI moi doc advice (map tu how_to cu)
         assert "session_scores" in SESSION_FEEDBACK_PROMPT
         assert "200 words" in SESSION_FEEDBACK_PROMPT
-        # Nhan xet phai bang tieng Viet
-        assert "TIẾNG VIỆT" in SYSTEM_PROMPT
+        assert "bằng tiếng Việt" in SYSTEM_PROMPT
         assert "TIẾNG VIỆT" in SESSION_FEEDBACK_PROMPT
 
     def test_extract_json(self):
@@ -33,8 +32,8 @@ class TestPromptSections:
         assert extract_json("") is None
 
     def test_prompt_forbids_thinking(self):
-        assert "ONLY the JSON" in SYSTEM_PROMPT
-        assert "no thinking process" in SYSTEM_PROMPT.lower()
+        assert "Chỉ trả về một đối tượng JSON" in SYSTEM_PROMPT
+        assert "quá trình suy nghĩ" in SYSTEM_PROMPT
         assert "ONLY the JSON" in SESSION_FEEDBACK_PROMPT
 
     def test_extract_json_strips_think_block(self):
@@ -97,6 +96,32 @@ class TestGenerateFeedback:
         messages = fake2.ainvoke.call_args[0][0]
         assert messages[0]["content"] == SFP
         assert messages[1]["content"].startswith("session_scores:")
+
+    def test_fast_failure_retries_then_succeeds(self, monkeypatch):
+        import app.ai.pronunciation.feedback as feedback_module
+
+        monkeypatch.setattr(feedback_module, "LLM_RETRY_PAUSE_SECONDS", 0)
+        fake = AsyncMock()
+        fake.ainvoke.side_effect = [
+            RuntimeError("502 provider busy"),
+            RuntimeError("502 provider busy"),
+            FakeMsg('{"summary": "recovered"}'),
+        ]
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake):
+            out = asyncio.run(generate_feedback({"utterances": []}))
+        assert out["summary"] == "recovered"
+        assert fake.ainvoke.call_count == 3
+
+    def test_slow_failure_falls_back_without_retry(self, monkeypatch):
+        import app.ai.pronunciation.feedback as feedback_module
+
+        monkeypatch.setattr(feedback_module, "LLM_FAST_FAIL_SECONDS", 0)
+        fake = AsyncMock()
+        fake.ainvoke.side_effect = RuntimeError("read timeout")
+        with patch("app.ai.llm.client.ChatOpenAI", return_value=fake):
+            out = asyncio.run(generate_feedback({"utterances": []}))
+        assert out["fallback"] is True
+        assert fake.ainvoke.call_count == 1
 
 
 class TestFallbackFeedback:

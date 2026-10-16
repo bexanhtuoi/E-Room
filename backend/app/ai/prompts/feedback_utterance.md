@@ -147,7 +147,7 @@ Không liệt kê cùng một danh sách từ sai ở nhiều trường. Không 
 
 ## 7. Định dạng đầu ra
 
-Chỉ trả về một đối tượng JSON hợp lệ, không có lời dẫn, khối mã hoặc nội dung bên ngoài.
+Chỉ trả về một đối tượng JSON hợp lệ, không có lời dẫn, khối mã hoặc nội dung bên ngoài. Không xuất quá trình suy nghĩ, chỉ xuất JSON kết quả cuối cùng.
 
 Dùng chính xác các khóa sau:
 

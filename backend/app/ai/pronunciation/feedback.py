@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Any, Dict, List
 
 from app.ai.pronunciation.articulation import guide_for_word
@@ -382,25 +383,46 @@ def sanitize_feedback_json(parsed: Dict[str, Any]) -> Dict[str, Any]:
     return parsed
 
 
+LLM_MAX_ATTEMPTS = 3
+
+LLM_FAST_FAIL_SECONDS = 20.0
+
+LLM_RETRY_PAUSE_SECONDS = 3.0
+
+
 async def generate_feedback(scoring_report: dict, model: str = "",
                             temperature: float = 0.2, max_tokens: int = 2000,
                             system_prompt: str = "", user_label: str = "scoring_report") -> dict:
+    import asyncio
+
     from app.ai.llm.client import get_llm
 
     user_msg = f"{user_label}:\n" + json.dumps(scoring_report, ensure_ascii=False)[:12000]
 
-    try:
-        llm = get_llm(model=model, temperature=temperature, max_tokens=max_tokens,
-                        reasoning="exclude")
+    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
+        started = time.monotonic()
 
-        msg = await llm.ainvoke([
-            {"role": "system", "content": system_prompt or prompts()["utterance"]},
-            {"role": "user", "content": user_msg},
-        ])
-    except Exception as error:
-        log.warning("LLM feedback không reachable (%s) — dùng gợi ý theo quy tắc", error)
+        try:
+            llm = get_llm(model=model, temperature=temperature, max_tokens=max_tokens,
+                            reasoning="exclude")
 
-        return build_fallback_feedback(scoring_report, user_label)
+            msg = await llm.ainvoke([
+                {"role": "system", "content": system_prompt or prompts()["utterance"]},
+                {"role": "user", "content": user_msg},
+            ])
+        except Exception as error:
+            elapsed = time.monotonic() - started
+
+            if attempt < LLM_MAX_ATTEMPTS and elapsed < LLM_FAST_FAIL_SECONDS:
+                log.warning("LLM feedback lần %s lỗi sau %.1fs (%s) — thử lại", attempt, elapsed, error)
+
+                await asyncio.sleep(LLM_RETRY_PAUSE_SECONDS)
+
+                continue
+
+            log.warning("LLM feedback không reachable (%s) — dùng gợi ý theo quy tắc", error)
+
+            return build_fallback_feedback(scoring_report, user_label)
 
     content = getattr(msg, "content", "") or ""
 
