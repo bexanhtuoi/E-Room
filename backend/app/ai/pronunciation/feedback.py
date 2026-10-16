@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 from app.ai.pronunciation.articulation import guide_for_word
 from app.ai.pronunciation.g2p import get_pronunciation
+from app.ai.pronunciation.metrics import INTON_MED_RANGE
 from app.config import settings
 from app.log import get_logger
 
@@ -637,6 +638,65 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
 
         n = 1
 
+    stress_details = report.get("stress_detail") or []
+    stress_wrong = [
+        str(d.get("word") or "").strip() for d in stress_details
+        if d.get("correct") is False and str(d.get("word") or "").strip()
+    ]
+    if stress_wrong:
+        stress_names = ", ".join(f"'{w}'" for w in stress_wrong[:3])
+        stress_feedback = (
+            f"Trọng âm sai: {stress_names}. "
+            f"Nghe kỹ âm tiết nhấn của từ đa âm tiết, đọc mạnh-nhẹ rõ ràng."
+        )
+    elif stress_details:
+        stress_feedback = "Trọng âm ổn — các từ đa âm tiết đều nhấn đúng."
+    else:
+        stress_feedback = ""
+
+    into = report.get("intonation") or {}
+    if into.get("score") is None:
+        intonation_feedback = ""
+    else:
+        into_parts = []
+        if into.get("monotone"):
+            into_parts.append("giọng ngang, đều từ đầu đến cuối")
+        elif float(into.get("pitch_range") or 0.0) < INTON_MED_RANGE:
+            into_parts.append("dải cao độ hẹp, ít nhấn nhá")
+        else:
+            into_parts.append("giọng có lên xuống tự nhiên")
+        stype = {"question": "câu hỏi", "statement": "câu kể", "exclaim": "câu cảm thán"}.get(str(into.get("sentence_type") or ""))
+        if stype and into.get("slope_ok") is False:
+            if str(into.get("sentence_type")) == "question":
+                into_parts.append("nhưng cuối câu hỏi chưa lên giọng")
+            else:
+                into_parts.append(f"nhưng cuối {stype} chưa xuống giọng tự nhiên")
+        elif stype:
+            into_parts.append(f"cuối {stype} hợp ngữ điệu")
+        intonation_feedback = "Ngữ điệu: " + ", ".join(into_parts) + "."
+
+    flu = report.get("fluency") or {}
+    wpm = float(flu.get("wpm") or 0.0)
+    if not flu or wpm <= 0:
+        fluency_feedback = ""
+    else:
+        flu_bits = []
+        if 90 <= wpm <= 200:
+            flu_bits.append(f"nhịp vừa phải ({round(wpm)} từ/phút)")
+        elif wpm < 90:
+            flu_bits.append(f"nói chậm ({round(wpm)} từ/phút)")
+        else:
+            flu_bits.append(f"nói nhanh ({round(wpm)} từ/phút)")
+        longs = int(flu.get("long_pause_count") or 0)
+        if longs > 0:
+            flu_bits.append(f"nghỉ dài {longs} lần")
+        elif float(flu.get("pause_ratio") or 0.0) > 0.25:
+            flu_bits.append("nhiều quãng nghỉ")
+        stumbles = int(flu.get("hesitation_count") or 0) + int(flu.get("repetition_count") or 0)
+        if stumbles > 0:
+            flu_bits.append("có vấp/lặp từ")
+        fluency_feedback = "Trôi chảy: " + ", ".join(flu_bits) + "."
+
     # Gom trùng từ, giữ tối đa 3 lỗi chính.
     seen, top = set(), []
 
@@ -731,9 +791,9 @@ def build_fallback_feedback(scoring_report: dict, user_label: str = "scoring_rep
     return {
         "summary": summary,
         "pronunciation_feedback": pronunciation_feedback,
-        "stress_feedback": "",
-        "intonation_feedback": "",
-        "fluency_feedback": "",
+        "stress_feedback": stress_feedback,
+        "intonation_feedback": intonation_feedback,
+        "fluency_feedback": fluency_feedback,
         "priority_errors": [{"word": e["word"], "issue": e["issue"],
                              "advice": e["how_to"], "vi": e["vi"]} for e in top],
         "error_words": error_words,
