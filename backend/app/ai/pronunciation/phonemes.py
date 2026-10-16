@@ -642,11 +642,8 @@ def score_phones(
 
         anchored = False
 
-        stt_start = 0.0
+        stt_span = None
 
-        stt_end = 0.0
-
-        # 6. Neo STT: CTC toàn câu hay bóp từ chức năng còn 1 frame
         ctc_f0 = phone_span[p0][0] if phone_ok[p0] else -1
 
         ctc_f1 = phone_span[p1 - 1][1] if phone_ok[p1 - 1] else -1
@@ -655,30 +652,33 @@ def score_phones(
 
         queue = span_map.get(str(w).upper())
 
-        if queue and ctc_dur < 0.08:
+        if queue:
             stt_start, stt_end = queue.pop(0)
 
-            stt_dur = stt_end - stt_start
+            if stt_end - stt_start >= 0.08:
+                stt_span = (stt_start, stt_end)
 
-            if stt_dur >= 0.08:
-                margin = 0.05
+        if stt_span is not None and ctc_dur < 0.08:
+            stt_start, stt_end = stt_span
 
-                a = max(0, int((stt_start - margin) / FRAME_STRIDE_S))
+            margin = 0.05
 
-                b = min(T - 1, int((stt_end + margin) / FRAME_STRIDE_S))
+            a = max(0, int((stt_start - margin) / FRAME_STRIDE_S))
 
-                fixed = anchor_word_window(log_probs, target_ids[p0:p1], blank_id, a, b)
+            b = min(T - 1, int((stt_end + margin) / FRAME_STRIDE_S))
 
-                if fixed is not None:
-                    lps, spans, oks = fixed
+            fixed = anchor_word_window(log_probs, target_ids[p0:p1], blank_id, a, b)
 
-                    phone_lp[p0:p1] = lps
+            if fixed is not None:
+                lps, spans, oks = fixed
 
-                    phone_span[p0:p1] = spans
+                phone_lp[p0:p1] = lps
 
-                    phone_ok[p0:p1] = oks
+                phone_span[p0:p1] = spans
 
-                    anchored = True
+                phone_ok[p0:p1] = oks
+
+                anchored = True
 
         # 7. Observed evidence: align needleman toàn câu quá nặng nên so trong vùng từ
         f0 = phone_span[p0][0] if phone_ok[p0] else -1
@@ -689,6 +689,10 @@ def score_phones(
             f0 = max(0, int(stt_start / FRAME_STRIDE_S))
 
             f1 = min(T - 1, int(stt_end / FRAME_STRIDE_S))
+        elif stt_span is not None:
+            f0 = max(0, int(stt_span[0] / FRAME_STRIDE_S))
+
+            f1 = min(T - 1, int(stt_span[1] / FRAME_STRIDE_S))
 
         if f0 >= 0:
             span_pred = [id2tok.get(p, "") for p in pred_ids[f0:f1 + 1] if p != blank_id]
