@@ -65,4 +65,5 @@ class TestFallbackCarriesGuide:
         assert out["error_words"][0]["vi"] == "th i ng k"
         assert out["priority_errors"][0]["advice"]
         assert out["priority_errors"][0]["vi"] == "th i ng k"
-        assert "think" in out["practice_plan"][0]
+        assert len(out["practice_plan"]) == 3
+        assert "ưu tiên" in out["practice_plan"][0]
