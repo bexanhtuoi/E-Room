@@ -4,18 +4,6 @@ from app.schemas.document import (
     DocumentUpdateSchema,
 )
 from app.schemas.message import MessageCreateSchema, MessageResponse
-from app.schemas.speech import SpeechLogUpdateSchema, SpeechSummaryLine, SpeechUtterance
-from app.schemas.scoring import (
-    FeedbackResult,
-    PriorityError,
-    ReferenceInfo,
-    ScoringReport,
-    Scores,
-    SpeakingAttempt,
-    TextInfo,
-    WhisperWord,
-)
-from app.schemas.tts import TTSSpeakRequest, TTSVoiceOption
 from app.schemas.notification import NotificationCreateSchema, NotificationResponse, NotificationUpdateSchema
 from app.schemas.room import (
     RoomCreateSchema,
@@ -25,6 +13,16 @@ from app.schemas.room import (
     RoomTokenResponse,
     RoomUpdateSchema,
 )
+from app.schemas.scoring import (
+    FeedbackResult,
+    PriorityError,
+    ReferenceInfo,
+    Scores,
+    ScoringReport,
+    SpeakingAttempt,
+    TextInfo,
+    WhisperWord,
+)
 from app.schemas.session import (
     MySessionsResponse,
     SessionAnswerResponse,
@@ -32,6 +30,8 @@ from app.schemas.session import (
     SessionResponse,
     SessionWithRoom,
 )
+from app.schemas.speech import SpeechLogUpdateSchema, SpeechSummaryLine, SpeechUtterance
+from app.schemas.tts import TTSSpeakRequest, TTSVoiceOption
 from app.schemas.user import Token, UserBaseSchema, UserCreateSchema, UserResponse, UserStatsResponse, UserUpdateSchema
 
 __all__ = [
