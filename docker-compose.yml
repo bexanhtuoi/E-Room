@@ -26,14 +26,14 @@ services:
   ai-worker:
     build: ./backend
     container_name: ai-worker
-    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=1 -O fair --max-tasks-per-child=100 --loglevel=INFO
     restart: unless-stopped
     env_file: ./backend/.env.docker
     environment:
       OTEL_SERVICE_NAME: eroom-worker
     cpus: 2.0
-    mem_limit: 3g
-    mem_reservation: 1g
+    mem_limit: 4g
+    mem_reservation: 1536m
     volumes:
       - ./backend/app:/app/app
       - speech_logs:/app/log/speech
