@@ -1,0 +1,340 @@
+services:
+  api:
+    build: ./backend
+    container_name: api
+    command: uv run python -m app.server
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prom-metrics
+    cpus: 4.0
+    mem_limit: 3g
+    mem_reservation: 1g
+    volumes:
+      - ./backend/app:/app/app
+      - speech_logs:/app/log/speech
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  ai-worker:
+    build: ./backend
+    container_name: ai-worker
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    environment:
+      OTEL_SERVICE_NAME: eroom-worker
+    cpus: 2.0
+    mem_limit: 3g
+    mem_reservation: 1g
+    volumes:
+      - ./backend/app:/app/app
+      - speech_logs:/app/log/speech
+      - hf_cache:/root/.cache/huggingface
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
+  ai-beat:
+    build: ./backend
+    container_name: ai-beat
+    command: uv run celery -A app.integration.celery.celery_app beat --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    cpus: 0.5
+    mem_limit: 1g
+    mem_reservation: 256m
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ai-observer:
+    build: ./backend
+    container_name: ai-observer
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_observer --concurrency=2 -O fair --max-tasks-per-child=100 --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    environment:
+      OTEL_SERVICE_NAME: eroom-observer
+    cpus: 1.0
+    mem_limit: 1536m
+    mem_reservation: 384m
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
+  ai-transcriber:
+    build: ./backend
+    container_name: ai-transcriber
+    command: uv run celery -A app.integration.celery.celery_app worker --queues=ai_transcriber --pool=threads --concurrency=50 --loglevel=INFO
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    environment:
+      OTEL_SERVICE_NAME: eroom-transcriber
+    cpus: 4.0
+    mem_limit: 4g
+    mem_reservation: 1536m
+    volumes:
+      - ./backend/app:/app/app
+      - speech_logs:/app/log/speech
+      - hf_cache:/root/.cache/huggingface
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
+  db:
+    image: postgres:16
+    container_name: db
+    restart: unless-stopped
+    command: -c max_connections=200 -c shared_buffers=256MB
+    cpus: 2.0
+    mem_limit: 2g
+    mem_reservation: 512m
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eroom
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eroom"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    command: --config /etc/livekit.yaml --node-ip 192.168.1.9
+    restart: unless-stopped
+    environment:
+      NODE_IP: 192.168.1.9
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "51000-51100:51000-51100/udp"
+      - "3478:3478/udp"
+      - "5349:5349"
+    volumes:
+      - ./backend/livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # llama:
+  #   image: ghcr.io/ggml-org/llama.cpp:server
+  #   container_name: llama
+  #   profiles: ["llm-local"]
+  #   entrypoint: ["/app/llama-server"]
+  #   command: ["-hf", "unsloth/gemma-4-E4B-it-qat-GGUF:UD-Q4_K_XL", "--host", "0.0.0.0", "--port", "8012", "-c", "8192"]
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8012:8012"
+  #   volumes:
+  #     - llama_data:/root/.cache/huggingface
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   cpus: 1.0
+  #   mem_limit: 512m
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   entrypoint: ["/bin/sh", "-c", "ollama serve > /tmp/ollama.log 2>&1 & sleep 10; ollama pull qwen3-embedding:0.6b; wait"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "ollama list | grep -q qwen3-embedding"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 20
+  #     start_period: 300s
+
+  # reranker:
+  #   image: ghcr.io/ggml-org/llama.cpp:server
+  #   container_name: reranker
+  #   profiles: ["llm-local"]
+  #   entrypoint: ["/app/llama-server"]
+  #   command: ["-hf", "ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF", "--host", "0.0.0.0", "--port", "8014", "-c", "4096", "-b", "2048", "-ub", "2048", "--pooling", "rank", "--rerank"]
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8014:8014"
+  #   volumes:
+  #     - reranker_data:/root/.cache/huggingface
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "3001:3000"
+    expose:
+      - "3000"
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+      - livekit
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api:
+        condition: service_started
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    user: "0:0"
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./monitoring/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/tmp/tempo
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    volumes:
+      - ./monitoring/loki/loki.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/tmp/loki
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    restart: unless-stopped
+    cpus: 0.3
+    mem_limit: 256m
+    mem_reservation: 64m
+    volumes:
+      - ./monitoring/promtail/promtail.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    mem_reservation: 128m
+    ports:
+      - "8092:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/provisioning/dashboards-json:/etc/grafana/provisioning/dashboards-json:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+
+volumes:
+  redis_data:
+  minio_data:
+  pg_data:
+  llama_data:
+  hf_cache:
+  speech_logs:
+  qdrant_data:
+  ollama_data:
+  reranker_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+
