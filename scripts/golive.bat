@@ -9,6 +9,15 @@ echo.
 
 set "TS=C:\Program Files\Tailscale\tailscale.exe"
 
+REM -- Step 0: admin (tailscaled tu choi 401 neu khong admin) -----
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo        [ERROR] Hay chuot phai golive.bat -^> Run as administrator.
+    echo        Ly do: tailscale.exe bao 401 Unauthorized khi chay thuong.
+    pause
+    exit /b 1
+)
+
 REM -- Step 1: Docker --------------------------------------------
 echo [1/6] Checking Docker...
 docker ps >nul 2>&1
@@ -60,7 +69,7 @@ cd ..
 docker exec api uv run python -c "from app.config import settings; from app.integration.livekit import create_token; print('MODE:', settings.livekit_mode); print('URL :', settings.livekit_url); print('TOKEN_OK:', len(create_token('probe','1')) > 50)"
 echo        Waiting for reverse proxy :8080 ...
 for /l %%i in (1,1,24) do (
-    powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'http://localhost:8080/api/v1/rooms/count' -TimeoutSec 5 | Out-Null; exit 0 } catch { exit 1 }"
+    powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'http://localhost:8080/health' -TimeoutSec 5 | Out-Null; Invoke-WebRequest -Uri 'http://localhost:8080/api/v1/rooms/?limit=1' -TimeoutSec 5 | Out-Null; exit 0 } catch { exit 1 }"
     if %errorlevel% equ 0 goto :nginx_ok
     timeout /t 5 /nobreak >nul
 )
@@ -80,10 +89,12 @@ if not exist "%TS%" (
 "%TS%" funnel reset >nul 2>&1
 "%TS%" funnel --bg 8080
 if %errorlevel% neq 0 (
-    echo        [ERROR] funnel failed. Is Tailscale logged in? Run: tailscale status
+    echo        [ERROR] funnel failed. Chay: tailscale status + tailscale funnel status
+    echo        Neu 401 Unauthorized: dang chay thieu admin, hoac Tailscale dang login boi user khac.
     pause
     exit /b 1
 )
+"%TS%" funnel status
 
 echo.
 echo ============================================
